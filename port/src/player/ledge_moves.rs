@@ -309,7 +309,7 @@ pub fn try_side_jump(
 /// blended hop (0xDDCE40): weights over `swingback_up_{min,max}_{200,300}` by v = clamp(targetZ − rootZ −
 /// 2.0) and h = clamp(horizontal distance of the hands). (hypothesis) the search: edges 1.3–1.9 m above the
 /// hands within 0.6 m horizontally (the box query's arguments are not fully recovered).
-pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHangType, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<LedgeMove> {
+pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHangType, guidance: &GuidanceWorld, _collision: &CollisionWorld) -> Option<LedgeMove> {
     if hang != LedgeHangType::Wall {
         return None;
     }
