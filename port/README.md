@@ -186,6 +186,14 @@ Limitations:
 - **Fall loop:** in the game data it is a single held pose. PORT: it sways slowly through the game's own jump-to-fall
   frames.
 
+**Ground locomotion (RE/02 §4.1)**
+- The ground context moves by the root motion of the game's locomotion action `0x05923BDB`. That is 17 clips per
+  leading foot, with weights set exactly as `HumanGround__UpdateMoveBlend` 0xDA0810 sets them: band fraction, bank toward
+  the wanted heading, the jog slowdown timer and the sprint impulsion weight.
+- The speed parameter decelerates through the game's ResponseCurve (HG+0x63C).
+- The sim owns the step cycle (`player/move_blend.rs`), and the animator shows it at the sim's phase. PORT
+  (hypothesis): the clips inside the item are phase-synchronised.
+
 **Debugging and verification**
 - `AC_SHOTS=t1,t2,…` freezes the simulation at each time and saves screenshots from every view in `AC_VIEWS` into
   `AC_SHOT_DIR`:

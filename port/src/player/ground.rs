@@ -2,9 +2,9 @@
 //!
 //! - One speed parameter (0..1) split into bands Walk/Jog/Run/Sprint (GetSpeedBand 0xD807B0).
 //! - Target = base + 0.25·stick, base 0 (low profile) / 0.5 (high profile) / 0.75 (sprint).
-//! - Parameter rises at 1.0/s (0xDA0810); fall rate is a PLACEHOLDER for the decel curve.
+//! - Parameter rises at 1.0/s and falls through the deceleration ResponseCurve (0xDA0810, `move_blend`).
 //! - Heading turns toward the wanted direction at 360°/s (0xD95290).
-//! - Translation: in the game it is clip root motion; here a PLACEHOLDER speed per band.
+//! - Translation: root motion of the 17-clip locomotion blend (action 0x05923BDB, `move_blend`).
 //! - Ground loss → InAir fall (0xD87720 / 0xD8C380); jump request → InAir jump-to-target.
 
 use bevy::prelude::*;
@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use super::air::{FallOrigin, InAirEntry, Landing, LandingType};
 use super::climb::{ClimbEntry, ClimbEntryType};
 use super::ledge::{LedgeEntry, LedgeSubState};
+use super::move_blend::MoveBlend;
 use super::targets::{edge_ahead, find_jump_target, JumpTarget, TARGET_LEDGE};
 use super::{
     heading_of, switch_context, ActorContextId, Body, HumanDataBundle, Locomotion, Player, SpawnPoint, TransitionSetup,
@@ -75,6 +76,8 @@ pub struct HumanGroundData {
     pub last_landing: Option<Landing>,
     /// Incremented on every landing (lets the animator play the landing clip once).
     pub landing_seq: u32,
+    /// `HumanGround__UpdateMoveBlend` state: blend weights, timers, lean/bank, step cycle.
+    pub blend: MoveBlend,
 }
 
 impl HumanGroundData {
@@ -98,18 +101,6 @@ impl HumanGroundData {
             self.last_landing = Some(l);
         }
     }
-}
-
-fn root_motion_speed(param: f32) -> f32 {
-    // PLACEHOLDER: piecewise-linear stand-in for the blended walk/jog/run/sprint clips.
-    for w in ROOT_SPEED_AT_BAND.windows(2) {
-        let (p0, s0) = w[0];
-        let (p1, s1) = w[1];
-        if param <= p1 {
-            return s0 + (s1 - s0) * ((param - p0) / (p1 - p0)).clamp(0.0, 1.0);
-        }
-    }
-    ROOT_SPEED_AT_BAND[ROOT_SPEED_AT_BAND.len() - 1].1
 }
 
 fn angle_diff(a: f32, b: f32) -> f32 {
@@ -183,11 +174,13 @@ pub fn update_ground(
             BASE_LOW_PROFILE
         };
         let target = if moving { (base + STICK_SPAN * pad.speed01 * g.turn_atten).min(1.0) } else { 0.0 };
-        g.speed_param = if target > g.speed_param {
-            (g.speed_param + SPEED_PARAM_UP_RATE * dt).min(target)
-        } else {
-            (g.speed_param - SPEED_PARAM_DOWN_RATE * dt).max(target)
-        };
+        // speed parameter, lean/bank and blend weights (MoveBlend 0xDA0810). The heading snapshot is the
+        // heading before this frame's turn (HG+0x600, Movement_PreUpdate 0xD97E30).
+        g.blend.speed_param = g.speed_param;
+        g.blend.update_speed(target, dt);
+        g.blend.update_angles(body.heading, moving.then_some(want_heading), None, false, dt);
+        g.blend.update_weights(target, dt);
+        g.speed_param = g.blend.speed_param;
         g.recovery = (g.recovery - dt).max(0.0);
 
         // heading: rotate toward wanted at the player turn rate (0xD95290)
@@ -227,8 +220,8 @@ pub fn update_ground(
             continue;
         }
 
-        // ---------------------------------------------------------------- move (root-motion stand-in)
-        let speed = root_motion_speed(g.speed_param);
+        // ---------------------------------------------------------------- move (blended clip root motion)
+        let speed = if g.speed_param > 0.0 { g.blend.advance(dt) } else { 0.0 };
         let delta = forward * speed * dt;
         let r = collision.move_capsule(body.feet, delta, true);
         body.velocity = forward * speed;

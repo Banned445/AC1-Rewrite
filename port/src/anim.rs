@@ -15,6 +15,7 @@ use crate::assets::ac_actions::{ActionGraph, DisplacementMode};
 use crate::assets::anims::load_locomotion;
 use crate::assets::game_dir;
 use crate::model::Rig;
+use crate::player::move_blend::ACT_GROUND_LOCOMOTION;
 use crate::player::{ground::speed_band, ground::SpeedBand, ActorContextId, HumanDataBundle, Locomotion};
 
 /// A decoded animation clip (Bevy types).
@@ -210,6 +211,9 @@ pub struct AnimPlayer {
     grasp_dir: Vec3,
     /// Ledge grab whose reception has been played.
     caught: Option<u64>,
+    /// Phase set by the simulation (the ground step cycle, `MoveBlend`): the player shows it instead of
+    /// advancing its own clock.
+    sim_phase: Option<f32>,
 }
 
 /// What the selector wants playing.
@@ -328,6 +332,11 @@ const ACT_CATCH_FREE: [u32; 2] = [0x1F0C_2EB8, 0x1F0C_2EB9];
 /// Falling (6-way grasp blend).
 const ACT_FALL: u32 = 0x1F0C_22C2;
 
+/// Both items (footl, footr) of the ground locomotion action with all 17 clips loaded.
+fn ground_items(lib: &AnimLibrary) -> Option<Vec<ItemPlay>> {
+    lib.action_items(ACT_GROUND_LOCOMOTION).filter(|items| items.len() == 2 && items.iter().all(|i| i.layers.len() == 17))
+}
+
 /// Pick what plays for the current context.
 fn choose_clip(
     time: Res<Time>,
@@ -341,6 +350,7 @@ fn choose_clip(
     let dt = time.delta_secs();
     for (loco, data, body, mut p) in &mut q {
         let g = &data.ground;
+        p.sim_phase = None;
         if let Some(ctx) = p.hold {
             if ctx == loco.current && !(p.phase >= 1.0 && p.item + 1 >= p.items.len()) {
                 continue;
@@ -359,6 +369,21 @@ fn choose_clip(
             }
             // after a pull-up the action ends standing: let it finish before idling
             ActorContextId::Ground if p.clip.as_deref().is_some_and(|c| c.starts_with(&format!("act_{ACT_PULLUP_WALL:08x}")) || c.starts_with(&format!("act_{ACT_PULLUP_FREE:08x}"))) && !(p.phase >= 1.0 && p.item + 1 >= p.items.len()) => continue,
+            // moving: the game's locomotion action 0x05923BDB, item of the leading foot, MoveBlend's 17 weights
+            ActorContextId::Ground if g.speed_param > 0.0 && ground_items(&lib).is_some() => {
+                let mut it = ground_items(&lib).unwrap()[g.blend.foot].clone();
+                for (k, l) in it.layers.iter_mut().enumerate() {
+                    l.1 = g.blend.weights[k];
+                }
+                p.sim_phase = Some(g.blend.phase);
+                let key = format!("act_{ACT_GROUND_LOCOMOTION:08x}");
+                if p.clip.as_deref() == Some(key.as_str()) {
+                    p.items = vec![it];
+                    p.item = 0;
+                    continue;
+                }
+                Some(Request { key, items: vec![it], looping: true, fit: None, token: 0, fade: CROSSFADE, hold: false })
+            }
             ActorContextId::Ground => Some(looped(
                 match speed_band(g.speed_param) {
                     SpeedBand::None => if g.high_profile { "idle_high" } else { "idle_low" },
@@ -605,7 +630,9 @@ pub fn apply_clip(
             1.0
         };
         let next = p.phase + dt * rate / duration;
-        if p.looping {
+        if let Some(ph) = p.sim_phase {
+            p.phase = ph;
+        } else if p.looping {
             p.phase = next.fract();
         } else if next >= 1.0 && p.item + 1 < p.items.len() {
             // next item of the action's sequence, blended over its authored blend time

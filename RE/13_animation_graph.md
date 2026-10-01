@@ -156,10 +156,11 @@ This is the input to `LimbIK__UpdateContactsFromAnimTags` 0xE56FC0 (RE/11 §2):
 - **IDs:** the contexts select actions by the exe's IDs. Climb poses and moves come from the SHORT/LONG tables (`player/climb.rs` `SHORT_ACTIONS` / `LONG_ACTIONS`, generated from `climb_init.pkl`), plus the hang idles, shimmies, vertical steps (first/second hand), pull-up chain, catches and fall.
 - **Fall:** the grasp blend is ported exactly (`fall_grasp_weights`, tested). The earlier port's invented sway is removed.
 - **Limb IK:** driven by contact tags (`ik.rs` `limb_tag` / `LimbState::update_tagged`). The context's timing is kept only for clips without tags.
-- **Still name-based** (exe ID not traced yet): ground locomotion and landings, jump clips, fall entries, the jump-into-hang flight, its reception, and the ledge jump-up.
+- **Ground locomotion** plays action `0x05923BDB` with MoveBlend's weights (RE/02 §4.1).
+- **Still name-based** (exe ID not traced yet): idles and landings, jump clips, fall entries, the jump-into-hang flight, its reception, and the ledge jump-up.
 
 ## 7. Open questions
-- Who sets the item weights in the other blend trees (the ground locomotion bank/speed tree, the free-hang shimmy 000/050 cm blend, the lateral climb lean blend)? Right now the authored defaults are used.
+- Who sets the item weights in the other blend trees (the free-hang shimmy 000/050 cm blend, the lateral climb lean blend)? Right now the authored defaults are used. **The ground locomotion tree is answered: MoveBlend 0xDA0810, RE/02 §4.1.**
 - The meaning of the Action flags, item flags, `f20`, `b62` and `u28`/`u32`.
 - How transitions are selected at runtime: the transition objects are decoded, but the code that picks one isn't traced.
 - The STEPPHASES track (fixed track 3) values.

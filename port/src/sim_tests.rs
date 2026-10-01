@@ -121,6 +121,41 @@ fn speed_param_rises_at_one_per_second() {
 }
 
 #[test]
+fn ground_moves_by_the_blended_clip_root_motion() {
+    // run band top (param 0.75 = pure xx_h_run_hipm, 1.707 m per 0.3333 s step)
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(1.5);
+    let z0 = s.body().feet.z;
+    s.run(1.0);
+    let v = z0 - s.body().feet.z;
+    assert!((v - 5.121).abs() < 0.05, "run speed {v} m/s");
+    // sprint top settles on xx_h_sprint_hipm (1.674 m per 0.2667 s)
+    s.pad(Vec3::NEG_Z, 1.0, true, true);
+    s.run(2.5);
+    let z0 = s.body().feet.z;
+    s.run(1.0);
+    let v = z0 - s.body().feet.z;
+    assert!((v - 6.277).abs() < 0.05, "sprint speed {v} m/s");
+    assert!(s.ground().blend.weights[13] > 0.99);
+}
+
+#[test]
+fn releasing_sprint_decelerates_through_the_curve() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, true);
+    s.run(1.5);
+    // back to high-profile run (target 0.75). On the curve's last segment ds/dt = −(0.2 + 2.395·(s − 0.666)),
+    // so from 1.0: s(0.2 s) = 0.4175·e^(−0.479) + 0.5825 = 0.841
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(0.2);
+    let p = s.ground().speed_param;
+    assert!((p - 0.841).abs() < 0.01, "param after 0.2 s = {p}");
+    s.run(1.0);
+    assert!((s.ground().speed_param - 0.75).abs() < 1e-3);
+}
+
+#[test]
 fn free_run_jumps_a_rooftop_gap_and_lands_on_target() {
     // roof A: x 5..11, h 3.5 ; roof B: x 14.5..20.5, h 3.0  (3.5 m gap)
     let mut s = Sim::new(Vec3::new(7.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);

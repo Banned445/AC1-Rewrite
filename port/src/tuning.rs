@@ -28,19 +28,12 @@ pub const BASE_LOW_PROFILE: f32 = 0.0;
 pub const BASE_HIGH_PROFILE: f32 = 0.5;
 pub const BASE_SPRINT: f32 = 0.75;
 pub const STICK_SPAN: f32 = 0.25;
-/// Speed parameter rises at 1.0/s. 0xDA0810
-pub const SPEED_PARAM_UP_RATE: f32 = 1.0;
-/// PLACEHOLDER: the game decelerates through a curve whose keys are not decoded yet. 0xDA0810
-pub const SPEED_PARAM_DOWN_RATE: f32 = 2.0;
+/// Speed parameter: rises at 1.0/s, falls through the deceleration curve; blend weights and root motion
+/// of the locomotion clips: see `player::move_blend` (HumanGround__UpdateMoveBlend 0xDA0810).
+
 /// Player turn rate (rad/s): min 270°/s, max 360°/s; thresholds are 0 so effectively 360°/s.
 /// HumanGround__UpdateHeading 0xD95290 → RotateTowards 0xD94F30
 pub const PLAYER_TURN_RATE: f32 = std::f32::consts::TAU;
-
-/// Root-motion speeds (m/s) at the top of each band, MEASURED from the game's clips (DISPLACEMENT
-/// track ÷ duration, RE/10): walk xx_l_walk 1.90, jog xx_h_jog 3.54, run xx_h_run 5.12,
-/// sprint xx_h_sprint 6.28. Between bands the game blends clips; here speed is interpolated linearly.
-pub const ROOT_SPEED_AT_BAND: [(f32, f32); 5] =
-    [(0.0, 0.0), (BAND_WALK, 1.90), (BAND_JOG, 3.54), (BAND_RUN, 5.12), (1.0, 6.28)];
 
 /// Ground loss → InAir fall types by fall height 1 / 2 / 8 m and horizontal speed 2.5 m/s. 0xD8C380
 pub const FALL_TYPE_HEIGHTS: [f32; 3] = [1.0, 2.0, 8.0];

@@ -63,7 +63,7 @@ All addresses are VAs in `AssassinsCreed_Dx9.exe` (v1.02). Unverified readings a
 | +0x5EC | float | forced speed parameter (when +0x6C8≠0) | 0xD7D4B0 |
 | +0x5FC | float | signed angle CurHeading→DestHeading about +Z | 0xD97E30 |
 | +0x600 | vec4 | CurHeading snapshot for this frame | 0xD97E30 |
-| +0x608 | curve* | deceleration curve (speed-param → rate) | 0xDA0810, 0xD83640 |
+| +0x63C | ResponseCurve (embedded, vft 0x168BE5C) | **deceleration curve** speed-param → rate/s; keys in §4.1 (earlier read as +0x608: wrong) | ctor 0xDB2D25, keys 0xDA7E62, use 0xDA175F |
 | +0x6B4 | int | speed source: 0 = analog (slot 1), 1 = direct (slot 30) | 0xD7C930, 0xD83640 |
 | +0x6C8 | int | speed forced by script (use +0x5EC) | 0xD7D4B0 |
 | +0x6CC | float | sprint-band blend timer | 0xDA0810 |
@@ -174,7 +174,7 @@ Move(11).Update → MoveBlend (0xDA0810):
   stick = Data.DestSpeedRatio
   target = stick*0.25 + (highProfile ? (Data.Sprint ? 0.75 : 0.5) : 0); clamp ≤1
   if speed < target: speed = min(target, speed + dt)                // 1.0 / s
-  else: speed = max(target, speed - decelCurve(speed)*dt)           // curve at HG+0x608
+  else: speed = max(target, speed - decelCurve(speed)*dt)           // curve at HG+0x63C (§4.1)
   band: ≤0.25 walk (w = speed*4), ≤0.5 jog, ≤0.75 run, else sprint; set +0x5DC/+0x5D4
   Data.CurrentBodyAngle = lean toward crowd-avoid vector, max π/2, slerp rate 5·dt  (0xD94C80)
   Data[0xD8]            = lean toward DestHeading, max π/2 (π/4 if careful), rate 5·dt
@@ -188,6 +188,98 @@ RotateTowards (0xD94F30): angle = unsigned angle (or forced side, 0..2π)
   rate = angle<angLo ? rateMin : angle≥angHi ? rateMax : lerp; step=rate*dt; snap if step≥angle
 ```
 Translation = root motion of the blended clips (no velocity code in the module).
+
+### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
+MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
+- If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.
+- Otherwise the **locomotion path** below runs. It also sets the graph mode `HG+0x580 → +0x44 = 2`.
+
+#### 4.1.1 Speed parameter (0xDA1700–0xDA18A2)
+| Case | Speed param HG+0x5E8 | Slowdown timer HG+0x6CC |
+|---|---|---|
+| \|target − s\| ≤ 0.0005 | unchanged | −4·dt (≥ 0) |
+| s ≤ target | `min(target, s + dt)` | −8·dt (≥ 0) |
+| s > target, not forced | `max(target, s − curve(s)·dt)` | +dt (≤ 1) |
+| s > target, forced (HG+0x6C8) | `max(target, s − dt)` | unchanged |
+
+**The deceleration curve** is a `scimitar::ResponseCurve` embedded at **HG+0x63C**.
+- Constructed by `ResponseCurve__ctor` 0x5637C0 from the HumanGround ctor at 0xDB2D25.
+- Its keys are added in `HumanGround__OnEnterInit` 0xDA7D20 at 0xDA7E62–0xDA7ED0 (`ResponseCurve__AddKey` 0x563140): **(0, 1) (0.333, 1) (0.4, 0.3) (0.666, 0.2) (1, 1)**.
+- `ResponseCurve__Evaluate` 0x5631D0 is piecewise linear. Every segment that contains x is evaluated in key order and the last one wins. Outside the keys it returns 0.
+- So a slow-down from sprint is fast at the top (rate 1 → 0.2), slow through the run band (≈ 0.2–0.3/s) and fast again below 0.333.
+- Worked example: sprint (1.0) to run target 0.75 reaches 0.841 after 0.2 s. From 1.0 down to 0.5 takes about 1.39 s.
+
+#### 4.1.2 Bands and the in-band fraction f (0xDA18C0)
+| s | lower slot | upper slot | f | side effects |
+|---|---|---|---|---|
+| ≤ 0.25 | 0 slow walk | 3 walk | 4s | slowdown := 0, settle := 1, `sub_DC3FA0(1−f, f)` (not traced) |
+| ≤ 0.5 | 3 walk | 6 jog | 4(s−0.25) | settle := 1 |
+| ≤ 0.75 | 6 jog | 10 run | 4(s−0.5) | settle := 1 |
+| > 0.75 | 10 run | 13 sprint | 4(s−0.75) | settle HG+0x6D0 −= dt when f > 0.99 or s > target |
+
+f is clamped to ≤ 1. The slot pairs are packed in a 16-bit local, with the low byte the upper slot and the high byte the lower slot: 3, 0x0306, 0x060A, 0x0A0D.
+
+#### 4.1.3 Lean and bank (0xDA1A3F–0xDA1C2A, `HumanGround__UpdateLeanAngle` 0xD94C80)
+- `UpdateLeanAngle(angle, targetDir, max)` works in three steps:
+  1. It rebuilds the filtered direction as the heading snapshot HG+0x600 rotated by −angle about Z.
+  2. If the target is non-zero (|v| > 0.001), it moves towards it by the **fraction 5·dt** in angle space along the short way (`Math__LerpHeadingAngle` 0xD4C390). Otherwise it moves back to the heading by the **fraction 0.1 per frame**.
+  3. It returns `SignedAngle(filtered, heading, Z)` (`Math__SignedAngleAroundAxis` 0x55E570, sign = `cross(a,b)·axis`, 0x55E2C0), clamped to ±max.
+- A **positive angle means the filtered direction is right of the body**, and it selects the right clips.
+- **Lean** Data+0xD4: target is the crowd-avoid vector Data+0x60, max π/2. The vector is zeroed after use.
+- **Bank** Data+0xD8: target is DestHeading Data+0x50, max **π/2**, or **π/4** (0x3F490FDB) when IHumanGroundAccess vt1120 returns true. When HG+0x6F0 = ±1 (forced turn side), the target is first limited to 3π/4 on that side.
+- Normalised: `L = |lean|/(π/2)` and `B = |bank|/(π/2)`, each ≤ 1. The side clip is slot+1 for angle < 0 (left) and slot+2 for angle ≥ 0 (right).
+
+#### 4.1.4 The 17 weights (0xDA1C8C–0xDA1FCB → `AnimGraph__SetItemBlendWeights` 0x503040)
+Slot order of both items of `0x05923BDB` (`RE/data/action_graph_movement.txt`):
+
+| Slots | Clips |
+|---|---|
+| 0–2 | `walk_slow_hip{m,l,r}` |
+| 3–5 | `walk_hip{m,l,r}` |
+| 6–9 | `jog_hipm`, `jog_bank_left`, `jog_bank_right`, `jog_slowdown` |
+| 10–12 | `run_hipm`, `run_bank_{left,right}` |
+| 13 | `sprint_hipm` |
+| 14–15 | `run_bank_{left,right}` again (the sprint band's sides) |
+| 16 | `sprint_impultion` |
+
+S is the total side weight: L for s ≤ 0.25; B for s > 0.5; `(1−f)·L + f·B` for 0.25 < s ≤ 0.5. In the formulas below, "side" stands for L or B, whichever that band uses.
+
+| Band | lower mid | upper mid | extra | lower side | upper side |
+|---|---|---|---|---|---|
+| ≤ 0.5 | (1−f)(1−S) | (1−slowdown)·f(1−S) | slot 9 = slowdown·f(1−S) | side·(1−f) | side·f |
+| ≤ 0.75 | (1−slowdown)(1−f)(1−S) | f(1−S) | slot 9 = slowdown·(1−f)(1−S) | B(1−f) | B·f |
+| > 0.75 | (1−f)(1−S) | (1−settle)·f(1−S) | slot 16 = settle·f(1−S) | B(1−f) | B·f |
+
+In the walk→jog band (0.25 < s ≤ 0.5), the exe uses `(1−f)·L` and `f·B` as the side factors and then multiplies them by (1−f) and f again. So that band's weights sum to `1 − S + (1−f)²L + f²B` instead of 1. This is verified by the decompile and is not a transcription slip.
+
+`SetItemBlendWeights` clamps each weight to [0, 1] and writes them to the playing item instances (0x726280 / 0x726200).
+
+Consequences:
+- **Jog slowdown:** while decelerating, the slowdown timer blends `xx_h_jog_slowdown` in place of `jog_hipm`.
+- **Sprint impulsion:** on reaching the sprint band, `sprint_impultion` plays first (settle = 1). It hands over to `sprint_hipm` at 1/s once the band is full.
+- **Walk band:** only crowd avoidance leans the hips. Turning shows from jog upwards (bank).
+
+#### 4.1.5 Root motion
+All 34 clips have 2-key DISPLACEMENT tracks, so each one has a constant speed (RE/10 §6, `RE/data/anim_root_motion_gamefix.txt`).
+
+| Slot | footl d (m) / T (s) | footr d (m) / T (s) |
+|---|---|---|
+| 0 slow walk m | 0.170 / 1.6667 | 0.150 / 1.4667 |
+| 1–2 slow walk l/r | 0.269 / 2.0 | 0.269 / 2.0 |
+| 3 walk m | 1.012 / 0.5333 | 0.885 / 0.4667 |
+| 4–5 walk l/r | 0.992 / 0.6 | 0.992 / 0.6 |
+| 6, 9 jog / slowdown | 1.651 / 0.4667 | same |
+| 7–8 jog bank | 1.707 / 0.4667 | same |
+| 10–12, 14–15 run (+bank) | 1.707 / 0.3333 | same |
+| 13, 16 sprint / impulsion | 1.674 / 0.2667 | same |
+
+**(hypothesis)** The clips of an item play phase-synchronised and the blend is normalised by the total weight. Then one step lasts Σwᵢ·Tᵢ/Σwᵢ and covers Σwᵢ·dᵢ/Σwᵢ.
+- Support: the transition blender works in normalised phase (`bpos` modes 1/2 read the playing clip's normalised time, 0x773F90).
+- Not found: the item-level clip clock was not located (anim middleware 0x72xxxx–0x77xxxx; attempt cap reached).
+- Under this hypothesis the band tops are exact: walk 1.898, jog 3.538, run 5.121, sprint 6.277 m/s. Between bands the speed is below a linear mix: 4.20 m/s at s = 0.625 instead of 4.33.
+- **Needs a runtime trace** of position against HG+0x5E8 to confirm.
+
+**Port:** `port/src/player/move_blend.rs` implements all of the above. The ground context moves by `MoveBlend::advance`, and the animator plays action `0x05923BDB` (item of the leading foot) with these weights at the sim's step phase.
 
 ## 5. Constants
 
@@ -227,7 +319,8 @@ Tuning values are hard-coded or set by controllers; per-clip behaviour (exit win
   decision/guidance (only the event-72 guard 0xD9F4C0 queries guidance edges from here).
 
 ## 7. Open questions / dynamic checks
-* Confirm decel curve object at HG+0x608 and its keys (breakpoint 0xDA0810).
+* ~~Confirm decel curve object at HG+0x608 and its keys~~ → done statically: HG+0x63C, §4.1.
+* Clip time sync inside a blend item (phase-synchronised? normalised by total weight?) — runtime check, §4.1.5.
 * Identify state names 5–10, 12–17, 26–35 (log state ids at 0xDAD1C0 while walking/stopping/turning).
 * Verify meaning of controller +0x60/+0x64 (0.58/0.37) in report 01.
 * Map IHumanGround event ids (0x01..0x88) to actions (push, crouch, free-run…).

@@ -21,9 +21,12 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 ---
 
 ## 1. Places the port departs from the game (must be removed or replaced)
-- [ ] **Ground translation:** currently a speed per band. The game moves by **blended clip root motion** (walk/jog/run/sprint
-      cycles weighted by the speed parameter, 0xDA0810).
-- [ ] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
+- [x] **Ground translation:** currently a speed per band. The game moves by **blended clip root motion** (walk/jog/run/sprint
+      cycles weighted by the speed parameter, 0xDA0810). **→ done: the 17-weight blend of action 0x05923BDB (lean, bank, jog
+      slowdown, sprint impulsion) drives the root motion and the animator (RE/02 §4.1, `player/move_blend.rs`). Clip time sync
+      inside the item is a hypothesis (phase-synchronised); confirm it with a runtime trace (§10)**
+- [x] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
+      **→ done: ResponseCurve at HG+0x63C, keys (0,1)(0.333,1)(0.4,0.3)(0.666,0.2)(1,1) (RE/02 §4.1.1)**
 - [ ] **Jumps:** currently a placeholder arc formula. The game plays **takeoff / flight / landing clips** chosen by
       `Human::SetupJumpToTarget` 0xB20200 and `JumpType` (Straight / 1m / 3m5m), driven by their root motion plus the linear correction.
 - [ ] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance.
@@ -59,6 +62,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] Clip **exit-flag gating** (0xD80010 bits 0x40/0x80/0x100/0x200/0x400/0x800, 0x20 = locked).
 - [ ] "Anim drives rotation" flag (0x10) overriding code heading.
 - [ ] Turn attenuation above 45° (verify against the interpreter, 0xEE65A0).
+- [ ] **Crowd-avoid vector** (Data+0x60, `UpdateCrowdAvoidVector` 0xD9E5A0): drives the walk-band hip lean (RE/02 §4.1.3).
+- [ ] **Start/transition blend layouts 1–7** (HG+0x724): MoveBlend's other path while a start or transition action plays (0xDA08C0).
 - [ ] **Crouch / crouch-walk** (`MvtDivision_Crouch`, 0xD84C10) and **WalkVerySlow**.
 - [ ] **Sub-states:**
   - FreeRun (2);

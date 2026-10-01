@@ -12,6 +12,7 @@ pub mod air;
 pub mod climb;
 pub mod ground;
 pub mod ledge;
+pub mod move_blend;
 pub mod targets;
 
 use bevy::prelude::*;
