@@ -194,6 +194,14 @@ Limitations:
 - The sim owns the step cycle (`player/move_blend.rs`), and the animator shows it at the sim's phase. PORT
   (hypothesis): the clips inside the item are phase-synchronised.
 
+**Ledge moves (RE/03 §7.6b)**
+- At the end of a shimmy (or when blocked), the game's order applies: inner corner, side jump, outer corner. Up beyond a hand
+  step: the hop.
+- Corners play `hangfree_corner_*_090_{in,out}` (free hang) or the wall strafe pair (wall hang).
+- Side jumps play the `StartLedgeJump` table's start / loop / end actions.
+- The hop plays `swingback_up` `_a` + `_b` into a free hang.
+- `AC_AUTOPILOT=ledgemoves` shows a side jump and an outer corner.
+
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then
   its flight item (`air_*_to_freestep`, 16 clips), weighted by height and distance class exactly as

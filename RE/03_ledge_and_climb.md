@@ -388,7 +388,7 @@ Shimmy anim tables (index = hang type, Wall/Free):
 So the pattern is: the lead hand reaches out, then the trailing hand closes in, and the two alternate.
 **NextHandToMove** in HumanLedgeData (+0x64) matches the `a2[1]` result (2 or 3) of these pickers (h).
 
-### 7.6 Vertical hand steps, jumps, corners
+### 7.6 Vertical hand steps, jumps, corners (first pass — the jump and corner names here are corrected in §7.6b)
 - **Vertical step** (`PickVerticalHandAndAnim` 0xDCB3E0) is a 2-step hand-over-hand. The first hand moves, and +1848 is set to 1/2 so the next frame forces the second hand.
   Tables: up 0x1A2C4C0/4CC/4D8/4E4, down 0x1A2C4F0/4FC/508/514 (Wall/Free columns: 0x1B70FAA/0x1A279B9 … 0x1B7093D/0x1C32FA4).
 - **TryJumpUpToLedge** 0xDD5E10 (wall hang only):
@@ -410,6 +410,104 @@ So the pattern is: the lead hand reaches out, then the trailing hand closes in, 
   - Free → Wall when feet are found: anims 29566306/7, clearance 1.1 m with 0.5 m back.
   - Wall → Free when the feet lose the wall: anims 29562045/6, 29565306/8, clearance 2.4 m.
   Variants a3 = 1/2 rotate the probe ±90° (corners).
+
+### 7.6b Ledge moves: corners, side jumps, jump-ups (verified 2026-10-01, supersedes parts of §7.6)
+**Corrected names.** The functions were renamed in the IDB:
+
+| Address | Old name | Real function |
+|---|---|---|
+| 0xDD3BB0 | "TrySideJumpToLedge" | **`HumanLedge__TryTurnCorner`** |
+| 0xDDD490 | (unnamed) | **`HumanLedge__TrySideJumpToLedge`** |
+| 0xDD55F0 | "outer corner" | **`HumanLedge__TrySideJumpToLadder`** |
+| 0xDD5E10 | "TryJumpUpToLedge" | **`HumanLedge__TryJumpUpToClimb`** |
+| 0xDE05E0 | "TryJumpUpOrTurnCorner" | `HumanLedge__TryJumpUpOrSideJump` |
+
+`HumanLedge__FindCornerEdges` is 0xDD0600.
+
+**Lateral decision order** (`Movement_ChooseAction` 0xDE29E0, stick left/right):
+1. `ProbeLateral`, side moves to climb holds, hang-type switch, `StartHandStep` (the shimmy).
+2. `FindCornerEdges(dir, inner)`, then side moves to climb holds.
+3. **`TryTurnCorner(dir, inner)`**.
+4. `TrySwitchHangType`.
+5. `TryJumpUpOrSideJump` (ladder at the side 0xDD55F0, else **side jump** 0xDDD490).
+6. `FindCornerEdges(dir, outer)`, then side moves to climb holds again.
+7. **`TryTurnCorner(dir, outer)`**.
+8. `TrySwitchHangType`, then the blocked idle.
+
+**Up:**
+1. Climb, then the hand step.
+2. `TryJumpUpOrSideJump(up)` = `TryJumpUpToClimb`.
+3. **`TryWallJumpUp`** (the hop).
+4. Otherwise blocked-up (enables the pull-up).
+
+**Corner search (`FindCornerEdges` 0xDD0600).**
+- Base = hands' midpoint at the lower hand's height.
+- Five guidance probes (`sub_1170A70`: radius 0.25, vertical 0.4 / 0.3, ≤ 50°, filter `dword_19341B0`) at base heights −1.8 … +0.6 in 0.6 steps. Results go to +1904 + 80k (inner) and +2304 + 80k (outer). Row 3 (same height) = **+2144 / +2544**.
+- Inner corner: probe at base + 0.6·move − 0.6·facing; the new facing is the move direction.
+- Outer corner: probe at base + 0.3·facing + 0.2·move; the new facing is −move.
+
+**Corner turn (`TryTurnCorner` 0xDD3BB0).**
+- Both hand targets go to the candidate point.
+- Wall hang needs foot holds on the new wall (`sub_B16130`).
+- Clearance capsule: 2.4 m (free) or 1.1 m (wall), via `sub_B2A410`.
+- Root target from the hands (and feet), interpolated over the action length (`sub_711130`, flag 0). SubState 3.
+- Actions (510126209 + k):
+
+  | | left in | left out | right in | right out |
+  |---|---|---|---|---|
+  | Free hang | `0x1E67E881` `hangfree_corner_left_090_in` | `0x1E67E882` | `0x1E67E883` | `0x1E67E884` |
+  | Wall hang | `0x1E67E885` | `0x1E67E886` | `0x1E67E887` | `0x1E67E888` |
+
+  The wall-hang actions are two-item `hangwall_strafe_{left,right}_050cm_open` + `_close`.
+- The end of a corner clip leads to SecondHandGrab, ±0.25 m (§7.6, `CornerAnimFinished` 0xDCD570).
+
+**Side jump (`TrySideJumpToLedge` 0xDDD490).**
+- Search start = the hands' midpoint (higher hand) + 0.9·move.
+- `sub_B153C0` searches 1.6 m along the move (hand radius 0.35, 0.3 / 0.3) for a hand pair. Each (hand offset, foot offset) pair is tried in turn: (0, −1.2), (+0.6, −0.6), (−0.6, −1.8).
+- Result type: hands + wall feet → **type 1**, climb holds → **type 0**, hands only → **type 2**.
+- Clearance capsule r 0.35 up 1.8 (type 0), 1.0 (type 1) or 2.0 (type 2) m.
+- Sets dist = clamp(|target − start|/1.6) (≥ 0.5 = long), side = 2 or 3, flag 1861 | 1.
+
+**`StartLedgeJump` 0xDDCE40, table variant.**
+- Entry at base + 16·((type·2 + long)·4 + side), base = wall 0x1A2C780 or free 0x1A2C980.
+- Entry layout: {landing category, start, loop, end}. The table is filled by `StaticInitTables` 0xDCC2A0 and was read from `RE/data/ledge_init.pkl`; the full table is in `port/src/player/ledge_moves.rs`.
+- Plays start → loop → end (`HumanClimb_Jumps`, e.g. `climbing_hangwall_tr_hangwall_left_2_{a,b,c}`; "_2" short / "_3" long).
+- Landing (`StateLedgeJump_Update` 0xDDFC30, when the action finishes):
+
+  | Category | Result |
+  |---|---|
+  | 0 | Climb context (0xDD8CF0) |
+  | 1 / 2 | Hang on the new ledge (0xDD8550 → Movement) |
+  | 3 | Ladder (0xDD8800) |
+
+- Up entries exist only for wall hang, type 0 (jump up to climb holds).
+- Measured clips: a short wall→wall side jump is 0.20 s + 0.33 s (1.5 m sideways) + 0.60 s.
+
+**Jump up to climb holds (`TryJumpUpToClimb` 0xDD5E10).**
+- Wall hang only, no pending step.
+- A hold row 1.2 m above the hands and another 1.2 m below that (r 0.4, 0.5 / 0.3, 45°, filter `dword_193419C`).
+- Climb pose from `sub_B1CC20`; clearance r 0.35 from (root − 1.1 z, 0.65 back) up 1.8 m.
+- Table jump type 0, side up, short.
+
+**Hop up (`TryWallJumpUp` 0xDD62A0 → blended `StartLedgeJump`).**
+- Wall hang, up. A box guidance query `sub_1171050` about 1 m out, two box variants. Its arguments are only partly recovered: **hypothesis**, the port searches 1.3–1.9 m above the hands within 0.6 m.
+- Plays `0x4CD68F4F` `hangwall_to_swingback_up_{min,max}_{200,300}_a` with weights:
+
+  | Clip | Weight |
+  |---|---|
+  | min_200 | (1−h)(1−v) |
+  | min_300 | (1−h)v |
+  | max_200 | h(1−v) |
+  | max_300 | hv |
+
+  v = clamp(targetZ − rootZ − 2.0) and h = clamp(horizontal hand distance).
+- Then `HumanLedge__FinishBlendedJump` 0xDDB170 → `PlayHopUpSecondPart` 0xDDAB00 plays `0x4CD68F50` (`…_b`) with the same weights. The root is interpolated to the new hang over `_b` (`sub_711130` flag 0).
+- Sets **LedgeHangType = Free**, SubState 0, +108 = 3 and +112 = w2 + w3: the hop ends swinging in a free hang. `_b`'s transition leads to the free-hang idle `0x012719F1`.
+
+**Port (`port/src/player/ledge_moves.rs`).** The port has inner and outer corners, hang→hang side jumps (types 1/2) and the hop. Departures:
+- **Ledge-jump root path:** the root follows the clips' displacement plus a linear correction (**hypothesis**; the interpolation for table jumps is not traced). Corners and the hop use the interpolator.
+- **Second hand:** after a corner the hands are re-spread to the normal spacing (**hypothesis** for SecondHandGrab).
+- **Not ported yet:** the ladder and climb-hold side jumps (types 0/3), `TryJumpUpToClimb`, and the free→wall switch after a hop.
 
 ### 7.7 Pull-up / climbing onto the top
 - **Trigger**: event 0 in `HandleEvent_Movement` 0xDE36D0, sent from outside the module (decision layer). It is accepted when `CanPullup` 0xDE2270 returns 2:

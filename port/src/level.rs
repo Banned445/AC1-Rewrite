@@ -42,10 +42,23 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (-20.0, 30.0, 6.0, 6.0, 9.6),  // climb tower: hold bands on its -Z face (CLIMB_FACE)
     (12.0, 42.0, 8.0, 0.6, 2.6),   // jump-up wall: top edge 2.6 m (ledge band max up 3.0 m)
     (16.0, 41.1, 1.0, 1.2, 3.5),   // pillar at the wall's +X end: blocks shimmy (inner corner)
+    // --- ledge moves (RE/03 §7.6) ---
+    (33.0, 50.0, 6.0, 0.6, 2.6),   // L-wall, part A (x 30..36): hang on its -Z face …
+    (36.3, 47.15, 0.6, 6.3, 4.0),  // … part B rises above it at x 36, with a stone ledge at 2.6 m (WALL_LEDGES)
+    (20.0, 50.0, 6.0, 0.6, 2.6),   // side-jump wall C (x 17..23) …
+    (25.5, 50.0, 3.0, 0.6, 2.6),   // … and D (x 24..27): a 1 m gap in the same edge line
+    (42.0, 50.0, 4.0, 0.6, 2.6),   // hop-up wall E (x 40..44): hang at 2.6 m …
+    (42.0, 50.15, 4.0, 0.3, 4.2),  // … with a ledge 1.6 m higher, set back 0.3 m (E2)
 ];
 
 /// Floating slabs (centre x, top y, centre z, size x, size z, thickness): free-hang ledges.
 const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[(2.0, 3.0, 36.0, 6.0, 1.2, 0.3)];
+
+/// Extra ledges on wall faces (p0, p1, outward normal): stone ledges that are not roof edges.
+const WALL_LEDGES: &[(Vec3, Vec3, Vec3)] = &[
+    // along part B's -X face, meeting part A's ledge at the inner corner (x 36, z 49.7)
+    (Vec3::new(35.92, 2.6, 44.0), Vec3::new(35.92, 2.6, 49.7), Vec3::NEG_X),
+];
 
 /// Climb tower face: x range, face z (normal -Z), band heights 0.6 m apart, plus a missing patch.
 const CLIMB_FACE: (f32, f32, f32) = (-22.6, -17.4, 27.0);
@@ -73,6 +86,9 @@ pub fn geometry() -> (CollisionWorld, GuidanceWorld) {
         let max = Vec3::new(x + sx * 0.5, top, z + sz * 0.5);
         collision.boxes.push(Aabb3 { min, max });
         add_roof_edges(&mut guidance, min, max);
+    }
+    for &(p0, p1, n1) in WALL_LEDGES {
+        guidance.edges.push(GuidanceEdge { p0, p1, n0: Vec3::Y, n1, subtype: GuidanceSubType::LedgeGrab });
     }
     // climbing holds: horizontal stone bands on the tower face, split at the gap
     let (x0, x1, fz) = CLIMB_FACE;

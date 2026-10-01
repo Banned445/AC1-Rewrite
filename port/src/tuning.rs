@@ -119,6 +119,9 @@ pub const VSTEP_TIME: f32 = 0.6;
 pub const VSTEP_DOWN_TIME: f32 = 0.4;
 pub const VSTEP_SECOND_TIME: f32 = 0.533;
 pub const JUMP_UP_TIME: f32 = 0.6;
+/// PORT: corner / side-jump duration only when the clip table lacks the action (jump_clips.rs).
+pub const CORNER_FALLBACK_TIME: f32 = 0.8;
+pub const SIDE_JUMP_FALLBACK_TIME: f32 = 1.0;
 /// Pull-up = the game's clip chains (RE/11 §5): wall hang → hangknee → stand = 0.333+0.4+0.467+0.4 s;
 /// free hang → hangwaist → hangknee → stand = 0.8+0.2+0.733+0.467+0.4 s.
 pub const PULLUP_WALL_TIME: f32 = 1.6;

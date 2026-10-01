@@ -321,7 +321,7 @@ fn hang_on_balcony() -> Sim {
 }
 
 #[test]
-fn free_hang_shimmy_stops_at_the_end_of_the_ledge() {
+fn free_hang_shimmy_ends_with_the_outer_corner() {
     let mut s = hang_on_balcony();
     assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
     let f = s.body().feet;
@@ -332,6 +332,8 @@ fn free_hang_shimmy_stops_at_the_end_of_the_ledge() {
     let min_x = s.data().ledge.hand_l.x.min(s.data().ledge.hand_r.x);
     assert_eq!(s.loco().current, ActorContextId::Ledge);
     assert!(min_x >= -1.01 && min_x < 0.2, "hands should stop at the slab end: {min_x}");
+    // at the end the free hang turns the outer corner onto the slab's -X side (0xDD3BB0, `corner_090_out`)
+    assert!(s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99, "no outer corner: normal {:?}", s.data().ledge.normal);
 }
 
 #[test]
@@ -401,4 +403,74 @@ fn small_drop_lands_with_the_forward_landing_blend() {
     // speed ratio ~0.75 → bucket 2 (jog exit): weights in slots 1 (soft) and 4 (hard)
     let w = os.blend.weights();
     assert!(w[1] + w[4] > 0.99, "{w:?}");
+}
+
+/// Start hanging (wall hang) with the hands centred on `mid`, facing into the wall whose normal is `n`.
+fn hang_at(mid: Vec3, n: Vec3) -> Sim {
+    use crate::player::ledge::{LedgeEntry, LedgeSubState};
+    use crate::player::{switch_context, TransitionSetup};
+    let feet = mid - Vec3::Y * 1.1 + n * 0.5;
+    let mut s = Sim::new(feet, crate::player::heading_of(-n));
+    {
+        let player = s.player;
+        let w = s.app.world_mut();
+        let mut q = w.query::<(&mut Locomotion, &mut HumanDataBundle)>();
+        let (mut loco, mut data) = q.get_mut(w, player).unwrap();
+        switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(LedgeEntry::at(mid, n, feet, LedgeSubState::Movement)));
+    }
+    s.run(1.0);
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+    s
+}
+
+#[test]
+fn inner_corner_turns_onto_the_perpendicular_wall() {
+    // L-wall: A's -Z face (z 49.7), B sticks out toward -Z at x 36 (its -X face is the inner corner)
+    let mut s = hang_at(Vec3::new(34.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::X, 1.0, false, false); // facing +Z the player's left is +X
+    let turned = s.run_until(8.0, |s| s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99 && s.data().ledge.mv.is_none());
+    assert!(turned, "no corner: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    let l = &s.data().ledge;
+    assert!((l.hand_l.x - 35.92).abs() < 0.05 && (l.hand_l.y - 2.6).abs() < 0.05, "hands on B's stone ledge: {:?}", l.hand_l);
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+}
+
+#[test]
+fn side_jump_crosses_the_gap_between_ledges() {
+    // C (x 17..23) and D (x 24..27): same edge line, 1 m gap
+    let mut s = hang_at(Vec3::new(22.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::X, 1.0, false, false);
+    let jumped = s.run_until(6.0, |s| s.data().ledge.last_action == "side jump");
+    assert!(jumped, "no side jump: {}", s.data().ledge.last_action);
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let x = s.data().ledge.hand_l.x.min(s.data().ledge.hand_r.x);
+    assert!(x > 23.9, "should hang on D: hands x {x}");
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+}
+
+#[test]
+fn outer_corner_wraps_around_the_wall_end() {
+    // C's -X end (x 17): moving -X (the player's right) wraps onto C's -X face
+    let mut s = hang_at(Vec3::new(18.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::NEG_X, 1.0, false, false);
+    let turned = s.run_until(8.0, |s| s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99 && s.data().ledge.mv.is_none());
+    assert!(turned, "no outer corner: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    assert!((s.data().ledge.hand_l.x - 17.0).abs() < 0.05);
+}
+
+#[test]
+fn hop_up_reaches_the_ledge_above_and_swings_into_a_free_hang() {
+    use crate::player::ledge_moves::{MoveKind, HOP_UP};
+    let mut s = hang_at(Vec3::new(42.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::Z, 1.0, false, false); // up
+    let hopped = s.run_until(2.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::HopUp));
+    assert!(hopped, "no hop: {}", s.data().ledge.last_action);
+    let mv = s.data().ledge.mv.unwrap();
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(HOP_UP));
+    s.pad(Vec3::Z, 0.0, false, false);
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let l = &s.data().ledge;
+    assert!((l.hand_l.y - 4.2).abs() < 0.05, "hands on E2: {:?}", l.hand_l);
+    assert_eq!(l.hang_type, ledge::LedgeHangType::Free);
+    assert!((s.body().feet.y - (4.2 - 2.4)).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
 }

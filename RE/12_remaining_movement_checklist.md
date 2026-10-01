@@ -156,12 +156,18 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Vocalization (16):** fall and climb vocals (VocalFamily).
 
 ## 4. Ledge (context 9): the missing parts of RE/03 §7
-- [ ] **Corners:** inner and outer (`sub_DDD490` / `sub_DD55F0`, anim family 0x491228xx), then **SecondHandGrab** (state 17, ±0.25 m).
-- [ ] **Side jumps between ledges** (`TrySideJumpToLedge` 0xDD3BB0): near/far, wall/free, anims 510126209–216, clearance checks.
+- [x] **Corners:** inner and outer (`sub_DDD490` / `sub_DD55F0`, anim family 0x491228xx), then **SecondHandGrab** (state 17, ±0.25 m).
+      **→ done: the corner turn is 0xDD3BB0 with candidates from 0xDD0600 (RE/03 §7.6b); the port turns inner and outer corners
+      with the game's actions. SecondHandGrab's exact re-grab is still a hypothesis.**
+- [~] **Side jumps between ledges** (`TrySideJumpToLedge` 0xDD3BB0): near/far, wall/free, anims 510126209–216, clearance checks.
+      **→ the real side jump is 0xDDD490 → the StartLedgeJump table (RE/03 §7.6b); hang → hang (types 1/2) ported. To climb holds
+      (type 0) and to a ladder (0xDD55F0, type 3) are still open.**
 - [ ] **Jumps up and sideways:**
   - **ParallelJump / LedgeJump** (`StartLedgeJump` 0xDDCE40): the blended variant (anim 1289129807, 4-way) and the table variant (0x1A2C780 / 0x1A2C980).
-  - **TryWallJumpUp** 0xDD62A0.
-- [ ] **Exact jump-up rules** (`TryJumpUpToLedge` 0xDD5E10): edge probe and body sweep.
+    **→ done: table decoded and ported; the blended variant is the hop up (→ free hang, `_a` then `_b`).**
+  - [x] **TryWallJumpUp** 0xDD62A0. **→ ported as the hop (its box query geometry is a hypothesis).**
+- [ ] **Exact jump-up rules** (`TryJumpUpToLedge` 0xDD5E10): edge probe and body sweep. **→ it is TryJumpUpToClimb (to climb holds,
+      RE/03 §7.6b): decoded, not ported (needs a climbable wall above a ledge in the greybox).**
 - [x] **Vertical hand-step tables:** up 0x1A2C4C0…, down 0x1A2C4F0…, with the Wall/Free anim columns. Currently one clip each way. **→ done: the game's first/second-hand step actions (RE/13 §4)**
 - [ ] **Hang-type switching:**
   - Free → Wall (anims 29566306/7) and Wall → Free (29562045/6, 29565306/8) (`TrySwitchHangType` 0xDE1060);

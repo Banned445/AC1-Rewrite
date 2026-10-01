@@ -494,6 +494,12 @@ fn choose_clip(
                     }
                 }
             },
+            // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            ActorContextId::Ledge if data.ledge.mv.and_then(|m| m.current()).is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.ledge.mv.unwrap().current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_000_000 + data.ledge.step_seq as u64 * 4 + b.item as u64, 0.08)
+            }
             ActorContextId::Ledge => {
                 let l = &data.ledge;
                 let wall = l.hang_type == LedgeHangType::Wall;
