@@ -430,8 +430,8 @@ fn choose_clip(
             )),
             ActorContextId::InAir => match data.air.mode {
                 // the game's takeoff then flight item (0xB20200), at the sim's time
-                AirMode::Jump { real: true, t, t_takeoff, duration, .. } if data.air.takeoff.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
-                    let (b, ph) = if t < t_takeoff {
+                AirMode::Jump { real: true, t, t_takeoff, duration, .. } if data.air.flight.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                    let (b, ph) = if t < t_takeoff && data.air.takeoff.is_some() {
                         (data.air.takeoff.unwrap(), t / t_takeoff.max(1e-4))
                     } else {
                         (data.air.flight.unwrap(), (t - t_takeoff) / (duration - t_takeoff).max(1e-4))

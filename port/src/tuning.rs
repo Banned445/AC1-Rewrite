@@ -57,12 +57,6 @@ pub const FALL_FATAL: f32 = 7.0;
 /// landing blend. SetupToGround_Landing 0xE05940 (`player::jump_blend::landing`)
 pub const ROLL_DROP: f32 = 3.0;
 
-/// PLACEHOLDER jump-at-a-ledge "clip" (only for hang targets; every other jump plays the game's takeoff +
-/// flight items, `player::jump_blend`): duration = a + b·distance, apex = c + d·distance.
-pub const JUMP_DUR_BASE: f32 = 0.45;
-pub const JUMP_DUR_PER_M: f32 = 0.06;
-pub const JUMP_APEX_BASE: f32 = 0.6;
-pub const JUMP_APEX_PER_M: f32 = 0.1;
 /// PORT: jump distance when no target is in range (the game always jumps to a target; vt28 resolves one,
 /// 0xD832F0). The jump itself uses the game's free-step blend.
 pub const FREE_JUMP_DISTANCE: f32 = 2.5;
@@ -101,11 +95,9 @@ pub const SHIMMY_MIN_STEP: f32 = 0.15;
 pub const HAND_SPACING: f32 = 0.4;
 /// Lost-ledge check radius = 0.25 + half the hand spacing. HasLostLedge 0xDD20D0
 pub const LOST_LEDGE_R: f32 = 0.25;
-/// Vertical hand-over-hand step to a ledge 0.6–1.2 m away (StartHandStep 0xDDE0C0); jump-up probe
-/// 1.2 m above the hands (TryJumpUpToLedge 0xDD5E10).
+/// Vertical hand-over-hand step to a ledge 0.6–1.2 m away (StartHandStep 0xDDE0C0).
 pub const VSTEP_MIN: f32 = 0.45;
 pub const VSTEP_MAX: f32 = 1.25;
-pub const JUMP_UP_MAX: f32 = 2.0;
 /// Pull-up: root ends 0.5 m inside the ledge (Pullup_Start 0xDDBE80).
 pub const PULLUP_IN: f32 = 0.5;
 /// Move durations = the game clips' lengths (RE/10): xx_h_hangwall_strafe_*_050cm_open 0.533 s /
@@ -155,6 +147,9 @@ pub const CATCH_REACH_LEDGE: f32 = 1.4;
 pub const CATCH_REACH_WALL: f32 = 1.95;
 /// Ledge-type jump targets: max up 3.0 m, distance bands 2.5 / 6 / 8 m. 0xB1EC40
 pub const LEDGE_MAX_UP: f32 = 3.0;
+/// Highest hand target of the standing straight jump: its top band blends the 250 / 300 cm clips over
+/// 2.5–3.0 m (0xB21DA0). (hypothesis) the target finder's own limit is not traced.
+pub const STRAIGHT_JUMP_MAX: f32 = 3.0;
 pub const LEDGE_FAR: f32 = 8.0;
 
 // ---------------------------------------------------------------- body (PLACEHOLDER until Skeleton decoded)

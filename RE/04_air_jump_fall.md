@@ -354,11 +354,52 @@ Choice:
 - The type goes back through probe vt112 to pick the entry, and the result feeds `sub_D88AA0(setup, 2, …, 3)`. That mapping is **not traced**.
 - The port keeps name-based entry clips, but switches on the game's 2.5 m/s.
 
+### 4.1.11 Jumps at a ledge (verified 2026-10-01)
+**Standing straight jump at a hand target** (`HumanGround__StartStraightJump` 0xD85550).
+- With no target (+880 == 0x80000000), it plays the in-place jump (action 30 / `0x0109B1AC` by foot, InAir +416 = 31).
+- With a target, it calls **`Human__SetupJumpToHandTarget` 0xB21DA0** on the ground's JumpTarget (+784). That function is also called from 0xD8A9C0, 0xDE8EF0, 0xE3BF90 and 0xF73B80.
+
+The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget+84; **hypothesis**: it means a wall below the edge.
+
+| dz (m) | Flight (2 clips, weights [1−b, b]) | b | Root = hand + out·n − down | Flags | Arrival (0xE07D00) |
+|---|---|---|---|---|---|
+| < 0.7 | `0x012B291B` `collide_full_*_to_freestep_{050,070}cm` | (dz−0.5)/0.2 | +0.5 n | 1 | `0x012B33F1` → NarrowObject |
+| 0.7–1.5 | `0x01290ECF` `lean_wait…_to_hangknee_{070,150}cm` | (dz−0.7)/0.8 | +0.5 n | 4 | `0x01290ED0`, Ledge SubState 4 (pull-up), root → edge − 0.1 n |
+| 1.5–2.0 | `0x01272A69` `jumpstraight_to_hangknee_{150,200}cm` | (dz−1.5)·2 | +0.5 n | 4 | `0x01272A6A` (a, b) → `0x0106C58B` hangknee→wait |
+| 2.0–2.5, subtype 8 | `0x01271631` `jumpstraight_to_hangwall_{200,250}cm` | (dz−2)·2 | +0.5 n − 1.1 | 0x40 | `0x01271632` (a, b) → wall idle `0x0106F2E8`; needs foot holds; hang type 0 |
+| 2.0–2.5, else | `0x01271639` `jumpstraight_to_hangwaist_{250,200}cm` | (dz−2)·2 | +0.5 n − 1.0 | 8 | `0x0127163A`, SubState 4 (pull-up) |
+| ≥ 2.5, subtype 8 | `0x0121A8B1` `jumpstraight_to_hangwallfree_{250,300}cm` | (dz−2.5)·2 | +0.5 n − 2.4 | 0x80 | `0x0121B072` (a, b) → free idle; **hang type 1** |
+| ≥ 2.5, else | `0x0121A598` `jumpstraight_to_hangfree_{250,300}cm` | (dz−2.5)·2 | −2.4 | 0x80 | `0x012723A5` (a, b) → free idle `0x012719F1` |
+
+- These ids apply while the playing action is 89 or `0x01099C96` (`impultionstraight_footr_to_jumpstraight_clear`, the straight-jump impulse). Otherwise the `beam_jumpstraight_*` variants `0x516D52DB…DF` are used.
+- `a4` = beam auto-climb `0x6DA7646E` (+ `0x6EFC142E` for the other foot), with b = (clamp(dz, 0.2, 1.3) − 0.2)/1.1.
+- InAir data: JumpType 0, **no takeoff** (+0x1A4 = −1, +0x1E4 = 0), flight +0x1A8 with Σw·T at +0x1E8. The correction is target root − anim end, as in §4.1.6.
+
+**Running jump onto a ledge** (`SetupJumpToTarget` §4.1.2; type 0x40 flight `…_to_surface`, 0x80 `…_to_swing`). The arrival takes the generic branch of 0xE07D00.
+
+| Case | Reception | Then |
+|---|---|---|
+| Foot holds found | `HumanInAir__PlayLedgeReception` 0xE02BA0 plays `0x011FF16A` (type 64: 3 items × 6 clips `air_surface_tr_hangwall_reception_{straight,30_out,45_in}_{min,max}`, then `hangwall_reception_*_{a,b}`) or `0x8E5444EE` (other types, timed 0.1666 s) | Weights from `sub_E02790`; Ledge SubState 6 |
+| No feet, type 0x80 | `0x023E0C60` swing cycle (front/back up/down) | SubState 8 (SwingReception) |
+| No feet, other types | No arrival | The air catch takes over |
+
+**Port.**
+- The ground's grab into a wall uses the straight jump with these bands (hands 0.7–3.0 m up). Knee and waist heights end standing on top; higher ones end hanging.
+- Running jumps onto ledges use `SetupJumpToTarget` with the `…_to_surface` flight (wall hang, type 0x40) or the `…_to_swing` flight (free hang, type 0x80), then the wall reception or one swing.
+- The placeholder jump arc is gone.
+- Departures:
+  - the straight-jump impulse `0x01099C96` the ground plays first is not played;
+  - the ≤ 0.7 m step-up and the beam variants are not used;
+  - the wall reception uses the "straight, min" clip (**hypothesis**: min/max selection not traced);
+  - the swing plays once, with no SwingStrength;
+  - knee / waist pull-ups end in Ground instead of NarrowObject;
+  - the trigger (high profile + Legs into a wall) is the port's: the game's straight jump comes from the static-jump path, and running into a wall is Walling (RE/12 §3.1).
+
 ### 4.1.10 Port (`port/src/player/jump_blend.rs`, `air.rs`, `ground.rs`)
 - §4.1.2–4.1.8 are ported exactly for running jumps to roof edges (type 1) and for ground landings.
 - The clips' durations and displacement (9 samples) come from `player/jump_clips.rs`. It is generated from the install by `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
 - Departures:
-  - **jumps at a ledge:** they keep a PLACEHOLDER arc, because their flights (`0x01271631`, `0x0121A598`, `0x0121A8B1`) are set up by the ledge code;
+  - **jumps at a ledge:** now ported too (§4.1.11), so no placeholder arc remains;
   - **free-step arrival:** it continues in Ground with the reception playing, since NarrowObject is not ported;
   - **no target in range:** the port still jumps `FREE_JUMP_DISTANCE` ahead (PORT);
   - **leading foot:** taken from the playing locomotion item (**hypothesis** on the bit meaning).

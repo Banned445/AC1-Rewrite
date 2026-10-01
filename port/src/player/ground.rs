@@ -11,10 +11,10 @@ use bevy::prelude::*;
 
 use super::air::{FallOrigin, InAirEntry, Landing, LandingType};
 use super::climb::{ClimbEntry, ClimbEntryType};
-use super::ledge::{LedgeEntry, LedgeSubState};
+
 use super::jump_blend::ActionBlend;
 use super::move_blend::MoveBlend;
-use super::targets::{edge_ahead, find_jump_target, JumpTarget, TARGET_LEDGE};
+use super::targets::{edge_ahead, find_jump_target, JumpTarget};
 use super::{
     heading_of, switch_context, ActorContextId, Body, HumanDataBundle, Locomotion, Player, SpawnPoint, TransitionSetup,
 };
@@ -267,8 +267,8 @@ pub fn update_ground(
 /// Ground → Climb / Ledge / jump-to-ledge when pushing into a wall with high profile + Legs.
 /// Order (hypothesis from the interpreter's request order, RE/01 §6.3):
 /// 1. climb start: hand holds 1.8–2.4 m up and foot holds 1.2 m below them (vt764/768, FromGround);
-/// 2. grab a ledge within reach (hands ≤ 2.4 m up, no foot holds) → Ledge;
-/// 3. a ledge up to 3 m higher, close ahead → jump up to it (ledge target).
+/// 2. a ledge with the hands 0.7–3.0 m up → the standing straight jump at it (0xB21DA0 bands: knee / waist
+///    heights pull straight up onto the top, higher ones end hanging).
 fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<TransitionSetup> {
     // a wall must be right in front
     let wall_close = (0.4..=0.9).any_hit(|d| collision.point_inside(feet + forward * d + Vec3::Y * 1.0));
@@ -294,23 +294,25 @@ fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision:
                     from_feet: feet,
                 }));
             }
-            // 2. ledge in reach without foot holds
-            if hand.point.y - feet.y <= 2.4 {
-                return Some(TransitionSetup::ToLedge(LedgeEntry::at(hand.point, hand.wall_normal, feet, LedgeSubState::Grasp)));
-            }
         }
     }
-    // 3. jump up to a ledge up to 3 m above the hang root
-    let high = [2.7f32, 3.0, 3.3, 3.6, 3.9].into_iter().filter_map(reach).find(|h| h.point.y - feet.y > 2.4);
-    if let Some(hand) = high {
+    // 2. a ledge whose hands are 0.7–3.0 m above the feet: the standing straight jump at it
+    //    (HumanGround 0xD85550 → Human__SetupJumpToHandTarget 0xB21DA0), band by the hand height
+    let hand = [0.9f32, 1.3, 1.7, 2.1, 2.5, 2.9]
+        .into_iter()
+        .filter_map(reach)
+        .find(|h| (0.7..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)));
+    if let Some(hand) = hand {
+        let n = hand.wall_normal;
+        let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
+        let j = super::ledge_moves::hang_jump_in(hand.point.y - feet.y, wall)?;
         let target = JumpTarget {
-            position: super::ledge::hang_root(hand.point, hand.point, hand.wall_normal, super::ledge::LedgeHangType::Wall),
-            type_flags: TARGET_LEDGE,
-            hang: Some((hand.point, hand.wall_normal)),
+            position: hand.point + n * j.out - Vec3::Y * j.down,
+            type_flags: j.flags,
+            hang: Some((hand.point, n)),
+            straight: Some(j),
         };
-        if target.position.y - feet.y <= LEDGE_MAX_UP {
-            return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.5, foot_left: true }));
-        }
+        return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }));
     }
     None
 }

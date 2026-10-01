@@ -65,6 +65,8 @@ pub struct LedgeEntry {
     pub normal: Vec3,
     pub from_feet: Vec3,
     pub sub_state: LedgeSubState,
+    /// The reception after a jump at the ledge (`ledge_moves::arrival_move`); replaces the plain grab.
+    pub entry_move: Option<LedgeMove>,
 }
 
 impl LedgeEntry {
@@ -77,6 +79,7 @@ impl LedgeEntry {
             normal,
             from_feet,
             sub_state,
+            entry_move: None,
         }
     }
 }
@@ -128,8 +131,14 @@ impl HumanLedgeData {
         self.after = Some(After::Hang);
         self.last_action = "grab";
         self.step_seq += 1;
-        // the root moves onto the hang pose (reception/grasp anims in the game)
-        self.moves.push(RootInterp::new(e.from_feet, Vec3::NAN, GRAB_TIME));
+        if let Some(m) = e.entry_move {
+            // the game's reception for the jump that arrived (0xE07D00)
+            self.mv = Some(m);
+            self.sub_state = LedgeSubState::HandPlacement;
+        } else {
+            // the root moves onto the hang pose (reception/grasp anims in the game)
+            self.moves.push(RootInterp::new(e.from_feet, Vec3::NAN, GRAB_TIME));
+        }
     }
 }
 
@@ -247,6 +256,16 @@ pub fn update_ledge(
             body.feet = p;
             body.heading = heading_of(mv.facing());
             limbs.hands = None;
+            if done && mv.end_stand {
+                // knee / waist arrivals end standing on top (Ledge SubState 4 → pull-up). Game: NarrowObject
+                // on the edge; PORT: Ground
+                d.mv = None;
+                limbs.hands = None;
+                limbs.feet = None;
+                body.grounded = true;
+                switch_context(&mut loco, &mut data, TransitionSetup::ToMovement { landing: None });
+                continue;
+            }
             if done {
                 d.hand_l = mv.hand_l;
                 d.hand_r = mv.hand_r;

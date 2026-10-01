@@ -212,7 +212,8 @@ Limitations:
 - Both move Altaïr by their root motion until they end.
 - Clip durations and root curves are in `src/player/jump_clips.rs`. It is generated from your install by
   `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
-- Jumps at a ledge still use a placeholder arc.
+- Jumps at a ledge use the game's straight jump (0xB21DA0). Its bands by hand height are knee, waist / wall hang, and free
+  hang. Each band has its own reception. Running jumps onto ledges use the wall reception or the swing (RE/04 §4.1.11).
 
 **Debugging and verification**
 - `AC_SHOTS=t1,t2,…` freezes the simulation at each time and saves screenshots from every view in `AC_VIEWS` into

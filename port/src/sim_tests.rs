@@ -283,12 +283,14 @@ fn hang_on_jump_up_wall() -> Sim {
 fn jump_up_to_a_ledge_then_pull_up() {
     let mut s = hang_on_jump_up_wall();
     assert!(s.saw_air, "should have jumped up to the 2.6 m ledge");
-    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    // hands 2.6 m above the feet with a wall below: the straight jump's top band, `jumpstraight_to_hangwallfree`,
+    // which the arrival turns into a free hang (0xB21DA0 / 0xE07D00: LedgeHangType 1)
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()), "reception never ended");
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
     let hands = s.data().ledge.hand_l.y;
     assert!((hands - 2.6).abs() < 0.05, "hands on the edge: {hands}");
-    // wall hang root: 1.1 m below the hands, 0.5 m out (RE/03 §7.1)
     let f = s.body().feet;
-    assert!((f.y - 1.5).abs() < 0.05 && (f.z - 41.2).abs() < 0.05, "wall-hang root {f:?}");
+    assert!((f.y - 0.2).abs() < 0.05, "free-hang root 2.4 m below the hands: {f:?}");
     s.pad(Vec3::Z, 1.0, false, false); // hold up at the top edge → pull-up
     let on_top = s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground);
     assert!(on_top && (s.body().feet.y - 2.6).abs() < 0.05, "pull-up failed: {:?} ledge {}", s.body().feet, s.data().ledge.last_action);
@@ -316,7 +318,9 @@ fn hang_on_balcony() -> Sim {
     let hung = s.run_until(3.0, |s| s.loco().current == ActorContextId::Ledge);
     assert!(hung, "never reached the balcony: ctx {:?} feet {:?}", s.loco().current, s.body().feet);
     s.pad(Vec3::Z, 0.0, false, false);
-    s.run(0.5);
+    // the arrival's reception (swing) plays before the hang takes input
+    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none()), "reception never ended");
+    s.run(0.2);
     s
 }
 
@@ -473,4 +477,37 @@ fn hop_up_reaches_the_ledge_above_and_swings_into_a_free_hang() {
     assert!((l.hand_l.y - 4.2).abs() < 0.05, "hands on E2: {:?}", l.hand_l);
     assert_eq!(l.hang_type, ledge::LedgeHangType::Free);
     assert!((s.body().feet.y - (4.2 - 2.4)).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
+}
+
+/// Walk into a wall (facing +Z) with high profile + Legs from `feet`; return once the straight jump started.
+fn straight_jump_at(feet: Vec3) -> Sim {
+    let mut s = Sim::new(feet, FACE_PZ);
+    s.pad(Vec3::Z, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never jumped: {:?}", s.body().feet);
+    s.pad(Vec3::Z, 0.0, false, false);
+    s
+}
+
+#[test]
+fn knee_height_block_jumps_and_stands_on_top() {
+    use crate::player::ledge_moves::{HangEnd, ACT_KNEE_TO_WAIT};
+    let mut s = straight_jump_at(Vec3::new(50.0, 0.0, 49.0));
+    let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
+    assert_eq!((j.flight, j.end), (0x0127_2A69, HangEnd::StandFromKnee), "1.6 m: jumpstraight_to_hangknee");
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
+    let mv = s.data().ledge.mv.expect("reception");
+    assert_eq!(mv.seq[2].map(|a| a.id), Some(ACT_KNEE_TO_WAIT));
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::Ground), "never stood up");
+    assert!((s.body().feet.y - 1.6).abs() < 0.05, "on top of the block: {:?}", s.body().feet);
+}
+
+#[test]
+fn two_metre_wall_jumps_into_a_wall_hang() {
+    let mut s = straight_jump_at(Vec3::new(56.0, 0.0, 49.0));
+    let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
+    assert_eq!(j.flight, 0x0127_1631, "2.2 m with a wall below: jumpstraight_to_hangwall");
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    assert!((s.body().feet.y - 1.1).abs() < 0.05, "wall-hang root 1.1 m below the hands: {:?}", s.body().feet);
 }

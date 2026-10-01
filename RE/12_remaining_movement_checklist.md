@@ -27,9 +27,10 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
       inside the item is a hypothesis (phase-synchronised); confirm it with a runtime trace (§10)**
 - [x] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
       **→ done: ResponseCurve at HG+0x63C, keys (0,1)(0.333,1)(0.4,0.3)(0.666,0.2)(1,1) (RE/02 §4.1.1)**
-- [x] **Jumps:** currently a placeholder arc formula. **→ done for running jumps to roof edges (free-step type 1): takeoff + flight items
-      chosen and weighted as 0xB1EC40, Σw·T durations, blended root motion + linear correction (RE/04 §4.1). Jumps at a ledge
-      still use the placeholder arc (their flights come from the ledge code, §4)** The game plays **takeoff / flight / landing clips** chosen by
+- [x] **Jumps:** currently a placeholder arc formula. **→ done: running jumps (0xB1EC40 / 0xB20200, RE/04 §4.1) and jumps at a
+      ledge (standing straight jump 0xB21DA0 with its height bands and receptions, running jumps onto ledges with the wall /
+      swing receptions, RE/04 §4.1.11). No placeholder arc remains. Open: the straight-jump impulse 0x1099C96, min/max of the
+      wall reception, the swing's SwingStrength** The game plays **takeoff / flight / landing clips** chosen by
       `Human::SetupJumpToTarget` 0xB20200 and `JumpType` (Straight / 1m / 3m5m), driven by their root motion plus the linear correction.
 - [~] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance. **→ vt28 is not a free jump: it
       resolves a target type and calls vt24 (0xD832F0). The port's no-target jump (FREE_JUMP_DISTANCE) is PORT; find what the
@@ -44,7 +45,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [~] **Fall-entry clip choice:** currently chosen by my speed rule. **→ fall type 0–6 decoded (RE/04 §4.1.9), port uses the 2.5 m/s
       threshold; the type → entry action mapping (probe vt112) is still open.** The game chooses by fall type (fall height 1 / 2 / 8 m and **→ fall action from the graph; the entry clips are still chosen by name**
       horizontal speed 2.5 m/s, 0xD87720 / 0xD8C380).
-- [ ] **Ground jump up to a ledge:** currently uses jump-to-hang clips. The game goes through **Walling** (see §3.1).
+- [~] **Ground jump up to a ledge:** currently uses jump-to-hang clips. The game goes through **Walling** (see §3.1). **→ the standing
+      straight jump at a hand target (0xD85550 → 0xB21DA0) is ported with the game's bands; the running wall run-up is Walling
+      (still open), and the port's trigger (high profile + Legs into a wall) is a stand-in**
 - [ ] **Pull-up trigger:** currently "hold up while blocked" (hypothesis). The game sends ledge event 0 from the decision layer.
       Find the sender and its input.
 - [ ] **Back eject from ledge and climb:** "high profile + Legs + stick away" is a hypothesis. Decode `TryBackEject` 0xDF2F50 and the ledge equivalent.
@@ -177,7 +180,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - variants (957955002, 0x386E3B13);
   - free-hang special case (`sub_DE0E30`);
   - the three outcomes: stand on the edge → NarrowObject, jump off → InAir, back to hang.
-- [ ] **Grasp** (low ledges at knee/waist height → pull-up straight away) and **GraspType** (HangKnee, Climb, HangWaist, HangWall,
+- [~] **Grasp** (low ledges at knee/waist height → pull-up straight away) **→ via the straight jump's knee / waist bands (RE/04
+      §4.1.11); the GraspType states themselves are not traced** and **GraspType** (HangKnee, Climb, HangWaist, HangWall,
       HangFree 1 hand, HangFree 2 hands).
 - [~] **Receptions:** Wall / Free / **Swing** reception (SwingStrength from InAir); **HangFreeReceptionType** Front/Straight/Back; **→ catch actions by type and ≥3 m (CheckAirCatch); swing/one-hand/angle classes still open**
       **min/max** catch variants (long catch at a fall of 3 m or more, 0xE0BB70); angle variants **30_out / 45_in / straight**;

@@ -15,6 +15,7 @@ use bevy::prelude::*;
 
 use super::jump_blend::{self, ActionBlend, TARGET_FREESTEP};
 use super::ledge::{LedgeEntry, LedgeSubState};
+use super::ledge_moves::{self, LedgeArrival};
 use super::targets::JumpTarget;
 use super::{switch_context, ActorContextId, Body, HumanDataBundle, Locomotion, Player, TransitionSetup};
 use crate::collision::CollisionWorld;
@@ -150,10 +151,9 @@ impl HumanInAirData {
                     aim.y = from.y - OVERDROP;
                     then_fall_to = Some(target.position);
                 }
-                self.mode = if target.hang.is_some() {
-                    placeholder_jump(from, aim, speed_param, then_fall_to)
-                } else {
-                    self.real_jump(from, aim, target.type_flags, then_fall_to)
+                self.mode = match (target.straight, target.hang) {
+                    (Some(j), Some((_, n))) => self.straight_jump(from, aim, j, n),
+                    _ => self.real_jump(from, aim, target.type_flags, then_fall_to),
                 };
             }
             InAirEntry::FreeJump { from, dir, speed_param } => {
@@ -199,6 +199,20 @@ impl HumanInAirData {
     }
 }
 
+impl HumanInAirData {
+    /// Human__SetupJumpToHandTarget 0xB21DA0: no takeoff item (+0x1E4 = 0); the band's 2-clip flight, its Σw·T
+    /// as the duration (+0x1E8), JumpType 0, and the linear correction to the hang / knee root.
+    fn straight_jump(&mut self, from: Vec3, aim: Vec3, j: super::ledge_moves::HangJumpIn, n: Vec3) -> AirMode {
+        let fwd = -Vec3::new(n.x, 0.0, n.z).normalize_or(Vec3::NEG_Z);
+        let flight = ActionBlend::new(j.flight, 0, &[1.0 - j.b, j.b]);
+        self.takeoff = None;
+        self.flight = Some(flight);
+        let d = flight.duration();
+        let clip_end = from + to_world(flight.disp(1.0), fwd);
+        AirMode::Jump { from, clip_end, aim, apex: 0.0, duration: d.max(0.2), t: 0.0, then_fall_to: None, real: true, t_takeoff: 0.0, fwd }
+    }
+}
+
 fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
@@ -210,25 +224,13 @@ fn to_world(d: [f32; 3], fwd: Vec3) -> Vec3 {
 
 /// Blended root displacement of the jump at time `t` (takeoff item, then the flight item from its end).
 fn jump_disp(air: &HumanInAirData, t: f32, t1: f32, duration: f32) -> [f32; 3] {
-    let (Some(to), Some(fl)) = (air.takeoff, air.flight) else { return [0.0; 3] };
+    let Some(fl) = air.flight else { return [0.0; 3] };
+    let Some(to) = air.takeoff else { return fl.disp(t / duration.max(1e-4)) };
     if t < t1 {
         to.disp(t / t1.max(1e-4))
     } else {
         add(to.disp(1.0), fl.disp((t - t1) / (duration - t1).max(1e-4)))
     }
-}
-
-/// PLACEHOLDER jump to a ledge: the jump-into-hang flights (0x01271631 / 0x0121A598 / 0x0121A8B1) are set
-/// up by the ledge code, not traced yet — nominal clip length per distance class, parabolic lift.
-fn placeholder_jump(from: Vec3, aim: Vec3, speed_param: f32, then_fall_to: Option<Vec3>) -> AirMode {
-    let flat = Vec3::new(aim.x - from.x, 0.0, aim.z - from.z);
-    let dist = flat.length();
-    let nominal = if dist < 2.5 { dist.max(1.0) } else if dist < 5.0 { 4.0 } else { 6.0 };
-    let dir = flat.normalize_or_zero();
-    let clip_end = from + dir * nominal; // where the uncorrected clip would end (same height)
-    let duration = (JUMP_DUR_BASE + JUMP_DUR_PER_M * dist) * (1.15 - 0.3 * speed_param.clamp(0.0, 1.0));
-    let apex = JUMP_APEX_BASE + JUMP_APEX_PER_M * dist;
-    AirMode::Jump { from, clip_end, aim, apex, duration, t: 0.0, then_fall_to, real: false, t_takeoff: 0.0, fwd: dir }
 }
 
 fn classify_landing(apex_y: f32, start_y: f32, land_y: f32) -> Landing {
@@ -283,11 +285,10 @@ pub fn update_air(
             AirMode::Jump { from, clip_end, aim, apex, duration, t, then_fall_to, real, t_takeoff, fwd } => {
                 let t1 = (t + dt).min(duration);
                 let s = t1 / duration;
+                // the takeoff + flight items' blended root motion (0xE0DEF0); `real` is always set now
                 let clip_pos = if real {
-                    // the takeoff + flight items' blended root motion (0xE0DEF0)
                     from + to_world(jump_disp(air, t1, t_takeoff, duration), fwd)
                 } else {
-                    // PLACEHOLDER: straight line to clip_end + parabolic lift
                     from.lerp(clip_end, s) + Vec3::Y * (4.0 * apex * s * (1.0 - s))
                 };
                 // linear correction toward the real target (0xE0DEF0)
@@ -295,7 +296,7 @@ pub fn update_air(
                 let next = clip_pos + correction;
                 let r = collision.move_capsule(body.feet, next - body.feet, false);
                 body.velocity = (r.position - body.feet) / dt.max(1e-4);
-                body.heading = super::heading_of(Vec3::new(aim.x - from.x, 0.0, aim.z - from.z).normalize_or(body.forward()));
+                body.heading = super::heading_of(fwd);
                 body.feet = r.position;
                 let blocked = (r.position - next).length() > 0.05;
                 if blocked {
@@ -308,7 +309,15 @@ pub fn update_air(
                     debug_assert!((body.feet - aim).length() < ARRIVAL_TOLERANCE + 0.05);
                     // hand-off by target type (ledge targets → Ledge context)
                     if let Some((mid, normal)) = air.target.and_then(|t| t.hang) {
-                        hang_on = Some(LedgeEntry::at(mid, normal, body.feet, LedgeSubState::HangWallReception));
+                        // the reception by the flight that arrived (CheckJumpTargetArrival 0xE07D00)
+                        let t = air.target.unwrap();
+                        let arrival = match t.straight {
+                            Some(j) => LedgeArrival::Straight(j),
+                            None => LedgeArrival::Surface { free: t.type_flags == super::targets::TARGET_LEDGE_FREE },
+                        };
+                        let mut e = LedgeEntry::at(mid, normal, body.feet, LedgeSubState::HangWallReception);
+                        e.entry_move = Some(ledge_moves::arrival_move(arrival, body.feet, e.hand_l, e.hand_r, normal, &collision));
+                        hang_on = Some(e);
                     }
                     match then_fall_to {
                         _ if hang_on.is_some() => {}

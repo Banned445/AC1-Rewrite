@@ -71,6 +71,12 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     0x4C46037A, 0x4C46037B, 0x4C46037C, 0x4C46037D, 0x4C46037E, 0x4C46037F,
     0x1E67_E881, 0x1E67_E882, 0x1E67_E883, 0x1E67_E884, 0x1E67_E885, 0x1E67_E886, 0x1E67_E887, 0x1E67_E888,
     HOP_UP, HOP_UP_B,
+    // straight jump to a hand target (0xB21DA0) and its arrivals (0xE07D00)
+    0x0129_0ECF, 0x0127_2A69, 0x0127_1631, 0x0127_1639, 0x0121_A598, 0x0121_A8B1,
+    0x0129_0ED0, 0x0127_2A6A, 0x0127_163A, 0x0127_1632, 0x0121_B072, 0x0127_23A5,
+    ACT_WAIST_TO_KNEE, ACT_KNEE_TO_WAIT,
+    // running jump onto a ledge: wall reception and free-hang swing (0xE07D00 generic branch)
+    RECEPTION_SURFACE_WALL, SWING_RECEPTION,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +84,8 @@ pub enum MoveKind {
     Corner { inner: bool },
     SideJump { long: bool },
     HopUp,
+    /// Received after a jump at a ledge (0xE07D00).
+    Arrival,
 }
 
 /// A running ledge move.
@@ -85,8 +93,8 @@ pub enum MoveKind {
 pub struct LedgeMove {
     pub kind: MoveKind,
     /// The action items played in sequence.
-    pub seq: [Option<ActionBlend>; 3],
-    pub durations: [f32; 3],
+    pub seq: [Option<ActionBlend>; 4],
+    pub durations: [f32; 4],
     pub t: f32,
     pub from: Vec3,
     pub to: Vec3,
@@ -99,6 +107,8 @@ pub struct LedgeMove {
     pub lead: f32,
     /// The move ends in a free hang whatever the wall below (the hop, 0xDDAB00 sets LedgeHangType 1).
     pub end_free: bool,
+    /// The move ends standing on top (knee / waist arrivals: Ledge SubState 4 → pull-up → Ground).
+    pub end_stand: bool,
     /// Hands and wall normal once the move ends.
     pub hand_l: Vec3,
     pub hand_r: Vec3,
@@ -116,7 +126,7 @@ impl LedgeMove {
         for (i, a) in self.seq.iter().enumerate() {
             let Some(a) = a else { continue };
             let d = self.durations[i];
-            if self.t < t0 + d || i == 2 || self.seq[i + 1..].iter().all(|x| x.is_none()) {
+            if self.t < t0 + d || i == self.seq.len() - 1 || self.seq[i + 1..].iter().all(|x| x.is_none()) {
                 return Some((*a, ((self.t - t0) / d.max(1e-4)).clamp(0.0, 1.0)));
             }
             t0 += d;
@@ -168,8 +178,8 @@ fn single(id: u32, item: usize) -> Option<ActionBlend> {
     jump_blend::action_items(id).filter(|i| i.len() > item).map(|_| ActionBlend::new(id, item, &[1.0]))
 }
 
-fn seq_durations(seq: &[Option<ActionBlend>; 3]) -> [f32; 3] {
-    let mut d = [0.0; 3];
+fn seq_durations(seq: &[Option<ActionBlend>; 4]) -> [f32; 4] {
+    let mut d = [0.0; 4];
     for (i, a) in seq.iter().enumerate() {
         d[i] = a.map(|a| a.duration()).unwrap_or(0.0);
     }
@@ -216,9 +226,9 @@ pub fn try_corner(
     }
     let col = (right as usize) * 2 + (!inner) as usize;
     let id = CORNER_ACTIONS[(hang == LedgeHangType::Wall) as usize][col];
-    let seq = if hang == LedgeHangType::Wall { [single(id, 0), single(id, 1), None] } else { [single(id, 0), None, None] };
+    let seq = if hang == LedgeHangType::Wall { [single(id, 0), single(id, 1), None, None] } else { [single(id, 0), None, None, None] };
     let durations = seq_durations(&seq);
-    let durations = if durations.iter().sum::<f32>() > 0.0 { durations } else { [CORNER_FALLBACK_TIME, 0.0, 0.0] };
+    let durations = if durations.iter().sum::<f32>() > 0.0 { durations } else { [CORNER_FALLBACK_TIME, 0.0, 0.0, 0.0] };
     Some(LedgeMove {
         kind: MoveKind::Corner { inner },
         seq,
@@ -231,6 +241,7 @@ pub fn try_corner(
         follow_disp: false,
         lead: 0.0,
         end_free: false,
+        end_stand: false,
         hand_l: hl,
         hand_r: hr,
         normal: nn,
@@ -278,13 +289,13 @@ pub fn try_side_jump(
                     let long = (dist / 1.6).clamp(0.0, 1.0) >= 0.5;
                     let ty = if new_hang == LedgeHangType::Wall { 1 } else { 2 };
                     let entry = LEDGE_JUMP_TABLE[(hang == LedgeHangType::Free) as usize][(ty * 2 + long as usize) * 4 + 2 + right as usize];
-                    let seq = [single(entry.1[0], 0), single(entry.1[1], 0), single(entry.1[2], 0)];
+                    let seq = [single(entry.1[0], 0), single(entry.1[1], 0), single(entry.1[2], 0), None];
                     let durations = seq_durations(&seq);
                     let found = durations.iter().sum::<f32>() > 0.0;
                     return Some(LedgeMove {
                         kind: MoveKind::SideJump { long },
                         seq,
-                        durations: if found { durations } else { [SIDE_JUMP_FALLBACK_TIME, 0.0, 0.0] },
+                        durations: if found { durations } else { [SIDE_JUMP_FALLBACK_TIME, 0.0, 0.0, 0.0] },
                         t: 0.0,
                         from: root,
                         to,
@@ -293,6 +304,7 @@ pub fn try_side_jump(
                         follow_disp: found,
                         lead: 0.0,
                         end_free: false,
+                        end_stand: false,
                         hand_l: hl,
                         hand_r: hr,
                         normal: nn,
@@ -334,8 +346,8 @@ pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHa
         let (da, db) = if da + db > 0.0 { (da, db) } else { (0.0, JUMP_UP_TIME) };
         return Some(LedgeMove {
             kind: MoveKind::HopUp,
-            seq: [a, b, None],
-            durations: [da, db, 0.0],
+            seq: [a, b, None, None],
+            durations: [da, db, 0.0, 0.0],
             t: 0.0,
             from: root,
             to,
@@ -345,10 +357,139 @@ pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHa
             follow_disp: false,
             lead: da,
             end_free: true,
+            end_stand: false,
             hand_l: hl,
             hand_r: hr,
             normal: nn,
         });
     }
     None
+}
+
+// ---------------------------------------------------------------- jumps into a hang
+
+/// Pull-up chain pieces: hangwaist → hangknee (`xx_h_hangwaist_tr_hangknee_footl`), hangknee → wait.
+pub const ACT_WAIST_TO_KNEE: u32 = 0x0127_199E;
+pub const ACT_KNEE_TO_WAIT: u32 = 0x0106_C58B;
+/// Running jump onto a wall-hang ledge (target type 0x40): `air_surface_tr_hangwall_reception_{straight,
+/// 30_out,45_in}_{min,max}` then `hangwall_reception_*_{a,b}` (3 items × 6 clips; 0xE07D00 → 0xE02BA0).
+pub const RECEPTION_SURFACE_WALL: u32 = 0x011F_F16A;
+/// Running jump onto a free-hang ledge (type 0x80): the swing cycle (0xE07D00, Ledge SubState 8).
+pub const SWING_RECEPTION: u32 = 0x023E_0C60;
+
+/// The bands of `Human__SetupJumpToHandTarget` 0xB21DA0 (standing straight jump at a hand target) by the
+/// hand height above the feet `dz`: flight action, its 2-clip blend weight, the root offset from the hand
+/// point (out along the wall normal, down), target flags, the arrival reception and how it ends.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HangJumpIn {
+    pub flight: u32,
+    pub b: f32,
+    pub out: f32,
+    pub down: f32,
+    pub flags: u32,
+    pub reception: u32,
+    pub end: HangEnd,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HangEnd {
+    /// Hang (wall / free / wall-free) after the reception.
+    Hang(LedgeHangType),
+    /// Knee height: the reception then hangknee → wait (Ledge SubState 4, pull-up).
+    StandFromKnee,
+    /// Waist height: the reception, hangwaist → hangknee, hangknee → wait.
+    StandFromWaist,
+}
+
+/// 0xB21DA0 bands (ground variant: the playing action is the straight-jump impulse; the `beam_*` variants and
+/// the ≤ 0.7 m `collide_full_*_to_freestep` step-up → NarrowObject are not used by the port). `wall` = the
+/// target's sub-type is 8 (hypothesis: a wall below the edge, i.e. a wall hang).
+pub fn hang_jump_in(dz: f32, wall: bool) -> Option<HangJumpIn> {
+    let c = |x: f32| x.clamp(0.0, 1.0);
+    Some(if dz < 0.7 {
+        return None;
+    } else if dz < 1.5 {
+        HangJumpIn { flight: 0x0129_0ECF, b: c((dz - 0.7) / 0.8), out: 0.5, down: 0.0, flags: 4, reception: 0x0129_0ED0, end: HangEnd::StandFromKnee }
+    } else if dz < 2.0 {
+        HangJumpIn { flight: 0x0127_2A69, b: c((dz - 1.5) * 2.0), out: 0.5, down: 0.0, flags: 4, reception: 0x0127_2A6A, end: HangEnd::StandFromKnee }
+    } else if dz < 2.5 {
+        if wall {
+            HangJumpIn { flight: 0x0127_1631, b: c((dz - 2.0) * 2.0), out: 0.5, down: 1.1, flags: 0x40, reception: 0x0127_1632, end: HangEnd::Hang(LedgeHangType::Wall) }
+        } else {
+            HangJumpIn { flight: 0x0127_1639, b: c((dz - 2.0) * 2.0), out: 0.5, down: 1.0, flags: 8, reception: 0x0127_163A, end: HangEnd::StandFromWaist }
+        }
+    } else if wall {
+        HangJumpIn { flight: 0x0121_A8B1, b: c((dz - 2.5) * 2.0), out: 0.5, down: 2.4, flags: 0x80, reception: 0x0121_B072, end: HangEnd::Hang(LedgeHangType::Free) }
+    } else {
+        HangJumpIn { flight: 0x0121_A598, b: c((dz - 2.5) * 2.0), out: 0.0, down: 2.4, flags: 0x80, reception: 0x0127_23A5, end: HangEnd::Hang(LedgeHangType::Free) }
+    })
+}
+
+/// How a jump at a ledge is received when it arrives (CheckJumpTargetArrival 0xE07D00).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LedgeArrival {
+    /// From the standing straight jump (0xB21DA0).
+    Straight(HangJumpIn),
+    /// From a running jump (0xB20200) onto a ledge: wall reception (type 0x40) or the swing (0x80).
+    Surface { free: bool },
+}
+
+/// The Ledge context's entry move for an arrival: the reception actions while the root goes from `from` to
+/// the hang root (or onto the top for knee / waist heights), following the clips' displacement plus a
+/// correction (receptions are FROMANIM; the game interpolates the root over the action, 0xE07D00 →
+/// sub_711130).
+pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n: Vec3, collision: &CollisionWorld) -> LedgeMove {
+    let facing = -Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    let mid = (hand_l + hand_r) * 0.5;
+    let top = Vec3::new(mid.x, mid.y, mid.z) - n * PULLUP_IN;
+    let item = |id: u32, i: usize, w: &[f32]| jump_blend::action_items(id).filter(|it| it.len() > i).map(|_| ActionBlend::new(id, i, w));
+    let (seq, to, end_free, end_stand) = match arr {
+        LedgeArrival::Straight(j) => {
+            let w = [1.0 - j.b, j.b];
+            match j.end {
+                HangEnd::Hang(h) => {
+                    let to = hang_root(hand_l, hand_r, n, if h == LedgeHangType::Free || hang_type_at(mid, n, collision) == LedgeHangType::Free { LedgeHangType::Free } else { LedgeHangType::Wall });
+                    ([item(j.reception, 0, &w), item(j.reception, 1, &w), None, None], to, h == LedgeHangType::Free, false)
+                }
+                HangEnd::StandFromKnee => ([item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_KNEE_TO_WAIT, 0, &[1.0]), None], top, false, true),
+                HangEnd::StandFromWaist => (
+                    [item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_WAIST_TO_KNEE, 0, &[1.0]), item(ACT_KNEE_TO_WAIT, 0, &[1.0])],
+                    top,
+                    false,
+                    true,
+                ),
+            }
+        }
+        LedgeArrival::Surface { free: false } => {
+            // 0xE02790 weights the 6 clips by the wall angle (straight / 30 out / 45 in) and min / max;
+            // the port's ledges are straight; (hypothesis) min
+            let w = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+            let to = hang_root(hand_l, hand_r, n, LedgeHangType::Wall);
+            ([item(RECEPTION_SURFACE_WALL, 0, &w), item(RECEPTION_SURFACE_WALL, 1, &w), item(RECEPTION_SURFACE_WALL, 2, &w), None], to, false, false)
+        }
+        LedgeArrival::Surface { free: true } => {
+            // the swing: front up, front down (PORT: one swing, no SwingStrength decay)
+            let to = hang_root(hand_l, hand_r, n, LedgeHangType::Free);
+            ([item(SWING_RECEPTION, 0, &[1.0]), item(SWING_RECEPTION, 1, &[1.0]), None, None], to, true, false)
+        }
+    };
+    let durations = seq_durations(&seq);
+    let found = durations.iter().sum::<f32>() > 0.0;
+    LedgeMove {
+        kind: MoveKind::Arrival,
+        seq,
+        durations: if found { durations } else { [GRAB_TIME, 0.0, 0.0, 0.0] },
+        t: 0.0,
+        from,
+        to,
+        facing_from: facing,
+        facing_to: facing,
+        follow_disp: found,
+        lead: 0.0,
+        end_free,
+        end_stand,
+        hand_l,
+        hand_r,
+        normal: n,
+    }
 }

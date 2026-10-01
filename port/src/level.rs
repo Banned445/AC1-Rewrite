@@ -49,6 +49,9 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (25.5, 50.0, 3.0, 0.6, 2.6),   // … and D (x 24..27): a 1 m gap in the same edge line
     (42.0, 50.0, 4.0, 0.6, 2.6),   // hop-up wall E (x 40..44): hang at 2.6 m …
     (42.0, 50.15, 4.0, 0.3, 4.2),  // … with a ledge 1.6 m higher, set back 0.3 m (E2)
+    // --- standing straight jump bands (0xB21DA0) ---
+    (50.0, 50.3, 3.0, 1.0, 1.6),   // knee height: jump, hangknee, stand on top
+    (56.0, 50.3, 3.0, 1.0, 2.2),   // 2.0–2.5 m with a wall below: jump into a wall hang
 ];
 
 /// Floating slabs (centre x, top y, centre z, size x, size z, thickness): free-hang ledges.
