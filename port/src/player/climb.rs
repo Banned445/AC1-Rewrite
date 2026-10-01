@@ -340,7 +340,7 @@ pub fn update_climb(
                 InAirEntry::FreeJump { from: body.feet, dir: n, speed_param: 0.5 }
             } else {
                 // release (StartRelease 0xDE96A0 → InAir, FallOrigin_Climb)
-                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: FallOrigin::Climb }
+                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: FallOrigin::Climb, speed_param: 0.0 }
             };
             switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
             continue;
@@ -394,6 +394,8 @@ pub fn update_climb(
                     normal: n,
                     from_feet: body.feet,
                     sub_state: LedgeSubState::TransitionInFromClimb,
+                    entry_move: None,
+                    entry_rest: [None, None],
                 };
                 switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
                 continue;

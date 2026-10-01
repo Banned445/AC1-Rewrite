@@ -10,9 +10,9 @@ Start with **00_overview.md** (architecture and recreation plan), then read the 
 |---|---|---|
 | 00 | [00_overview.md](00_overview.md) | Architecture, how the pieces fit, recreation roadmap |
 | 01 | [01_human_core_and_input.md](01_human_core_and_input.md) | Human object, module/state framework, pad input → movement, character controller |
-| 02 | [02_ground_locomotion.md](02_ground_locomotion.md) | Walk/jog/run/sprint, turning, stopping, obstacles, crowd push |
-| 03 | [03_ledge_and_climb.md](03_ledge_and_climb.md) | Ledge hanging/shimmy/pull-up, wall climbing |
-| 04 | [04_air_jump_fall.md](04_air_jump_fall.md) | Jumps, falls, landing, Leap of Faith |
+| 02 | [02_ground_locomotion.md](02_ground_locomotion.md) | Walk/jog/run/sprint, turning, stopping, obstacles, crowd push; §4.1 MoveBlend: 17-clip locomotion blend weights, deceleration curve, root motion |
+| 03 | [03_ledge_and_climb.md](03_ledge_and_climb.md) | Ledge hanging/shimmy/pull-up, wall climbing; §7.6b corners, side jumps, ledge-jump table, hop up |
+| 04 | [04_air_jump_fall.md](04_air_jump_fall.md) | Jumps, falls, landing, Leap of Faith; §4.1 jump action choice (takeoff/flight/reception), height/distance blends, Σw·T item timing, ground landing actions |
 | 05 | [05_beams_walling_poles_ladders.md](05_beams_walling_poles_ladders.md) | Beams, wall-run, poles, ladders, ropes |
 | 06 | [06_guidance_world_detection.md](06_guidance_world_detection.md) | How the world marks climbable/grabbable geometry |
 | 07 | [07_reflection_enums_and_data_layouts.md](07_reflection_enums_and_data_layouts.md) | Reflection formats, all movement enums, data layouts, CRC32 name hashes, engine type table |

@@ -15,6 +15,7 @@ use crate::assets::ac_actions::{ActionGraph, DisplacementMode};
 use crate::assets::anims::load_locomotion;
 use crate::assets::game_dir;
 use crate::model::Rig;
+use crate::player::move_blend::ACT_GROUND_LOCOMOTION;
 use crate::player::{ground::speed_band, ground::SpeedBand, ActorContextId, HumanDataBundle, Locomotion};
 
 /// A decoded animation clip (Bevy types).
@@ -210,6 +211,9 @@ pub struct AnimPlayer {
     grasp_dir: Vec3,
     /// Ledge grab whose reception has been played.
     caught: Option<u64>,
+    /// Phase set by the simulation (the ground step cycle, `MoveBlend`): the player shows it instead of
+    /// advancing its own clock.
+    sim_phase: Option<f32>,
 }
 
 /// What the selector wants playing.
@@ -328,6 +332,38 @@ const ACT_CATCH_FREE: [u32; 2] = [0x1F0C_2EB8, 0x1F0C_2EB9];
 /// Falling (6-way grasp blend).
 const ACT_FALL: u32 = 0x1F0C_22C2;
 
+/// One item of a graph action with the sim's weights, if all its clips are loaded. Root motion is off:
+/// the sim already moves the body along it.
+fn sim_item(lib: &AnimLibrary, b: &crate::player::jump_blend::ActionBlend) -> Option<ItemPlay> {
+    let items = lib.action_items(b.id)?;
+    let mut it = items.get(b.item)?.clone();
+    if it.layers.len() != b.n {
+        return None;
+    }
+    for (k, l) in it.layers.iter_mut().enumerate() {
+        l.1 = b.w[k];
+    }
+    it.root_motion = false;
+    Some(it)
+}
+
+/// Play `b` (phase from the sim): update the weights in place if it is already playing.
+fn sim_request(p: &mut AnimPlayer, lib: &AnimLibrary, b: &crate::player::jump_blend::ActionBlend, token: u64, fade: f32) -> Option<Request> {
+    let it = sim_item(lib, b)?;
+    let key = format!("act_{:08x}", b.id);
+    if p.clip.as_deref() == Some(key.as_str()) && p.token == token {
+        p.items = vec![it];
+        p.item = 0;
+        return None;
+    }
+    Some(Request { key, items: vec![it], looping: false, fit: None, token, fade, hold: false })
+}
+
+/// Both items (footl, footr) of the ground locomotion action with all 17 clips loaded.
+fn ground_items(lib: &AnimLibrary) -> Option<Vec<ItemPlay>> {
+    lib.action_items(ACT_GROUND_LOCOMOTION).filter(|items| items.len() == 2 && items.iter().all(|i| i.layers.len() == 17))
+}
+
 /// Pick what plays for the current context.
 fn choose_clip(
     time: Res<Time>,
@@ -341,6 +377,7 @@ fn choose_clip(
     let dt = time.delta_secs();
     for (loco, data, body, mut p) in &mut q {
         let g = &data.ground;
+        p.sim_phase = None;
         if let Some(ctx) = p.hold {
             if ctx == loco.current && !(p.phase >= 1.0 && p.item + 1 >= p.items.len()) {
                 continue;
@@ -348,6 +385,13 @@ fn choose_clip(
             p.hold = None;
         }
         let req = match loco.current {
+            // landing / free-step reception action (0xE05940 / 0xE07D00), shown at the sim's phase
+            ActorContextId::Ground if g.oneshot.is_some_and(|os| sim_item(&lib, &os.blend).is_some()) => {
+                let os = g.oneshot.unwrap();
+                p.seen_landing = g.landing_seq;
+                p.sim_phase = Some((os.t / os.duration.max(1e-4)).min(1.0));
+                sim_request(&mut p, &lib, &os.blend, 1_000_000 + g.landing_seq as u64, 0.1)
+            }
             ActorContextId::Ground if g.landing_seq != p.seen_landing => {
                 p.seen_landing = g.landing_seq;
                 let clip = match g.last_landing {
@@ -359,6 +403,21 @@ fn choose_clip(
             }
             // after a pull-up the action ends standing: let it finish before idling
             ActorContextId::Ground if p.clip.as_deref().is_some_and(|c| c.starts_with(&format!("act_{ACT_PULLUP_WALL:08x}")) || c.starts_with(&format!("act_{ACT_PULLUP_FREE:08x}"))) && !(p.phase >= 1.0 && p.item + 1 >= p.items.len()) => continue,
+            // moving: the game's locomotion action 0x05923BDB, item of the leading foot, MoveBlend's 17 weights
+            ActorContextId::Ground if g.speed_param > 0.0 && ground_items(&lib).is_some() => {
+                let mut it = ground_items(&lib).unwrap()[g.blend.foot].clone();
+                for (k, l) in it.layers.iter_mut().enumerate() {
+                    l.1 = g.blend.weights[k];
+                }
+                p.sim_phase = Some(g.blend.phase);
+                let key = format!("act_{ACT_GROUND_LOCOMOTION:08x}");
+                if p.clip.as_deref() == Some(key.as_str()) {
+                    p.items = vec![it];
+                    p.item = 0;
+                    continue;
+                }
+                Some(Request { key, items: vec![it], looping: true, fit: None, token: 0, fade: CROSSFADE, hold: false })
+            }
             ActorContextId::Ground => Some(looped(
                 match speed_band(g.speed_param) {
                     SpeedBand::None => if g.high_profile { "idle_high" } else { "idle_low" },
@@ -370,6 +429,16 @@ fn choose_clip(
                 CROSSFADE,
             )),
             ActorContextId::InAir => match data.air.mode {
+                // the game's takeoff then flight item (0xB20200), at the sim's time
+                AirMode::Jump { real: true, t, t_takeoff, duration, .. } if data.air.flight.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                    let (b, ph) = if t < t_takeoff && data.air.takeoff.is_some() {
+                        (data.air.takeoff.unwrap(), t / t_takeoff.max(1e-4))
+                    } else {
+                        (data.air.flight.unwrap(), (t - t_takeoff) / (duration - t_takeoff).max(1e-4))
+                    };
+                    p.sim_phase = Some(ph.min(1.0));
+                    sim_request(&mut p, &lib, &b, 2_000_000 + data.air.seq as u64, 0.05)
+                }
                 // the takeoff/flight clip is stretched over the target-warped jump (RE/04)
                 AirMode::Jump { duration, .. } => {
                     let clip = match data.air.target.and_then(|t| t.hang) {
@@ -388,7 +457,9 @@ fn choose_clip(
                             FallOrigin::HangFree => "hangfree_to_fall",
                             FallOrigin::HangWall | FallOrigin::Climb => "hangwall_to_fall",
                             FallOrigin::Ground if p.clip.as_deref() == Some("jump") => "jump_to_fall",
-                            FallOrigin::Ground if speed > 3.0 => "run_to_fall",
+                            // fast fall types (odd / 6) at a horizontal speed ≥ 2.5 m/s (0xD8C380); the type → clip
+                            // mapping (probe vt112) is not traced, so the clip is still chosen by name
+                            FallOrigin::Ground if speed >= 2.5 => "run_to_fall",
                             FallOrigin::Ground => "walk_to_fall",
                         };
                         Some(once(entry.into(), 4_000_000 + data.air.seq as u64, None, 0.12))
@@ -423,6 +494,12 @@ fn choose_clip(
                     }
                 }
             },
+            // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            ActorContextId::Ledge if data.ledge.mv.and_then(|m| m.current()).is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.ledge.mv.unwrap().current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_000_000 + data.ledge.step_seq as u64 * 4 + b.item as u64, 0.08)
+            }
             ActorContextId::Ledge => {
                 let l = &data.ledge;
                 let wall = l.hang_type == LedgeHangType::Wall;
@@ -605,7 +682,9 @@ pub fn apply_clip(
             1.0
         };
         let next = p.phase + dt * rate / duration;
-        if p.looping {
+        if let Some(ph) = p.sim_phase {
+            p.phase = ph;
+        } else if p.looping {
             p.phase = next.fract();
         } else if next >= 1.0 && p.item + 1 < p.items.len() {
             // next item of the action's sequence, blended over its authored blend time

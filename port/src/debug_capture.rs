@@ -27,6 +27,12 @@ enum Scenario {
     Sprint,
     /// Jump up to the 2.6 m wall ledge (wall hang), hold, then pull up.
     WallHang,
+    /// Grab wall C, side-jump to D, shimmy to D's end and turn its outer corner (RE/03 §7.6).
+    LedgeMoves,
+    /// Jump at wall F (free arrival), shimmy left: free → wall, then wall → free at the overhang (0xDE1060).
+    HangSwitch,
+    /// Stand at roof A's +X edge, press Legs in low profile: pull-down into a wall hang (0xDDE4D0).
+    PullDown,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -45,6 +51,9 @@ impl Plugin for DebugCapturePlugin {
                 "walk" => Scenario::Walk,
                 "back" => Scenario::Back,
                 "wallhang" => Scenario::WallHang,
+                "ledgemoves" => Scenario::LedgeMoves,
+                "hangswitch" => Scenario::HangSwitch,
+                "pulldown" => Scenario::PullDown,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -93,6 +102,24 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 rig.yaw = std::f32::consts::PI - 0.5;
                 rig.distance = 6.0;
                 rig.pitch = 0.05;
+            }
+            Scenario::PullDown => {
+                b.feet = Vec3::new(10.6, 3.5, 12.0);
+                b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, over the drop
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::HangSwitch => {
+                b.feet = Vec3::new(61.5, 0.0, 48.6);
+                b.heading = std::f32::consts::PI;
+                rig.yaw = std::f32::consts::PI;
+                rig.distance = 6.0;
+            }
+            Scenario::LedgeMoves => {
+                b.feet = Vec3::new(22.0, 0.0, 48.6);
+                b.heading = std::f32::consts::PI; // facing +Z, into wall C
+                rig.yaw = std::f32::consts::PI;
+                rig.distance = 6.0;
             }
             Scenario::WallHang => {
                 b.feet = Vec3::new(12.0, 0.0, 40.6);
@@ -143,6 +170,25 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             pad.dir = Vec3::Z;
             pad.high_profile = true;
             pad.legs_held = true;
+        }
+        Scenario::PullDown => {
+            pad.magnitude = 0.0;
+            pad.speed01 = 0.0;
+            pad.high_profile = false;
+            if (0.5..0.52).contains(&t) {
+                pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::HangSwitch | Scenario::LedgeMoves => {
+            // grab C (jump up), then hold the stick toward +X (the player's left): side jump to D, shimmy
+            // along D, outer corner at D's end
+            pad.high_profile = t < 0.6;
+            pad.legs_held = (0.3..0.6).contains(&t);
+            pad.dir = if t < 2.0 { Vec3::Z } else { Vec3::X };
+            if (0.6..2.0).contains(&t) {
+                pad.magnitude = 0.0;
+                pad.speed01 = 0.0;
+            }
         }
         Scenario::WallHang => {
             // into the wall with high profile, Legs at 0.4 s (jump up to the ledge), hang until 3.5 s,

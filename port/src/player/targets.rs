@@ -3,7 +3,7 @@
 //! Game rules used here:
 //! - candidates within a 45° cone of the wanted direction, height difference dz > -3 m;
 //! - per target type, height/distance bands from Human__ComputeJumpAnimBlend 0xB1EC40:
-//!   ground (flag 0x8000): max up 1.3 m, far 7 m; ledges (hang targets, flag 0x40): max up 3.0 m, far 8 m;
+//!   roof edges (free-step type 1): max up 1.3 m, far 7 m; ledges (hang targets, flag 0x40): max up 3.0 m, far 8 m;
 //! - among candidates in front, prefer the **highest**, ties → nearest.
 //! Simplification: candidates are points on LedgeGrab edges that face the player. Ground targets
 //! land `LAND_INSET` onto the roof; ledge targets hang from the edge (aim = hang root).
@@ -19,14 +19,22 @@ use crate::tuning::*;
 pub struct JumpTarget {
     /// Where the jump ends (feet / root).
     pub position: Vec3,
-    /// Target type flags as in HumanInAirData+0x290 (0x8000 = ground, 0x40 = ledge hang).
+    /// Target type flags as in HumanInAirData+0x290 (1 = free-step / roof edge, 0x40 = ledge hang).
     pub type_flags: u32,
     /// For hang targets: hand midpoint on the edge and the edge's wall normal.
     pub hang: Option<(Vec3, Vec3)>,
+    /// Standing straight jump at a hand target (0xB21DA0): its band (flight, weights, arrival).
+    pub straight: Option<super::ledge_moves::HangJumpIn>,
 }
 
-pub const TARGET_GROUND: u32 = 0x8000;
+/// Roof-edge landing spot: the game's free-step target type 1 (narrow object / edge; its flight is
+/// `xx_h_air_*_to_freestep` and arrival plays the free-step reception, 0xB1EC40 / 0xE07D00). 0x8000 is the
+/// air-assassination target (its flight is `…_to_assassinate`), not plain ground.
+pub const TARGET_GROUND: u32 = super::jump_blend::TARGET_FREESTEP;
+/// Ledge hang targets: 0x40 = wall hang (flight `…_to_surface`, wall reception), 0x80 = free hang (flight
+/// `…_to_swing`, swing reception) (0xB1EC40 / 0xE07D00).
 pub const TARGET_LEDGE: u32 = 0x40;
+pub const TARGET_LEDGE_FREE: u32 = 0x80;
 
 pub fn find_jump_target(
     feet: Vec3,
@@ -57,7 +65,7 @@ pub fn find_jump_target(
             let landing = on_edge - e.n1 * LAND_INSET;
             let Some(h) = collision.ground_height(landing + Vec3::Y * 0.05, 0.2) else { continue };
             let pos = Vec3::new(landing.x, h, landing.z);
-            Some(JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None })
+            Some(JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None })
         } else if edge_dz <= LEDGE_MAX_UP + WALL_HANG_DROP {
             // ledge target: hang from the edge (wall hang if there is wall below)
             let hang = if collision.point_inside(on_edge - e.n1 * 0.15 - Vec3::Y * 0.9) {
@@ -69,14 +77,15 @@ pub fn find_jump_target(
             if pos.y - feet.y > LEDGE_MAX_UP {
                 continue;
             }
-            Some(JumpTarget { position: pos, type_flags: TARGET_LEDGE, hang: Some((on_edge, e.n1)) })
+            let flags = if hang == LedgeHangType::Wall { TARGET_LEDGE } else { TARGET_LEDGE_FREE };
+            Some(JumpTarget { position: pos, type_flags: flags, hang: Some((on_edge, e.n1)), straight: None })
         } else {
             None
         };
         let Some(target) = candidate else { continue };
         let flat = Vec3::new(target.position.x - feet.x, 0.0, target.position.z - feet.z);
         let dist = flat.length();
-        let far = if target.type_flags == TARGET_LEDGE { LEDGE_FAR } else { GROUND_FAR };
+        let far = if target.hang.is_some() { LEDGE_FAR } else { GROUND_FAR };
         if !(0.6..=far).contains(&dist) {
             continue;
         }

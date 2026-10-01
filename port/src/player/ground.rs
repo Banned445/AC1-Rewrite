@@ -2,17 +2,19 @@
 //!
 //! - One speed parameter (0..1) split into bands Walk/Jog/Run/Sprint (GetSpeedBand 0xD807B0).
 //! - Target = base + 0.25·stick, base 0 (low profile) / 0.5 (high profile) / 0.75 (sprint).
-//! - Parameter rises at 1.0/s (0xDA0810); fall rate is a PLACEHOLDER for the decel curve.
+//! - Parameter rises at 1.0/s and falls through the deceleration ResponseCurve (0xDA0810, `move_blend`).
 //! - Heading turns toward the wanted direction at 360°/s (0xD95290).
-//! - Translation: in the game it is clip root motion; here a PLACEHOLDER speed per band.
+//! - Translation: root motion of the 17-clip locomotion blend (action 0x05923BDB, `move_blend`).
 //! - Ground loss → InAir fall (0xD87720 / 0xD8C380); jump request → InAir jump-to-target.
 
 use bevy::prelude::*;
 
 use super::air::{FallOrigin, InAirEntry, Landing, LandingType};
 use super::climb::{ClimbEntry, ClimbEntryType};
-use super::ledge::{LedgeEntry, LedgeSubState};
-use super::targets::{edge_ahead, find_jump_target, JumpTarget, TARGET_LEDGE};
+
+use super::jump_blend::ActionBlend;
+use super::move_blend::MoveBlend;
+use super::targets::{edge_ahead, find_jump_target, JumpTarget};
 use super::{
     heading_of, switch_context, ActorContextId, Body, HumanDataBundle, Locomotion, Player, SpawnPoint, TransitionSetup,
 };
@@ -70,11 +72,24 @@ pub struct HumanGroundData {
     /// `Sprint` flag (HumanGroundData+0x123, name recovered by CRC32).
     pub sprint: bool,
     pub high_profile: bool,
-    /// Seconds of landing recovery left (roll / heavy landing), PLACEHOLDER durations.
-    pub recovery: f32,
+    /// The landing / reception action playing after an InAir landing (0xE05940 / 0xE07D00): its root
+    /// motion moves the character and input waits until it ends (its transitions lead back to the
+    /// locomotion action 0x05923BDB or wait).
+    pub oneshot: Option<GroundOneShot>,
     pub last_landing: Option<Landing>,
     /// Incremented on every landing (lets the animator play the landing clip once).
     pub landing_seq: u32,
+    /// `HumanGround__UpdateMoveBlend` state: blend weights, timers, lean/bank, step cycle.
+    pub blend: MoveBlend,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GroundOneShot {
+    pub blend: ActionBlend,
+    pub t: f32,
+    pub duration: f32,
+    /// Displacement already applied (animation space).
+    pub applied: [f32; 3],
 }
 
 impl HumanGroundData {
@@ -83,33 +98,15 @@ impl HumanGroundData {
         self.sub_state = HumanGroundSubState::Movement;
         if let Some(l) = landing {
             self.landing_seq = self.landing_seq.wrapping_add(1);
-            self.recovery = match l.kind {
-                LandingType::Safe if l.roll => 0.55,
-                LandingType::Safe => 0.0,
-                LandingType::SmallDamage => 0.4,
-                LandingType::HeavyDamage => 1.0,
-                LandingType::Fatal => 0.0,
-            };
-            // (hypothesis) soft landings and rolls keep running momentum, as in the game; the RE shows
-            // no speed reset for them. Heavy-damage landings stop the character.
+            self.oneshot = l.action.map(|b| GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
+            // The speed parameter HG+0x5E8 is not reset by OnEnterInit 0xDA7D20, so the landing's exit
+            // into locomotion continues at the take-off speed. (hypothesis) heavy-damage landings stop.
             if l.kind == LandingType::HeavyDamage {
                 self.speed_param = 0.0;
             }
             self.last_landing = Some(l);
         }
     }
-}
-
-fn root_motion_speed(param: f32) -> f32 {
-    // PLACEHOLDER: piecewise-linear stand-in for the blended walk/jog/run/sprint clips.
-    for w in ROOT_SPEED_AT_BAND.windows(2) {
-        let (p0, s0) = w[0];
-        let (p1, s1) = w[1];
-        if param <= p1 {
-            return s0 + (s1 - s0) * ((param - p0) / (p1 - p0)).clamp(0.0, 1.0);
-        }
-    }
-    ROOT_SPEED_AT_BAND[ROOT_SPEED_AT_BAND.len() - 1].1
 }
 
 fn angle_diff(a: f32, b: f32) -> f32 {
@@ -142,8 +139,9 @@ pub fn update_ground(
             // AIActor::Update skips a context's first update after it was switched in.
             loco.just_switched = false;
             if let Some(l) = g.last_landing {
-                if l.roll || l.kind == LandingType::HeavyDamage {
-                    rig.shake = 1.0;
+                // drop > 3 m: camera shake (drop − 3) / 7 (0xE05940)
+                if l.total_drop > 3.0 {
+                    rig.shake = ((l.total_drop - 3.0) / 7.0).min(1.0);
                 }
                 if l.kind == LandingType::Fatal {
                     // "desynchronisation": respawn
@@ -155,7 +153,8 @@ pub fn update_ground(
         }
 
         // ---------------------------------------------------------------- input → wanted motion
-        let moving = pad.speed01 > 0.0 && g.recovery <= 0.0;
+        let busy = g.oneshot.is_some();
+        let moving = pad.speed01 > 0.0 && !busy;
         g.high_profile = pad.high_profile;
         g.sprint = pad.high_profile && pad.legs_held; // sprint = high profile + legs (RE/01 §6.2)
         g.sub_state = if g.sprint { HumanGroundSubState::FreeRun } else { HumanGroundSubState::Movement };
@@ -182,13 +181,16 @@ pub fn update_ground(
         } else {
             BASE_LOW_PROFILE
         };
-        let target = if moving { (base + STICK_SPAN * pad.speed01 * g.turn_atten).min(1.0) } else { 0.0 };
-        g.speed_param = if target > g.speed_param {
-            (g.speed_param + SPEED_PARAM_UP_RATE * dt).min(target)
-        } else {
-            (g.speed_param - SPEED_PARAM_DOWN_RATE * dt).max(target)
-        };
-        g.recovery = (g.recovery - dt).max(0.0);
+        // the target follows the stick even while a landing action plays (MoveBlend's transition path keeps
+        // ramping toward it, 0xDA0810)
+        let target = if pad.speed01 > 0.0 { (base + STICK_SPAN * pad.speed01 * g.turn_atten).min(1.0) } else { 0.0 };
+        // speed parameter, lean/bank and blend weights (MoveBlend 0xDA0810). The heading snapshot is the
+        // heading before this frame's turn (HG+0x600, Movement_PreUpdate 0xD97E30).
+        g.blend.speed_param = g.speed_param;
+        g.blend.update_speed(target, dt);
+        g.blend.update_angles(body.heading, moving.then_some(want_heading), None, false, dt);
+        g.blend.update_weights(target, dt);
+        g.speed_param = g.blend.speed_param;
 
         // heading: rotate toward wanted at the player turn rate (0xD95290)
         if moving {
@@ -200,10 +202,21 @@ pub fn update_ground(
         // ---------------------------------------------------------------- climb / grab requests
         // interpreter vt736/740 (grab wall) and vt764/768 (climb start): high profile + Legs into a wall
         let forward = body.forward();
-        if g.high_profile && pad.legs_held && moving && g.recovery <= 0.0 {
+        if g.high_profile && pad.legs_held && moving {
             if let Some(setup) = try_wall_grab(body.feet, forward, &guidance, &collision) {
                 pad.consume_jump();
                 switch_context(&mut loco, &mut data, setup);
+                continue;
+            }
+        }
+
+        // ---------------------------------------------------------------- pull-down (event 70)
+        // The game's decision layer sends event 70 (not traced); guard 0xD9D6C0: facing along the edge's outward
+        // normal, a drop of more than 2 m, body space. PORT trigger: Legs in low profile at an edge.
+        if !g.high_profile && pad.jump_buffered() && !busy {
+            if let Some(entry) = try_pulldown(body.feet, body.forward(), &guidance, &collision) {
+                pad.consume_jump();
+                switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
                 continue;
             }
         }
@@ -216,10 +229,11 @@ pub fn update_ground(
         let want_jump = g.high_profile
             && moving
             && (pad.jump_buffered() || (pad.legs_held && edge_ahead(body.feet, forward, &collision)));
-        if want_jump && g.recovery <= 0.0 {
+        if want_jump && !busy {
             pad.consume_jump();
             let entry = match find_jump_target(body.feet, if moving { pad.dir } else { forward }, &guidance, &collision) {
-                Some(t) => InAirEntry::JumpToTarget { from: body.feet, target: t, speed_param: g.speed_param },
+                // leading foot: the playing locomotion item (footl item = left ahead) (hypothesis)
+                Some(t) => InAirEntry::JumpToTarget { from: body.feet, target: t, speed_param: g.speed_param, foot_left: g.blend.foot == 0 },
                 // vt28: free jump without a target
                 None => InAirEntry::FreeJump { from: body.feet, dir: forward, speed_param: g.speed_param },
             };
@@ -227,9 +241,21 @@ pub fn update_ground(
             continue;
         }
 
-        // ---------------------------------------------------------------- move (root-motion stand-in)
-        let speed = root_motion_speed(g.speed_param);
-        let delta = forward * speed * dt;
+        // ---------------------------------------------------------------- move (blended clip root motion)
+        let (delta, speed) = if let Some(mut os) = g.oneshot {
+            // landing / reception action: its blended root motion (FROMANIM)
+            os.t += dt;
+            let d = os.blend.disp(os.t / os.duration.max(1e-4));
+            let step = [d[0] - os.applied[0], d[1] - os.applied[1]];
+            os.applied = d;
+            g.oneshot = (os.t < os.duration).then_some(os);
+            let right = super::right_of(forward);
+            let delta = right * step[0] + forward * step[1];
+            (delta, delta.length() / dt.max(1e-4))
+        } else {
+            let speed = if g.speed_param > 0.0 { g.blend.advance(dt) } else { 0.0 };
+            (forward * speed * dt, speed)
+        };
         let r = collision.move_capsule(body.feet, delta, true);
         body.velocity = forward * speed;
         body.feet = r.position;
@@ -242,7 +268,7 @@ pub fn update_ground(
             }
             _ => {
                 body.grounded = false;
-                let entry = InAirEntry::Fall { from: body.feet, velocity: body.velocity, origin: FallOrigin::Ground };
+                let entry = InAirEntry::Fall { from: body.feet, velocity: body.velocity, origin: FallOrigin::Ground, speed_param: g.speed_param };
                 switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
             }
         }
@@ -252,8 +278,8 @@ pub fn update_ground(
 /// Ground → Climb / Ledge / jump-to-ledge when pushing into a wall with high profile + Legs.
 /// Order (hypothesis from the interpreter's request order, RE/01 §6.3):
 /// 1. climb start: hand holds 1.8–2.4 m up and foot holds 1.2 m below them (vt764/768, FromGround);
-/// 2. grab a ledge within reach (hands ≤ 2.4 m up, no foot holds) → Ledge;
-/// 3. a ledge up to 3 m higher, close ahead → jump up to it (ledge target).
+/// 2. a ledge with the hands 0.7–3.0 m up → the standing straight jump at it (0xB21DA0 bands: knee / waist
+///    heights pull straight up onto the top, higher ones end hanging).
 fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<TransitionSetup> {
     // a wall must be right in front
     let wall_close = (0.4..=0.9).any_hit(|d| collision.point_inside(feet + forward * d + Vec3::Y * 1.0));
@@ -279,25 +305,49 @@ fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision:
                     from_feet: feet,
                 }));
             }
-            // 2. ledge in reach without foot holds
-            if hand.point.y - feet.y <= 2.4 {
-                return Some(TransitionSetup::ToLedge(LedgeEntry::at(hand.point, hand.wall_normal, feet, LedgeSubState::Grasp)));
-            }
         }
     }
-    // 3. jump up to a ledge up to 3 m above the hang root
-    let high = [2.7f32, 3.0, 3.3, 3.6, 3.9].into_iter().filter_map(reach).find(|h| h.point.y - feet.y > 2.4);
-    if let Some(hand) = high {
+    // 2. a ledge whose hands are 0.7–3.0 m above the feet: the standing straight jump at it
+    //    (HumanGround 0xD85550 → Human__SetupJumpToHandTarget 0xB21DA0), band by the hand height
+    let hand = [0.9f32, 1.3, 1.7, 2.1, 2.5, 2.9]
+        .into_iter()
+        .filter_map(reach)
+        .find(|h| (0.7..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)));
+    if let Some(hand) = hand {
+        let n = hand.wall_normal;
+        let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
+        let j = super::ledge_moves::hang_jump_in(hand.point.y - feet.y, wall)?;
         let target = JumpTarget {
-            position: super::ledge::hang_root(hand.point, hand.point, hand.wall_normal, super::ledge::LedgeHangType::Wall),
-            type_flags: TARGET_LEDGE,
-            hang: Some((hand.point, hand.wall_normal)),
+            position: hand.point + n * j.out - Vec3::Y * j.down,
+            type_flags: j.flags,
+            hang: Some((hand.point, n)),
+            straight: Some(j),
         };
-        if target.position.y - feet.y <= LEDGE_MAX_UP {
-            return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.5 }));
-        }
+        return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }));
     }
     None
+}
+
+/// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a
+/// LedgeGrab edge at the feet within 0.8 m ahead whose outward normal points along the facing (dot > 0),
+/// with more than 2.0 m of drop below it (edge report +48).
+fn try_pulldown(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<super::ledge::LedgeEntry> {
+    let hit = guidance.probe(feet + forward * 0.5, 0.5, 0.2, None, std::f32::consts::PI)?;
+    let n = hit.wall_normal;
+    if n.dot(forward) <= 0.0 {
+        return None;
+    }
+    let below = collision.ground_height(hit.point + n * 0.6 - Vec3::Y * 0.05, 50.0).unwrap_or(hit.point.y - 100.0);
+    if hit.point.y - below <= 2.0 {
+        return None;
+    }
+    let [orient, descent, reception] = super::ledge_moves::pulldown(hit.point, n, feet, true, guidance, collision)?;
+    let mut e = super::ledge::LedgeEntry::at((orient.hand_l + orient.hand_r) * 0.5, n, feet, super::ledge::LedgeSubState::PullDown);
+    e.hand_l = orient.hand_l;
+    e.hand_r = orient.hand_r;
+    e.entry_move = Some(orient);
+    e.entry_rest = [Some(descent), Some(reception)];
+    Some(e)
 }
 
 trait AnyHit {

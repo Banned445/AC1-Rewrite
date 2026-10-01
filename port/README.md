@@ -186,6 +186,39 @@ Limitations:
 - **Fall loop:** in the game data it is a single held pose. PORT: it sways slowly through the game's own jump-to-fall
   frames.
 
+**Ground locomotion (RE/02 §4.1)**
+- The ground context moves by the root motion of the game's locomotion action `0x05923BDB`. That is 17 clips per
+  leading foot, with weights set exactly as `HumanGround__UpdateMoveBlend` 0xDA0810 sets them: band fraction, bank toward
+  the wanted heading, the jog slowdown timer and the sprint impulsion weight.
+- The speed parameter decelerates through the game's ResponseCurve (HG+0x63C).
+- The sim owns the step cycle (`player/move_blend.rs`), and the animator shows it at the sim's phase. PORT
+  (hypothesis): the clips inside the item are phase-synchronised.
+
+**Ledge moves (RE/03 §7.6b)**
+- At the end of a shimmy (or when blocked), the game's order applies: inner corner, side jump, outer corner. Up beyond a hand
+  step: the hop.
+- Corners play `hangfree_corner_*_090_{in,out}` (free hang) or the wall strafe pair (wall hang).
+- Side jumps play the `StartLedgeJump` table's start / loop / end actions.
+- The hop plays `swingback_up` `_a` + `_b` into a free hang.
+- `AC_AUTOPILOT=ledgemoves` shows a side jump and an outer corner.
+- Hang type (wall / free) changes only through moves. A step whose destination has (or lacks) foot support on the wall plays
+  the game's switch (`hangfree_tr_hangwall_*` / `hangwall_tr_hangfree_*`, 0xDE1060). `AC_AUTOPILOT=hangswitch` shows both.
+- **Pull-down** (RE/03 §7.8b): Legs in low profile at an edge with a drop over 2 m. It plays the game's orientation, descent and
+  wall / free reception into a hang. `AC_AUTOPILOT=pulldown`.
+
+**Jumps and landings (RE/04 §4.1)**
+- A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then
+  its flight item (`air_*_to_freestep`, 16 clips), weighted by height and distance class exactly as
+  `Human__ComputeJumpAnimBlend` 0xB1EC40.
+- Their Σw·T durations and blended root motion, plus the game's linear correction, carry Altaïr onto the target.
+- Arrival plays the free-step reception. Ground contact plays the landing chosen by `SetupToGround_Landing` 0xE05940
+  (soft/hard × walk/jog/sprint exit, or damage / damage-roll above 3 m).
+- Both move Altaïr by their root motion until they end.
+- Clip durations and root curves are in `src/player/jump_clips.rs`. It is generated from your install by
+  `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
+- Jumps at a ledge use the game's straight jump (0xB21DA0). Its bands by hand height are knee, waist / wall hang, and free
+  hang. Each band has its own reception. Running jumps onto ledges use the wall reception or the swing (RE/04 §4.1.11).
+
 **Debugging and verification**
 - `AC_SHOTS=t1,t2,…` freezes the simulation at each time and saves screenshots from every view in `AC_VIEWS` into
   `AC_SHOT_DIR`:

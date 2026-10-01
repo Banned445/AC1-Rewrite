@@ -23,6 +23,13 @@ pub const TRACK_ACUATOR_CONTACTS: u32 = 2;
 
 /// ActionBlocks whose clips are loaded (the movement contexts).
 pub const MOVEMENT_BLOCKS: &[&str] = &["HumanClimb", "HumanClimb_Jumps", "HumanLedge", "HumanInAir"];
+/// Single actions of other blocks whose clips are loaded too: the ground locomotion blend (MoveBlend 0xDA0810).
+pub const EXTRA_ACTIONS: &[u32] = &[
+    crate::player::move_blend::ACT_GROUND_LOCOMOTION,
+    // jump takeoff / flight / reception / landings (RE/04 §6)
+    0x0A4C_8C0E, 0x0A4C_8C0F, 0x010D_DAFA, 0x010D_F0D8, 0x010D_E1FE, 0x010D_F150,
+    0x6D20_0160, 0x6D20_0161, 0x6E9C_754A, 0x6E9C_754C, 0x6E9C_702A, 0x6E9C_7557, 0x010D_D707, 0x010D_D70B,
+];
 
 fn contact_keys(a: &super::ac_anim::AnimData) -> Vec<(f32, u8)> {
     a.tracks
@@ -126,7 +133,11 @@ pub fn load_locomotion(game_dir: &Path) -> Result<(Vec<RawClip>, ActionGraph, Ha
     let mut graph_clips: Vec<String> = graph
         .actions
         .values()
-        .filter(|a| MOVEMENT_BLOCKS.contains(&a.block.as_str()))
+        .filter(|a| {
+            MOVEMENT_BLOCKS.contains(&a.block.as_str())
+                || EXTRA_ACTIONS.contains(&a.id)
+                || crate::player::ledge_moves::DUMPED_ACTIONS.contains(&a.id)
+        })
         .flat_map(|a| a.items.iter().flat_map(|it| it.animations.iter()))
         .filter_map(|id| anim_names.get(id).cloned())
         .collect();

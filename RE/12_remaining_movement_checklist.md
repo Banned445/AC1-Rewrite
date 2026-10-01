@@ -21,19 +21,33 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 ---
 
 ## 1. Places the port departs from the game (must be removed or replaced)
-- [ ] **Ground translation:** currently a speed per band. The game moves by **blended clip root motion** (walk/jog/run/sprint
-      cycles weighted by the speed parameter, 0xDA0810).
-- [ ] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
-- [ ] **Jumps:** currently a placeholder arc formula. The game plays **takeoff / flight / landing clips** chosen by
+- [x] **Ground translation:** currently a speed per band. The game moves by **blended clip root motion** (walk/jog/run/sprint
+      cycles weighted by the speed parameter, 0xDA0810). **→ done: the 17-weight blend of action 0x05923BDB (lean, bank, jog
+      slowdown, sprint impulsion) drives the root motion and the animator (RE/02 §4.1, `player/move_blend.rs`). Clip time sync
+      inside the item is a hypothesis (phase-synchronised); confirm it with a runtime trace (§10)**
+- [x] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
+      **→ done: ResponseCurve at HG+0x63C, keys (0,1)(0.333,1)(0.4,0.3)(0.666,0.2)(1,1) (RE/02 §4.1.1)**
+- [x] **Jumps:** currently a placeholder arc formula. **→ done: running jumps (0xB1EC40 / 0xB20200, RE/04 §4.1) and jumps at a
+      ledge (standing straight jump 0xB21DA0 with its height bands and receptions, running jumps onto ledges with the wall /
+      swing receptions, RE/04 §4.1.11). No placeholder arc remains. Open: the straight-jump impulse 0x1099C96, min/max of the
+      wall reception, the swing's SwingStrength** The game plays **takeoff / flight / landing clips** chosen by
       `Human::SetupJumpToTarget` 0xB20200 and `JumpType` (Straight / 1m / 3m5m), driven by their root motion plus the linear correction.
-- [ ] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance.
+- [~] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance. **→ vt28 is not a free jump: it
+      resolves a target type and calls vt24 (0xD832F0). The port's no-target jump (FREE_JUMP_DISTANCE) is PORT; find what the
+      game does with no target in range (decision layer)**
 - [ ] **Landing point:** currently `LAND_INSET` 0.45 m inside the roof. The game lands on the guidance contact.
-- [ ] **Landing recovery:** times are placeholders. Take them from the landing clips' lengths and exit flags.
-- [ ] **Landing momentum:** "soft landings and rolls keep speed" is a hypothesis. Verify it or replace it with the landing clips' root motion.
+- [x] **Landing recovery:** times are placeholders. Take them from the landing clips' lengths and exit flags. **→ done: the
+      landing / reception action plays with its root motion until it ends (0xE05940 / 0xE07D00, RE/04 §4.1.7–8)**
+- [x] **Landing momentum:** "soft landings and rolls keep speed" is a hypothesis. Verify it or replace it with the landing clips' root motion.
+      **→ done: landings move by their clips; the exit clip (walk / jog / sprint impulsion / wait) is chosen by the speed bucket of
+      HumanInAir+0x16C (its writer is not traced: hypothesis = ground speed ratio); HG+0x5E8 is not reset by OnEnterInit**
 - [x] **Fall pose sway:** remove it. The game's fall loop `xx_h_jumpfalling01` is a static pose. **→ done: removed; the fall is the game's grasp blend (RE/13 §4.1)**
-- [~] **Fall-entry clip choice:** currently chosen by my speed rule. The game chooses by fall type (fall height 1 / 2 / 8 m and **→ fall action from the graph; the entry clips are still chosen by name**
+- [~] **Fall-entry clip choice:** currently chosen by my speed rule. **→ fall type 0–6 decoded (RE/04 §4.1.9), port uses the 2.5 m/s
+      threshold; the type → entry action mapping (probe vt112) is still open.** The game chooses by fall type (fall height 1 / 2 / 8 m and **→ fall action from the graph; the entry clips are still chosen by name**
       horizontal speed 2.5 m/s, 0xD87720 / 0xD8C380).
-- [ ] **Ground jump up to a ledge:** currently uses jump-to-hang clips. The game goes through **Walling** (see §3.1).
+- [~] **Ground jump up to a ledge:** currently uses jump-to-hang clips. The game goes through **Walling** (see §3.1). **→ the standing
+      straight jump at a hand target (0xD85550 → 0xB21DA0) is ported with the game's bands; the running wall run-up is Walling
+      (still open), and the port's trigger (high profile + Legs into a wall) is a stand-in**
 - [ ] **Pull-up trigger:** currently "hold up while blocked" (hypothesis). The game sends ledge event 0 from the decision layer.
       Find the sender and its input.
 - [ ] **Back eject from ledge and climb:** "high profile + Legs + stick away" is a hypothesis. Decode `TryBackEject` 0xDF2F50 and the ledge equivalent.
@@ -59,6 +73,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] Clip **exit-flag gating** (0xD80010 bits 0x40/0x80/0x100/0x200/0x400/0x800, 0x20 = locked).
 - [ ] "Anim drives rotation" flag (0x10) overriding code heading.
 - [ ] Turn attenuation above 45° (verify against the interpreter, 0xEE65A0).
+- [ ] **Crowd-avoid vector** (Data+0x60, `UpdateCrowdAvoidVector` 0xD9E5A0): drives the walk-band hip lean (RE/02 §4.1.3).
+- [ ] **Start/transition blend layouts 1–7** (HG+0x724): MoveBlend's other path while a start or transition action plays (0xDA08C0).
 - [ ] **Crouch / crouch-walk** (`MvtDivision_Crouch`, 0xD84C10) and **WalkVerySlow**.
 - [ ] **Sub-states:**
   - FreeRun (2);
@@ -74,7 +90,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
 - [ ] **Ledge look-down:** `xx_l_ledge_lookdown_*` (ability LookDown, vt1540).
 - [ ] **Leap of Faith** from a look-down edge.
-- [ ] **PullDown, ground → hang** (§4):
+- [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
   - from a stop at the edge, from wait, hard, from a beam, and hand-pass-over;
   - all four sides.
 - [ ] **Crowd:** gentle push and shove (vt848–860, PushStrength), **CrowdRun**, blending with monks
@@ -94,6 +110,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Rebound jump** (0xE365C0): within ±89° of the wall normal; fallback 7 m out, 3 m down.
 - [ ] **Walling commands 0–4** from the pad controller (+0x38; meaning still open).
 ### 3.2 NarrowObject (context 12) — RE/05 §2
+- [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
+      The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
 - [ ] **Edge:** walking along a narrow wall ledge (EdgeState Front/Left/Right).
 - [ ] **Lean:** FaceLeft / FaceRight (lean height/width).
@@ -141,14 +159,21 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Vocalization (16):** fall and climb vocals (VocalFamily).
 
 ## 4. Ledge (context 9): the missing parts of RE/03 §7
-- [ ] **Corners:** inner and outer (`sub_DDD490` / `sub_DD55F0`, anim family 0x491228xx), then **SecondHandGrab** (state 17, ±0.25 m).
-- [ ] **Side jumps between ledges** (`TrySideJumpToLedge` 0xDD3BB0): near/far, wall/free, anims 510126209–216, clearance checks.
+- [x] **Corners:** inner and outer (`sub_DDD490` / `sub_DD55F0`, anim family 0x491228xx), then **SecondHandGrab** (state 17, ±0.25 m).
+      **→ done: the corner turn is 0xDD3BB0 with candidates from 0xDD0600 (RE/03 §7.6b); the port turns inner and outer corners
+      with the game's actions. SecondHandGrab's exact re-grab is still a hypothesis.**
+- [~] **Side jumps between ledges** (`TrySideJumpToLedge` 0xDD3BB0): near/far, wall/free, anims 510126209–216, clearance checks.
+      **→ the real side jump is 0xDDD490 → the StartLedgeJump table (RE/03 §7.6b); hang → hang (types 1/2) ported. To climb holds
+      (type 0) and to a ladder (0xDD55F0, type 3) are still open.**
 - [ ] **Jumps up and sideways:**
   - **ParallelJump / LedgeJump** (`StartLedgeJump` 0xDDCE40): the blended variant (anim 1289129807, 4-way) and the table variant (0x1A2C780 / 0x1A2C980).
-  - **TryWallJumpUp** 0xDD62A0.
-- [ ] **Exact jump-up rules** (`TryJumpUpToLedge` 0xDD5E10): edge probe and body sweep.
+    **→ done: table decoded and ported; the blended variant is the hop up (→ free hang, `_a` then `_b`).**
+  - [x] **TryWallJumpUp** 0xDD62A0. **→ ported as the hop (its box query geometry is a hypothesis).**
+- [ ] **Exact jump-up rules** (`TryJumpUpToLedge` 0xDD5E10): edge probe and body sweep. **→ it is TryJumpUpToClimb (to climb holds,
+      RE/03 §7.6b): decoded, not ported (needs a climbable wall above a ledge in the greybox).**
 - [x] **Vertical hand-step tables:** up 0x1A2C4C0…, down 0x1A2C4F0…, with the Wall/Free anim columns. Currently one clip each way. **→ done: the game's first/second-hand step actions (RE/13 §4)**
-- [ ] **Hang-type switching:**
+- [x] **Hang-type switching:** **→ done (RE/03 §7.6c): foot rays, free ↔ wall switch moves with the game's actions; the corner-candidate
+  variants and WallFree as a separate type are not ported**
   - Free → Wall (anims 29566306/7) and Wall → Free (29562045/6, 29565306/8) (`TrySwitchHangType` 0xDE1060);
   - **WallFree** hang type (2).
 - [ ] **Pull-up:**
@@ -156,7 +181,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - variants (957955002, 0x386E3B13);
   - free-hang special case (`sub_DE0E30`);
   - the three outcomes: stand on the edge → NarrowObject, jump off → InAir, back to hang.
-- [ ] **Grasp** (low ledges at knee/waist height → pull-up straight away) and **GraspType** (HangKnee, Climb, HangWaist, HangWall,
+- [~] **Grasp** (low ledges at knee/waist height → pull-up straight away) **→ via the straight jump's knee / waist bands (RE/04
+      §4.1.11); the GraspType states themselves are not traced** and **GraspType** (HangKnee, Climb, HangWaist, HangWall,
       HangFree 1 hand, HangFree 2 hands).
 - [~] **Receptions:** Wall / Free / **Swing** reception (SwingStrength from InAir); **HangFreeReceptionType** Front/Straight/Back; **→ catch actions by type and ≥3 m (CheckAirCatch); swing/one-hand/angle classes still open**
       **min/max** catch variants (long catch at a fall of 3 m or more, 0xE0BB70); angle variants **30_out / 45_in / straight**;
@@ -164,7 +190,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **One-hand catch** (`hangfree_onehand`, `hangwall_onehand`) → SecondHandGrab.
 - [ ] **Impacts:** `hangfree_impact_*` (catching at elbow/shoulder height, 50 cm, 150 cm).
 - [ ] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground).
-- [ ] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
+- [~] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
+      **→ decoded (RE/03 §7.8b); type Wait / front ported with the game's actions and roots. Open: EdgeStop (needs the ledge stop),
+      side and beam variants, HandPassOver, ReleaseToInAir, the decision layer's event 70 input**
 - [ ] **Ledge → Climb:** down/side onto climb holds; the free-hang drop-to-climb sequence (states 14/15, `TryFreeHangDropToClimb`).
 - [ ] **Ledge → Ladder** (ToLadder).
 - [ ] **Exits:** knock-off / damage reactions (events 2/4/5) → InAir.

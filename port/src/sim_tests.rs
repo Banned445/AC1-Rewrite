@@ -121,6 +121,41 @@ fn speed_param_rises_at_one_per_second() {
 }
 
 #[test]
+fn ground_moves_by_the_blended_clip_root_motion() {
+    // run band top (param 0.75 = pure xx_h_run_hipm, 1.707 m per 0.3333 s step)
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(1.5);
+    let z0 = s.body().feet.z;
+    s.run(1.0);
+    let v = z0 - s.body().feet.z;
+    assert!((v - 5.121).abs() < 0.05, "run speed {v} m/s");
+    // sprint top settles on xx_h_sprint_hipm (1.674 m per 0.2667 s)
+    s.pad(Vec3::NEG_Z, 1.0, true, true);
+    s.run(2.5);
+    let z0 = s.body().feet.z;
+    s.run(1.0);
+    let v = z0 - s.body().feet.z;
+    assert!((v - 6.277).abs() < 0.05, "sprint speed {v} m/s");
+    assert!(s.ground().blend.weights[13] > 0.99);
+}
+
+#[test]
+fn releasing_sprint_decelerates_through_the_curve() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, true);
+    s.run(1.5);
+    // back to high-profile run (target 0.75). On the curve's last segment ds/dt = −(0.2 + 2.395·(s − 0.666)),
+    // so from 1.0: s(0.2 s) = 0.4175·e^(−0.479) + 0.5825 = 0.841
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(0.2);
+    let p = s.ground().speed_param;
+    assert!((p - 0.841).abs() < 0.01, "param after 0.2 s = {p}");
+    s.run(1.0);
+    assert!((s.ground().speed_param - 0.75).abs() < 1e-3);
+}
+
+#[test]
 fn free_run_jumps_a_rooftop_gap_and_lands_on_target() {
     // roof A: x 5..11, h 3.5 ; roof B: x 14.5..20.5, h 3.0  (3.5 m gap)
     let mut s = Sim::new(Vec3::new(7.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
@@ -248,12 +283,14 @@ fn hang_on_jump_up_wall() -> Sim {
 fn jump_up_to_a_ledge_then_pull_up() {
     let mut s = hang_on_jump_up_wall();
     assert!(s.saw_air, "should have jumped up to the 2.6 m ledge");
-    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    // hands 2.6 m above the feet with a wall below: the straight jump's top band, `jumpstraight_to_hangwallfree`,
+    // which the arrival turns into a free hang (0xB21DA0 / 0xE07D00: LedgeHangType 1)
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()), "reception never ended");
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
     let hands = s.data().ledge.hand_l.y;
     assert!((hands - 2.6).abs() < 0.05, "hands on the edge: {hands}");
-    // wall hang root: 1.1 m below the hands, 0.5 m out (RE/03 §7.1)
     let f = s.body().feet;
-    assert!((f.y - 1.5).abs() < 0.05 && (f.z - 41.2).abs() < 0.05, "wall-hang root {f:?}");
+    assert!((f.y - 0.2).abs() < 0.05, "free-hang root 2.4 m below the hands: {f:?}");
     s.pad(Vec3::Z, 1.0, false, false); // hold up at the top edge → pull-up
     let on_top = s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground);
     assert!(on_top && (s.body().feet.y - 2.6).abs() < 0.05, "pull-up failed: {:?} ledge {}", s.body().feet, s.data().ledge.last_action);
@@ -281,12 +318,14 @@ fn hang_on_balcony() -> Sim {
     let hung = s.run_until(3.0, |s| s.loco().current == ActorContextId::Ledge);
     assert!(hung, "never reached the balcony: ctx {:?} feet {:?}", s.loco().current, s.body().feet);
     s.pad(Vec3::Z, 0.0, false, false);
-    s.run(0.5);
+    // the arrival's reception (swing) plays before the hang takes input
+    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none()), "reception never ended");
+    s.run(0.2);
     s
 }
 
 #[test]
-fn free_hang_shimmy_stops_at_the_end_of_the_ledge() {
+fn free_hang_shimmy_ends_with_the_outer_corner() {
     let mut s = hang_on_balcony();
     assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
     let f = s.body().feet;
@@ -297,6 +336,8 @@ fn free_hang_shimmy_stops_at_the_end_of_the_ledge() {
     let min_x = s.data().ledge.hand_l.x.min(s.data().ledge.hand_r.x);
     assert_eq!(s.loco().current, ActorContextId::Ledge);
     assert!(min_x >= -1.01 && min_x < 0.2, "hands should stop at the slab end: {min_x}");
+    // at the end the free hang turns the outer corner onto the slab's -X side (0xDD3BB0, `corner_090_out`)
+    assert!(s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99, "no outer corner: normal {:?}", s.data().ledge.normal);
 }
 
 #[test]
@@ -325,4 +366,206 @@ fn trace_climb() {
         }
         if s.loco().current == ActorContextId::Ground && s.body().feet.y > 9.5 { break; }
     }
+}
+
+#[test]
+fn rooftop_jump_plays_the_game_items_and_free_step_reception() {
+    use crate::player::air::AirMode;
+    use crate::player::jump_blend::{RECEPTION_FREESTEP, TAKEOFF_RUN};
+    // roof A: x 5..11, h 3.5 ; roof B: x 14.5..20.5, h 3.0
+    let mut s = Sim::new(Vec3::new(7.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::InAir), "never jumped");
+    let air = &s.data().air;
+    let AirMode::Jump { real, duration, t_takeoff, .. } = air.mode else { panic!("not a jump: {:?}", air.mode) };
+    assert!(real);
+    let (to, fl) = (air.takeoff.unwrap(), air.flight.unwrap());
+    assert!(TAKEOFF_RUN.contains(&to.id));
+    // durations are the items' Σw·T (takeoff 0.13–0.33 s, flight 0.2–0.6 s for these clips)
+    assert!((t_takeoff - to.duration()).abs() < 1e-5 && (duration - t_takeoff - fl.duration()).abs() < 1e-5);
+    assert!(duration > 0.3 && duration < 1.2, "jump lasts {duration}");
+    let sum: f32 = fl.weights().iter().sum();
+    assert!((sum - 1.0).abs() < 1e-4);
+    // arrival → Ground with the free-step reception playing, then free movement
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ground), "never landed");
+    let os = s.ground().oneshot.expect("reception playing");
+    assert!(RECEPTION_FREESTEP.contains(&os.blend.id));
+    assert!(os.duration > 0.1);
+    assert!(s.run_until(2.0, |s| s.ground().oneshot.is_none()), "reception never ended");
+    assert!(s.ground().speed_param > 0.75, "kept the sprint speed: {}", s.ground().speed_param);
+}
+
+#[test]
+fn small_drop_lands_with_the_forward_landing_blend() {
+    use crate::player::jump_blend::{LAND_FORWARD_MOVE, LAND_STRAIGHT_MOVE};
+    // walk off roof B's far edge (3.0 m high, x 14.5..20.5) at jog speed: drop 3.0 m ≤ 3 → landing, b = 1 (hard)
+    let mut s = Sim::new(Vec3::new(19.0, 3.0, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, false);
+    assert!(s.run_until(4.0, |s| s.saw_air && s.loco().current == ActorContextId::Ground), "never landed");
+    let os = s.ground().oneshot.expect("landing action");
+    assert!(LAND_FORWARD_MOVE.contains(&os.blend.id) || os.blend.id == LAND_STRAIGHT_MOVE, "{:#x}", os.blend.id);
+    // speed ratio ~0.75 → bucket 2 (jog exit): weights in slots 1 (soft) and 4 (hard)
+    let w = os.blend.weights();
+    assert!(w[1] + w[4] > 0.99, "{w:?}");
+}
+
+/// Start hanging (wall hang) with the hands centred on `mid`, facing into the wall whose normal is `n`.
+fn hang_at(mid: Vec3, n: Vec3) -> Sim {
+    use crate::player::ledge::{LedgeEntry, LedgeSubState};
+    use crate::player::{switch_context, TransitionSetup};
+    let feet = mid - Vec3::Y * 1.1 + n * 0.5;
+    let mut s = Sim::new(feet, crate::player::heading_of(-n));
+    {
+        let player = s.player;
+        let w = s.app.world_mut();
+        let mut q = w.query::<(&mut Locomotion, &mut HumanDataBundle)>();
+        let (mut loco, mut data) = q.get_mut(w, player).unwrap();
+        switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(LedgeEntry::at(mid, n, feet, LedgeSubState::Movement)));
+    }
+    s.run(1.0);
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+    s
+}
+
+#[test]
+fn inner_corner_turns_onto_the_perpendicular_wall() {
+    // L-wall: A's -Z face (z 49.7), B sticks out toward -Z at x 36 (its -X face is the inner corner)
+    let mut s = hang_at(Vec3::new(34.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::X, 1.0, false, false); // facing +Z the player's left is +X
+    let turned = s.run_until(8.0, |s| s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99 && s.data().ledge.mv.is_none());
+    assert!(turned, "no corner: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    let l = &s.data().ledge;
+    assert!((l.hand_l.x - 35.92).abs() < 0.05 && (l.hand_l.y - 2.6).abs() < 0.05, "hands on B's stone ledge: {:?}", l.hand_l);
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+}
+
+#[test]
+fn side_jump_crosses_the_gap_between_ledges() {
+    // C (x 17..23) and D (x 24..27): same edge line, 1 m gap
+    let mut s = hang_at(Vec3::new(22.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::X, 1.0, false, false);
+    let jumped = s.run_until(6.0, |s| s.data().ledge.last_action == "side jump");
+    assert!(jumped, "no side jump: {}", s.data().ledge.last_action);
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let x = s.data().ledge.hand_l.x.min(s.data().ledge.hand_r.x);
+    assert!(x > 23.9, "should hang on D: hands x {x}");
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+}
+
+#[test]
+fn outer_corner_wraps_around_the_wall_end() {
+    // C's -X end (x 17): moving -X (the player's right) wraps onto C's -X face
+    let mut s = hang_at(Vec3::new(18.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::NEG_X, 1.0, false, false);
+    let turned = s.run_until(8.0, |s| s.data().ledge.normal.dot(Vec3::NEG_X) > 0.99 && s.data().ledge.mv.is_none());
+    assert!(turned, "no outer corner: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    assert!((s.data().ledge.hand_l.x - 17.0).abs() < 0.05);
+}
+
+#[test]
+fn hop_up_reaches_the_ledge_above_and_swings_into_a_free_hang() {
+    use crate::player::ledge_moves::{MoveKind, HOP_UP};
+    let mut s = hang_at(Vec3::new(42.0, 2.6, 49.7), Vec3::NEG_Z);
+    s.pad(Vec3::Z, 1.0, false, false); // up
+    let hopped = s.run_until(2.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::HopUp));
+    assert!(hopped, "no hop: {}", s.data().ledge.last_action);
+    let mv = s.data().ledge.mv.unwrap();
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(HOP_UP));
+    s.pad(Vec3::Z, 0.0, false, false);
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let l = &s.data().ledge;
+    assert!((l.hand_l.y - 4.2).abs() < 0.05, "hands on E2: {:?}", l.hand_l);
+    assert_eq!(l.hang_type, ledge::LedgeHangType::Free);
+    assert!((s.body().feet.y - (4.2 - 2.4)).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
+}
+
+/// Walk into a wall (facing +Z) with high profile + Legs from `feet`; return once the straight jump started.
+fn straight_jump_at(feet: Vec3) -> Sim {
+    let mut s = Sim::new(feet, FACE_PZ);
+    s.pad(Vec3::Z, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never jumped: {:?}", s.body().feet);
+    s.pad(Vec3::Z, 0.0, false, false);
+    s
+}
+
+#[test]
+fn knee_height_block_jumps_and_stands_on_top() {
+    use crate::player::ledge_moves::{HangEnd, ACT_KNEE_TO_WAIT};
+    let mut s = straight_jump_at(Vec3::new(50.0, 0.0, 49.0));
+    let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
+    assert_eq!((j.flight, j.end), (0x0127_2A69, HangEnd::StandFromKnee), "1.6 m: jumpstraight_to_hangknee");
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
+    let mv = s.data().ledge.mv.expect("reception");
+    assert_eq!(mv.seq[2].map(|a| a.id), Some(ACT_KNEE_TO_WAIT));
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::Ground), "never stood up");
+    assert!((s.body().feet.y - 1.6).abs() < 0.05, "on top of the block: {:?}", s.body().feet);
+}
+
+#[test]
+fn two_metre_wall_jumps_into_a_wall_hang() {
+    let mut s = straight_jump_at(Vec3::new(56.0, 0.0, 49.0));
+    let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
+    assert_eq!(j.flight, 0x0127_1631, "2.2 m with a wall below: jumpstraight_to_hangwall");
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    assert!((s.body().feet.y - 1.1).abs() < 0.05, "wall-hang root 1.1 m below the hands: {:?}", s.body().feet);
+}
+
+
+#[test]
+fn shimmy_from_a_free_hang_switches_to_a_wall_hang() {
+    use crate::player::ledge_moves::{MoveKind, TO_WALL};
+    // the 2.6 m straight jump arrives in a free hang; the first step onto wall below plays hangfree_tr_hangwall
+    let mut s = hang_on_jump_up_wall();
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(1.0, |s| s.data().ledge.mv.is_some()));
+    let mv = s.data().ledge.mv.unwrap();
+    assert_eq!(mv.kind, MoveKind::SwitchHang { to_wall: true });
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(TO_WALL[0]), "moving left: hangfree_tr_hangwall_left");
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(2.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    assert!((s.body().feet.y - 1.5).abs() < 0.05, "wall-hang root: {:?}", s.body().feet);
+}
+
+#[test]
+fn shimmy_onto_an_overhang_switches_to_a_free_hang() {
+    use crate::player::ledge_moves::{MoveKind, TO_FREE};
+    // wall F (x 60..63) continues as an overhang slab (x 63..66) without wall below
+    let mut s = hang_at(Vec3::new(62.3, 2.6, 49.7), Vec3::NEG_Z);
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    s.pad(Vec3::X, 1.0, false, false); // the player's left
+    let switched = s.run_until(6.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::SwitchHang { to_wall: false }));
+    assert!(switched, "no switch: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    assert_eq!(s.data().ledge.mv.unwrap().seq[0].map(|a| a.id), Some(TO_FREE[0]), "hangwall_tr_hangfree_left");
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(2.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
+    assert!((s.body().feet.y - 0.2).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
+}
+
+#[test]
+fn pull_down_from_a_roof_edge_into_a_wall_hang() {
+    use crate::player::ledge_moves::{MoveKind, PULLDOWN_DESCENT, PULLDOWN_ORIENT};
+    // roof A: x 5..11, h 3.5; stand near its +X edge facing +X (over the drop)
+    let mut s = Sim::new(Vec3::new(10.6, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.run(0.2);
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::Ledge), "no pull-down: {:?}", s.loco().current);
+    let mv = s.data().ledge.mv.expect("orientation");
+    assert_eq!(mv.kind, MoveKind::PullDown { stage: 1 });
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(PULLDOWN_ORIENT[1]));
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::PullDown { stage: 2 })));
+    assert_eq!(s.data().ledge.mv.unwrap().seq[0].map(|a| a.id), Some(PULLDOWN_DESCENT));
+    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none()), "never settled: {:?}", s.data().ledge.mv.map(|m| m.kind));
+    let l = &s.data().ledge;
+    assert_eq!(l.hang_type, ledge::LedgeHangType::Wall);
+    assert!(l.normal.dot(Vec3::X) > 0.99, "hanging on the +X face: {:?}", l.normal);
+    assert!((l.hand_l.y - 3.5).abs() < 0.05);
+    let f = s.body().feet;
+    assert!((f.y - 2.4).abs() < 0.05 && (f.x - 11.5).abs() < 0.05, "wall-hang root: {f:?}");
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
 }

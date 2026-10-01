@@ -28,19 +28,12 @@ pub const BASE_LOW_PROFILE: f32 = 0.0;
 pub const BASE_HIGH_PROFILE: f32 = 0.5;
 pub const BASE_SPRINT: f32 = 0.75;
 pub const STICK_SPAN: f32 = 0.25;
-/// Speed parameter rises at 1.0/s. 0xDA0810
-pub const SPEED_PARAM_UP_RATE: f32 = 1.0;
-/// PLACEHOLDER: the game decelerates through a curve whose keys are not decoded yet. 0xDA0810
-pub const SPEED_PARAM_DOWN_RATE: f32 = 2.0;
+/// Speed parameter: rises at 1.0/s, falls through the deceleration curve; blend weights and root motion
+/// of the locomotion clips: see `player::move_blend` (HumanGround__UpdateMoveBlend 0xDA0810).
+
 /// Player turn rate (rad/s): min 270°/s, max 360°/s; thresholds are 0 so effectively 360°/s.
 /// HumanGround__UpdateHeading 0xD95290 → RotateTowards 0xD94F30
 pub const PLAYER_TURN_RATE: f32 = std::f32::consts::TAU;
-
-/// Root-motion speeds (m/s) at the top of each band, MEASURED from the game's clips (DISPLACEMENT
-/// track ÷ duration, RE/10): walk xx_l_walk 1.90, jog xx_h_jog 3.54, run xx_h_run 5.12,
-/// sprint xx_h_sprint 6.28. Between bands the game blends clips; here speed is interpolated linearly.
-pub const ROOT_SPEED_AT_BAND: [(f32, f32); 5] =
-    [(0.0, 0.0), (BAND_WALK, 1.90), (BAND_JOG, 3.54), (BAND_RUN, 5.12), (1.0, 6.28)];
 
 /// Ground loss → InAir fall types by fall height 1 / 2 / 8 m and horizontal speed 2.5 m/s. 0xD8C380
 pub const FALL_TYPE_HEIGHTS: [f32; 3] = [1.0, 2.0, 8.0];
@@ -60,16 +53,12 @@ pub const OVERDROP: f32 = 5.0;
 /// Landing damage by fall height (from apex): heavy > 6.3 m, fatal > 7.0 m. ComputeLandingType 0xE00FE0
 pub const FALL_HEAVY: f32 = 6.3;
 pub const FALL_FATAL: f32 = 7.0;
-/// Total drop > 3 m plays a roll + camera shake, else soft landing. SetupToGround_Landing 0xE05940
+/// Total drop > 3 m plays the damage / damage-roll landing + camera shake (drop − 3)/7, else the soft/hard
+/// landing blend. SetupToGround_Landing 0xE05940 (`player::jump_blend::landing`)
 pub const ROLL_DROP: f32 = 3.0;
 
-/// PLACEHOLDER jump "clip": duration = a + b·distance, apex = c + d·distance. The real game plays
-/// takeoff/flight/landing clips chosen by Human__ComputeJumpAnimBlend 0xB1EC40.
-pub const JUMP_DUR_BASE: f32 = 0.45;
-pub const JUMP_DUR_PER_M: f32 = 0.06;
-pub const JUMP_APEX_BASE: f32 = 0.6;
-pub const JUMP_APEX_PER_M: f32 = 0.1;
-/// PLACEHOLDER untargeted "free jump" (IHumanGround vt28): nominal forward distance, m.
+/// PORT: jump distance when no target is in range (the game always jumps to a target; vt28 resolves one,
+/// 0xD832F0). The jump itself uses the game's free-step blend.
 pub const FREE_JUMP_DISTANCE: f32 = 2.5;
 
 // ---------------------------------------------------------------- jump targets (RE/01 §7b)
@@ -80,6 +69,8 @@ pub const TARGET_MIN_DZ: f32 = -3.0;
 pub const GROUND_MAX_UP: f32 = 1.3;
 pub const GROUND_FAR: f32 = 7.0;
 /// Landing point is placed this far inside a roof edge. PLACEHOLDER (game uses the guidance contact).
+/// Ground loss → fall type 0–6 (0xD8C380): height < 1 (or < 2 with probe type 1) → 0/1, 2..8 with probe
+/// type 1 → 2/3, else 4/6; the faster type at a horizontal speed ≥ 2.5 m/s.
 pub const LAND_INSET: f32 = 0.45;
 
 // ---------------------------------------------------------------- ledge (RE/03 §7)
@@ -104,11 +95,9 @@ pub const SHIMMY_MIN_STEP: f32 = 0.15;
 pub const HAND_SPACING: f32 = 0.4;
 /// Lost-ledge check radius = 0.25 + half the hand spacing. HasLostLedge 0xDD20D0
 pub const LOST_LEDGE_R: f32 = 0.25;
-/// Vertical hand-over-hand step to a ledge 0.6–1.2 m away (StartHandStep 0xDDE0C0); jump-up probe
-/// 1.2 m above the hands (TryJumpUpToLedge 0xDD5E10).
+/// Vertical hand-over-hand step to a ledge 0.6–1.2 m away (StartHandStep 0xDDE0C0).
 pub const VSTEP_MIN: f32 = 0.45;
 pub const VSTEP_MAX: f32 = 1.25;
-pub const JUMP_UP_MAX: f32 = 2.0;
 /// Pull-up: root ends 0.5 m inside the ledge (Pullup_Start 0xDDBE80).
 pub const PULLUP_IN: f32 = 0.5;
 /// Move durations = the game clips' lengths (RE/10): xx_h_hangwall_strafe_*_050cm_open 0.533 s /
@@ -122,6 +111,9 @@ pub const VSTEP_TIME: f32 = 0.6;
 pub const VSTEP_DOWN_TIME: f32 = 0.4;
 pub const VSTEP_SECOND_TIME: f32 = 0.533;
 pub const JUMP_UP_TIME: f32 = 0.6;
+/// PORT: corner / side-jump duration only when the clip table lacks the action (jump_clips.rs).
+pub const CORNER_FALLBACK_TIME: f32 = 0.8;
+pub const SIDE_JUMP_FALLBACK_TIME: f32 = 1.0;
 /// Pull-up = the game's clip chains (RE/11 §5): wall hang → hangknee → stand = 0.333+0.4+0.467+0.4 s;
 /// free hang → hangwaist → hangknee → stand = 0.8+0.2+0.733+0.467+0.4 s.
 pub const PULLUP_WALL_TIME: f32 = 1.6;
@@ -155,6 +147,9 @@ pub const CATCH_REACH_LEDGE: f32 = 1.4;
 pub const CATCH_REACH_WALL: f32 = 1.95;
 /// Ledge-type jump targets: max up 3.0 m, distance bands 2.5 / 6 / 8 m. 0xB1EC40
 pub const LEDGE_MAX_UP: f32 = 3.0;
+/// Highest hand target of the standing straight jump: its top band blends the 250 / 300 cm clips over
+/// 2.5–3.0 m (0xB21DA0). (hypothesis) the target finder's own limit is not traced.
+pub const STRAIGHT_JUMP_MAX: f32 = 3.0;
 pub const LEDGE_FAR: f32 = 8.0;
 
 // ---------------------------------------------------------------- body (PLACEHOLDER until Skeleton decoded)

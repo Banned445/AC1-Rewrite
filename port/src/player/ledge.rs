@@ -1,4 +1,4 @@
-﻿//! Ledge context (`HumanLedge`, ActorContextID 9) â€” RE/03 Â§7.
+//! Ledge context (`HumanLedge`, ActorContextID 9) â€” RE/03 Â§7.
 //!
 //! - Hangs by two hand contacts on guidance edges. Wall hang: root 1.1 m below the hands and 0.5 m
 //!   out from the wall; free hang: root 2.4 m below (0xDD6730). Hang type re-evaluated after each
@@ -10,14 +10,17 @@
 //!   sweep; step = min(d âˆ’ 0.4, 1.0 âˆ’ spacing); blocked if d âˆ’ 0.15 < 0.7; min step 0.15; chain ends
 //!   handled implicitly (no edge further on â†’ no step).
 //! - Up/down: transition to Climb when wall holds exist (TryTransitionToClimb 0xDD46A0), else
-//!   hand-over-hand step to a ledge 0.6â€“1.2 m away, else (up, wall hang) jump up to a ledge â‰¤ 2 m above,
-//!   else (up) "blocked up" â†’ pull-up if there is standing space (CanPullup 0xDE2270).
+//!   hand-over-hand step to a ledge 0.6-1.2 m away, else (up, wall hang) the hop up into a free hang
+//!   (TryWallJumpUp 0xDD62A0), else (up) "blocked up" -> pull-up if there is standing space (CanPullup 0xDE2270).
+//! - Left/right past the end of the edge (or blocked): inner corner, side jump, outer corner
+//!   (`ledge_moves`, RE/03 §7.6b).
 //! - Let go (Legs) â†’ InAir; lost ledge (HasLostLedge 0xDD20D0) â†’ InAir.
 
 use bevy::prelude::*;
 
 use super::air::{FallOrigin, InAirEntry};
 use super::climb::{ClimbEntry, ClimbEntryType};
+use super::ledge_moves::{self, LedgeMove};
 use super::{
     heading_of, right_of, switch_context, ActorContextId, Body, HumanDataBundle, LimbTargets, Locomotion, Player,
     RootInterp, TransitionSetup,
@@ -62,6 +65,10 @@ pub struct LedgeEntry {
     pub normal: Vec3,
     pub from_feet: Vec3,
     pub sub_state: LedgeSubState,
+    /// The reception after a jump at the ledge (`ledge_moves::arrival_move`); replaces the plain grab.
+    pub entry_move: Option<LedgeMove>,
+    /// Further moves played after `entry_move` (the pull-down's descent and reception).
+    pub entry_rest: [Option<LedgeMove>; 2],
 }
 
 impl LedgeEntry {
@@ -74,6 +81,8 @@ impl LedgeEntry {
             normal,
             from_feet,
             sub_state,
+            entry_move: None,
+            entry_rest: [None, None],
         }
     }
 }
@@ -105,6 +114,16 @@ pub struct HumanLedgeData {
     pub vstep: Option<(bool, bool)>,
     moves: Vec<RootInterp>,
     after: Option<After>,
+    /// Running corner turn / ledge jump / hop up (`ledge_moves`).
+    pub mv: Option<LedgeMove>,
+    /// Moves queued after `mv` (pull-down stages); each starts from where the previous one ended.
+    pub queue: Vec<LedgeMove>,
+    /// Free hang forced by the hop (0xDDAB00) until the next move re-evaluates the wall below.
+    /// PORT: the game switches back through TrySwitchHangType's free → wall anims (not ported).
+    pub force_free: bool,
+    /// The hang type has been evaluated for this hang (it then changes only through moves: switches,
+    /// corners, jumps — 0xDE1060).
+    pub hang_set: bool,
 }
 
 impl HumanLedgeData {
@@ -116,18 +135,27 @@ impl HumanLedgeData {
         self.alt_flag = false; // EnterCommon 0xDE26D0 clears +0x85
         self.blocked_up = false;
         self.moves.clear();
+        self.mv = None;
+        self.hang_set = false;
         self.after = Some(After::Hang);
         self.last_action = "grab";
         self.step_seq += 1;
-        // the root moves onto the hang pose (reception/grasp anims in the game)
-        self.moves.push(RootInterp::new(e.from_feet, Vec3::NAN, GRAB_TIME));
+        self.queue = e.entry_rest.iter().flatten().copied().collect();
+        if let Some(m) = e.entry_move {
+            // the game's reception for the jump that arrived (0xE07D00), or the pull-down's first stage
+            self.mv = Some(m);
+            self.sub_state = LedgeSubState::HandPlacement;
+        } else {
+            // the root moves onto the hang pose (reception/grasp anims in the game)
+            self.moves.push(RootInterp::new(e.from_feet, Vec3::NAN, GRAB_TIME));
+        }
     }
 }
 
 impl HumanLedgeData {
     /// A discrete move (grab, step, pull-up) is running.
     pub fn moving(&self) -> bool {
-        !self.moves.is_empty()
+        !self.moves.is_empty() || self.mv.is_some()
     }
 }
 
@@ -135,12 +163,35 @@ fn hand_mid(d: &HumanLedgeData) -> Vec3 {
     (d.hand_l + d.hand_r) * 0.5
 }
 
-/// Wall below the hands? (TrySwitchHangType probes for foot holds; here: solid below the edge.)
+/// Foot supports for a hang at `mid` (`sub_DE0A60` from TrySwitchHangType 0xDE1060): two rays of 1.2 m toward
+/// the wall, starting 1 m below the hands, 0.5 m back from the wall and 0.1 m to either side (collision layer
+/// 43). Returns (left foot hits, right foot hits).
+pub fn feet_on_wall(mid: Vec3, n: Vec3, collision: &CollisionWorld) -> (bool, bool) {
+    let facing = -Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    let r = right_of(facing);
+    let start = mid - Vec3::Y - facing * 0.5;
+    let hit = |o: Vec3| collision.sphere_free_distance(o, facing, 0.01, 1.2) < 1.2 - 1e-3;
+    (hit(start - r * 0.1), hit(start + r * 0.1))
+}
+
+/// Hang type a hang at `mid` gets: wall if a foot finds support (the free → wall rule of 0xDE1060).
 pub fn hang_type_at(mid: Vec3, n: Vec3, collision: &CollisionWorld) -> LedgeHangType {
-    if collision.point_inside(mid - n * 0.15 - Vec3::Y * 0.9) {
+    let (a, b) = feet_on_wall(mid, n, collision);
+    if a || b {
         LedgeHangType::Wall
     } else {
         LedgeHangType::Free
+    }
+}
+
+/// The hang type a step to `mid` needs, if it differs from `cur` (0xDE1060): free → wall when a foot finds
+/// support, wall → free unless both feet do.
+fn needs_switch(cur: LedgeHangType, mid: Vec3, n: Vec3, collision: &CollisionWorld) -> Option<LedgeHangType> {
+    let (a, b) = feet_on_wall(mid, n, collision);
+    match cur {
+        LedgeHangType::Free if a || b => Some(LedgeHangType::Wall),
+        LedgeHangType::Wall if !(a && b) => Some(LedgeHangType::Free),
+        _ => None,
     }
 }
 
@@ -182,6 +233,15 @@ pub fn quantize(stick: Vec3, facing: Vec3) -> LedgeDir {
     }
 }
 
+fn start_move(d: &mut HumanLedgeData, mv: LedgeMove, what: &'static str) {
+    d.mv = Some(mv);
+    d.force_free = false;
+    d.step_seq += 1;
+    d.sub_state = LedgeSubState::HandPlacement;
+    d.blocked_up = false;
+    d.last_action = what;
+}
+
 /// Both foot holds 1.2 m below the hands exist â†’ the wall is climbable (TryTransitionToClimb).
 fn climb_holds_below(guidance: &GuidanceWorld, hand_l: Vec3, hand_r: Vec3, n: Vec3) -> Option<(Vec3, Vec3)> {
     let drop = CLIMB_ROW * CLIMB_HAND_ROWS as f32;
@@ -214,7 +274,10 @@ pub fn update_ledge(
         body.heading = heading_of(facing);
         body.velocity = Vec3::ZERO;
         body.grounded = false;
-        d.hang_type = hang_type_at(hand_mid(d), n, &collision);
+        if !d.hang_set {
+            d.hang_type = hang_type_at(hand_mid(d), n, &collision);
+            d.hang_set = true;
+        }
         // the pull-up clip carries the hands from the lip onto the top: no hand pinning (game: the
         // animation's contact tags release them)
         limbs.hands = (d.sub_state != LedgeSubState::Pullup).then_some((d.hand_l, d.hand_r));
@@ -222,6 +285,53 @@ pub fn update_ledge(
         limbs.transit = d.moves.first().map(|m| m.duration).unwrap_or(SHIMMY_OPEN_TIME) * 0.8;
         // the feet follow the hang clip (braced against the wall, or dangling); only the hands are pinned
         limbs.feet = None;
+
+        // ---------------------------------------------------------------- corner / ledge jump / hop
+        if let Some(mut mv) = d.mv {
+            let (p, done) = mv.advance(dt);
+            body.feet = p;
+            body.heading = heading_of(mv.facing());
+            limbs.hands = None;
+            if done && !d.queue.is_empty() {
+                // next queued stage (pull-down: orientation → descent → reception)
+                let mut next = d.queue.remove(0);
+                next.from = body.feet;
+                d.mv = Some(next);
+                continue;
+            }
+            if done && mv.end_stand {
+                // knee / waist arrivals end standing on top (Ledge SubState 4 → pull-up). Game: NarrowObject
+                // on the edge; PORT: Ground
+                d.mv = None;
+                limbs.hands = None;
+                limbs.feet = None;
+                body.grounded = true;
+                switch_context(&mut loco, &mut data, TransitionSetup::ToMovement { landing: None });
+                continue;
+            }
+            if done {
+                d.hand_l = mv.hand_l;
+                d.hand_r = mv.hand_r;
+                d.normal = mv.normal;
+                d.hang_type = if mv.end_free {
+                    LedgeHangType::Free
+                } else if mv.end_wall {
+                    LedgeHangType::Wall
+                } else {
+                    hang_type_at(hand_mid(d), mv.normal, &collision)
+                };
+                d.hang_set = true;
+                d.force_free = false;
+                d.mv = None;
+                d.sub_state = LedgeSubState::Movement;
+                if !matches!(mv.kind, ledge_moves::MoveKind::SwitchHang { .. }) {
+                    d.alt_flag = false;
+                }
+            } else {
+                d.mv = Some(mv);
+            }
+            continue;
+        }
 
         // ---------------------------------------------------------------- running move
         if let Some(m) = d.moves.first_mut() {
@@ -249,7 +359,6 @@ pub fn update_ledge(
                 Some(After::SecondHand(i, target)) => {
                     // ContinuePendingVerticalStep 0xDCF3C0: the second hand follows next
                     if i == 0 { d.hand_l = target } else { d.hand_r = target }
-                    d.hang_type = hang_type_at(hand_mid(d), n, &collision);
                     let to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
                     d.vstep = Some((i == 1, true));
                     d.moves.push(RootInterp::new(body.feet, to, VSTEP_SECOND_TIME));
@@ -269,7 +378,7 @@ pub fn update_ledge(
             let origin = if d.hang_type == LedgeHangType::Wall { FallOrigin::HangWall } else { FallOrigin::HangFree };
             limbs.hands = None;
             limbs.feet = None;
-            switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin }));
+            switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin, speed_param: 0.0 }));
             continue;
         }
         let dir = if pad.speed01 > 0.0 { Some(quantize(pad.dir, facing)) } else { None };
@@ -283,7 +392,7 @@ pub fn update_ledge(
             } else {
                 // let go (WantsLetGo 0xDCD4D0 â†’ LetGoToInAir)
                 let origin = if d.hang_type == LedgeHangType::Wall { FallOrigin::HangWall } else { FallOrigin::HangFree };
-                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin }
+                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin, speed_param: 0.0 }
             };
             switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
             continue;
@@ -328,9 +437,16 @@ pub fn update_ledge(
                     }
                 }
                 if let Some(h) = target {
-                    // first hand moves now, the second one next (pending vertical step)
                     let tl = Vec3::new(d.hand_l.x, h.point.y, d.hand_l.z);
                     let tr = Vec3::new(d.hand_r.x, h.point.y, d.hand_r.z);
+                    // the destination needs the other hang type: the switch replaces the hand step (0xDE29E0 order:
+                    // TrySwitchHangType before StartHandStep)
+                    if let Some(nt) = needs_switch(d.hang_type, (tl + tr) * 0.5, n, &collision) {
+                        let mv = ledge_moves::switch_move(if sign > 0.0 { 0 } else { 1 }, nt == LedgeHangType::Wall, body.feet, tl, tr, n);
+                        start_move(d, mv, if nt == LedgeHangType::Wall { "switch to wall hang" } else { "switch to free hang" });
+                        continue;
+                    }
+                    // first hand moves now, the second one next (pending vertical step)
                     let first_left = !d.alt_flag;
                     d.alt_flag = !d.alt_flag;
                     if first_left { d.hand_l = tl } else { d.hand_r = tr }
@@ -350,22 +466,12 @@ pub fn update_ledge(
                     continue;
                 }
                 if dir == LedgeDir::Up {
-                    // TryJumpUpToLedge (wall hang only): ledge up to 2 m above
-                    if d.hang_type == LedgeHangType::Wall {
-                        if let Some(h) = guidance.probe(mid + Vec3::Y * 1.6, 0.4, 0.45, Some(facing), 0.785) {
-                            let dy = h.point.y - mid.y;
-                            if dy > VSTEP_MAX && dy <= JUMP_UP_MAX {
-                                d.hand_l.y = h.point.y;
-                                d.hand_r.y = h.point.y;
-                                let to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
-                                d.moves.push(RootInterp::new(body.feet, to, JUMP_UP_TIME));
-                                d.step_seq += 1;
-                                d.after = Some(After::Hang);
-                                d.sub_state = LedgeSubState::HandPlacement;
-                                d.last_action = "jump up";
-                                continue;
-                            }
-                        }
+                    // TryWallJumpUp 0xDD62A0: hop up to a ledge above the reach of a hand step (wall hang).
+                    // (TryJumpUpToClimb 0xDD5E10, the jump up to climb holds, comes first in the game; the
+                    // greybox has no climbable wall above a ledge, so it is not ported yet.)
+                    if let Some(mv) = ledge_moves::try_hop_up(d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision) {
+                        start_move(d, mv, "hop up");
+                        continue;
                     }
                     // nothing else possible: blocked up â†’ pull-up (CanPullup 0xDE2270). In the game the
                     // decision layer sends event 0; here holding up while blocked triggers it (hypothesis).
@@ -403,7 +509,15 @@ pub fn update_ledge(
                     let origin = mover - dv * SHIMMY_SWEEP_R + n * SHIMMY_SWEEP_OUT + Vec3::Y * SHIMMY_SWEEP_UP;
                     let free = collision.sphere_free_distance(origin, dv, SHIMMY_SWEEP_R, SHIMMY_SWEEP_LEN);
                     if free - SHIMMY_SWEEP_R < SHIMMY_MIN_FREE {
-                        d.last_action = "shimmy blocked (obstacle / inner corner)";
+                        // blocked: inner corner (0xDD0600 inner + 0xDD3BB0), else side jump, else blocked
+                        let right_dir = dir == LedgeDir::Right;
+                        if let Some(mv) = ledge_moves::try_corner(true, right_dir, d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision) {
+                            start_move(d, mv, "corner (inner)");
+                        } else if let Some(mv) = ledge_moves::try_side_jump(right_dir, d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision) {
+                            start_move(d, mv, "side jump");
+                        } else {
+                            d.last_action = "shimmy blocked (obstacle / inner corner)";
+                        }
                         continue;
                     }
                     let step = (free - SHIMMY_WALL_MARGIN).min(SHIMMY_MAX_SPACING - spacing);
@@ -423,12 +537,29 @@ pub fn update_ledge(
                     guidance.on_edge(other - dv * HAND_SPACING, n, 0.1).map(|h| h.point)
                 };
                 let Some(t) = target else {
-                    d.last_action = "end of ledge";
+                    // end of the edge: inner corner, side jump, outer corner (Movement_ChooseAction 0xDE29E0 order)
+                    let right_dir = dir == LedgeDir::Right;
+                    let mv = ledge_moves::try_corner(true, right_dir, d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision)
+                        .map(|m| (m, "corner (inner)"))
+                        .or_else(|| ledge_moves::try_side_jump(right_dir, d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision).map(|m| (m, "side jump")))
+                        .or_else(|| ledge_moves::try_corner(false, right_dir, d.hand_l, d.hand_r, n, body.feet, d.hang_type, &guidance, &collision).map(|m| (m, "corner (outer)")));
+                    match mv {
+                        Some((mv, what)) => start_move(d, mv, what),
+                        None => d.last_action = "end of ledge",
+                    }
                     continue;
                 };
+                let (nl, nr) = if move_right_hand { (d.hand_l, t) } else { (t, d.hand_r) };
+                if let Some(nt) = needs_switch(d.hang_type, (nl + nr) * 0.5, n, &collision) {
+                    let mv = ledge_moves::switch_move(if dir == LedgeDir::Right { 3 } else { 2 }, nt == LedgeHangType::Wall, body.feet, nl, nr, n);
+                    // the switch carries this shimmy step's hand move: the alternation advances as for the step
+                    d.alt_flag = !d.alt_flag;
+                    start_move(d, mv, if nt == LedgeHangType::Wall { "switch to wall hang" } else { "switch to free hang" });
+                    continue;
+                }
                 if move_right_hand { d.hand_r = t } else { d.hand_l = t }
                 d.alt_flag = !d.alt_flag;
-                d.hang_type = hang_type_at(hand_mid(d), n, &collision);
+                d.force_free = false;
                 let to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
                 // after the toggle: alt_flag set = this was the lead hand's reach (open), clear = closing step
                 d.moves.push(RootInterp::new(body.feet, to, if d.alt_flag { SHIMMY_OPEN_TIME } else { SHIMMY_CLOSE_TIME }));

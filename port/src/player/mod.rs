@@ -11,7 +11,11 @@
 pub mod air;
 pub mod climb;
 pub mod ground;
+pub mod jump_blend;
+pub mod jump_clips;
 pub mod ledge;
+pub mod ledge_moves;
+pub mod move_blend;
 pub mod targets;
 
 use bevy::prelude::*;
