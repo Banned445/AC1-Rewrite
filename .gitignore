@@ -46,3 +46,6 @@ target
 
 # local clone of the remote (not part of the project)
 AC1-Rewrite/
+
+# local development screenshots (renders of the game's model)
+dev_screenshots/
