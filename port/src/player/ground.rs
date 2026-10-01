@@ -210,6 +210,17 @@ pub fn update_ground(
             }
         }
 
+        // ---------------------------------------------------------------- pull-down (event 70)
+        // The game's decision layer sends event 70 (not traced); guard 0xD9D6C0: facing along the edge's outward
+        // normal, a drop of more than 2 m, body space. PORT trigger: Legs in low profile at an edge.
+        if !g.high_profile && pad.jump_buffered() && !busy {
+            if let Some(entry) = try_pulldown(body.feet, body.forward(), &guidance, &collision) {
+                pad.consume_jump();
+                switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+                continue;
+            }
+        }
+
         // ---------------------------------------------------------------- jump requests
         // vt24 JumpToGuidanceTarget: high profile + jump buffer + stick > dead-zone (RE/01 §6.3).
         // While free-running with Legs held the game also jumps when it reaches an edge
@@ -315,6 +326,28 @@ fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision:
         return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }));
     }
     None
+}
+
+/// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a
+/// LedgeGrab edge at the feet within 0.8 m ahead whose outward normal points along the facing (dot > 0),
+/// with more than 2.0 m of drop below it (edge report +48).
+fn try_pulldown(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<super::ledge::LedgeEntry> {
+    let hit = guidance.probe(feet + forward * 0.5, 0.5, 0.2, None, std::f32::consts::PI)?;
+    let n = hit.wall_normal;
+    if n.dot(forward) <= 0.0 {
+        return None;
+    }
+    let below = collision.ground_height(hit.point + n * 0.6 - Vec3::Y * 0.05, 50.0).unwrap_or(hit.point.y - 100.0);
+    if hit.point.y - below <= 2.0 {
+        return None;
+    }
+    let [orient, descent, reception] = super::ledge_moves::pulldown(hit.point, n, feet, true, guidance, collision)?;
+    let mut e = super::ledge::LedgeEntry::at((orient.hand_l + orient.hand_r) * 0.5, n, feet, super::ledge::LedgeSubState::PullDown);
+    e.hand_l = orient.hand_l;
+    e.hand_r = orient.hand_r;
+    e.entry_move = Some(orient);
+    e.entry_rest = [Some(descent), Some(reception)];
+    Some(e)
 }
 
 trait AnyHit {

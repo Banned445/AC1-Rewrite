@@ -203,6 +203,8 @@ Limitations:
 - `AC_AUTOPILOT=ledgemoves` shows a side jump and an outer corner.
 - Hang type (wall / free) changes only through moves. A step whose destination has (or lacks) foot support on the wall plays
   the game's switch (`hangfree_tr_hangwall_*` / `hangwall_tr_hangfree_*`, 0xDE1060). `AC_AUTOPILOT=hangswitch` shows both.
+- **Pull-down** (RE/03 §7.8b): Legs in low profile at an edge with a drop over 2 m. It plays the game's orientation, descent and
+  wall / free reception into a hang. `AC_AUTOPILOT=pulldown`.
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

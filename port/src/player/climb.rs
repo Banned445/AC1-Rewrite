@@ -395,6 +395,7 @@ pub fn update_climb(
                     from_feet: body.feet,
                     sub_state: LedgeSubState::TransitionInFromClimb,
                     entry_move: None,
+                    entry_rest: [None, None],
                 };
                 switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
                 continue;

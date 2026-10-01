@@ -79,6 +79,8 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     ACT_WAIST_TO_KNEE, ACT_KNEE_TO_WAIT,
     // running jump onto a ledge: wall reception and free-hang swing (0xE07D00 generic branch)
     RECEPTION_SURFACE_WALL, SWING_RECEPTION,
+    // pull-down (0xDDE4D0 / 0xDDE980)
+    PULLDOWN_ORIENT[0], PULLDOWN_ORIENT[1], PULLDOWN_DESCENT, PULLDOWN_WALL[0], PULLDOWN_WALL[1], PULLDOWN_FREE[0], PULLDOWN_FREE[1],
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +92,8 @@ pub enum MoveKind {
     Arrival,
     /// Wall ↔ free hang (0xDE1060).
     SwitchHang { to_wall: bool },
+    /// Ground → hang over an edge (0xDDE4D0 / 0xDDE980): orientation, descent, reception.
+    PullDown { stage: u8 },
 }
 
 /// A running ledge move.
@@ -538,4 +542,89 @@ pub fn switch_move(dir: u8, to_wall: bool, from: Vec3, hand_l: Vec3, hand_r: Vec
         hand_r,
         normal: n,
     }
+}
+
+// ---------------------------------------------------------------- pull-down (ground → hang)
+
+/// Pull-down table 0x1A2C3F0 (index side + 8·type; +4 = the descent action): the ground types have front
+/// entries only. [EdgeStop (0), Wait (1)] orientation: `ledge_stop_start_footl_pulldown_front_orientation`,
+/// `ledge_lookdown_front_pulldown_front_orientation`.
+pub const PULLDOWN_ORIENT: [u32; 2] = [0xB5EB_D80B, 0x06E8_BD80];
+/// Descent (types 0 and 1): `ledge_pulldown_soft_front`.
+pub const PULLDOWN_DESCENT: u32 = 0x082F_8C53;
+/// Reception (0xDDE980 stage 2): wall `pulldown_soft_to_hangwall_{straight,30_out,45_in}_a` (115916161), then its
+/// transition action `_b` + `_tr` (0x082F820C); free `pulldown_soft_front_to_hangfree_a` (137338683), then
+/// 0x082F9F3C (`_b` + `_tr`).
+pub const PULLDOWN_WALL: [u32; 2] = [0x06E8_BD81, 0x082F_820C];
+pub const PULLDOWN_FREE: [u32; 2] = [0x082F_9F3B, 0x082F_9F3C];
+
+/// `HumanLedge__PullDown_Enter` 0xDDE4D0 + `HumanLedge__PullDown_Update` 0xDDE980 (front side).
+/// `p` = the edge point, `n` = the edge's outward normal (the character faces along it, guard 0xD9D6C0),
+/// `wait` = type 1 (from Movement) instead of 0 (from the ledge stop).
+/// 1. Orientation: the type's orientation action, root → p + 0.5·n, facing −n.
+/// 2. Descent: hands found on the edge at p ± 0.25·side (else the game releases into InAir), the descent
+///    action, root → p + 1.0·n − 0.8 m.
+/// 3. Reception: foot support (`sub_B16130`) → wall reception (angle blend, straight here) to the wall-hang
+///    root, else the free reception to the free-hang root.
+pub fn pulldown(p: Vec3, n: Vec3, from: Vec3, wait: bool, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<[LedgeMove; 3]> {
+    let n = Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    let facing_out = n;
+    let facing_in = -n;
+    let r = right_of(facing_in);
+    let hl = guidance.on_edge(p - r * 0.25, n, 0.3)?.point;
+    let hr = guidance.on_edge(p + r * 0.25, n, 0.3)?.point;
+    let mid = (hl + hr) * 0.5;
+    let mk = |kind: u8, seq: [Option<ActionBlend>; 4], from: Vec3, to: Vec3, ff: Vec3, ft: Vec3, end_wall: bool, end_free: bool| {
+        let durations = seq_durations(&seq);
+        let found = durations.iter().sum::<f32>() > 0.0;
+        LedgeMove {
+            kind: MoveKind::PullDown { stage: kind },
+            seq,
+            durations: if found { durations } else { [GRAB_TIME, 0.0, 0.0, 0.0] },
+            t: 0.0,
+            from,
+            to,
+            facing_from: ff,
+            facing_to: ft,
+            follow_disp: false,
+            lead: 0.0,
+            end_free,
+            end_wall,
+            end_stand: false,
+            hand_l: hl,
+            hand_r: hr,
+            normal: n,
+        }
+    };
+    let item = |id: u32, i: usize, w: &[f32]| jump_blend::action_items(id).filter(|it| it.len() > i).map(|_| ActionBlend::new(id, i, w));
+    let p1 = Vec3::new(mid.x, mid.y, mid.z) + n * 0.5;
+    let orient = mk(1, [single(PULLDOWN_ORIENT[wait as usize], 0), None, None, None], from, p1, facing_out, facing_in, false, false);
+    let p2 = mid + n * 1.0 - Vec3::Y * 0.8;
+    let descent = mk(2, [single(PULLDOWN_DESCENT, 0), None, None, None], p1, p2, facing_in, facing_in, false, false);
+    let wall = hang_type_at(mid, n, collision) == LedgeHangType::Wall;
+    let straight = [1.0, 0.0, 0.0];
+    let reception = if wall {
+        mk(
+            3,
+            [item(PULLDOWN_WALL[0], 0, &straight), item(PULLDOWN_WALL[1], 0, &straight), item(PULLDOWN_WALL[1], 1, &straight), None],
+            p2,
+            hang_root(hl, hr, n, LedgeHangType::Wall),
+            facing_in,
+            facing_in,
+            true,
+            false,
+        )
+    } else {
+        mk(
+            3,
+            [single(PULLDOWN_FREE[0], 0), single(PULLDOWN_FREE[1], 0), single(PULLDOWN_FREE[1], 1), None],
+            p2,
+            hang_root(hl, hr, n, LedgeHangType::Free),
+            facing_in,
+            facing_in,
+            false,
+            true,
+        )
+    };
+    Some([orient, descent, reception])
 }

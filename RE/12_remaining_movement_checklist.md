@@ -90,7 +90,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
 - [ ] **Ledge look-down:** `xx_l_ledge_lookdown_*` (ability LookDown, vt1540).
 - [ ] **Leap of Faith** from a look-down edge.
-- [ ] **PullDown, ground → hang** (§4):
+- [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
   - from a stop at the edge, from wait, hard, from a beam, and hand-pass-over;
   - all four sides.
 - [ ] **Crowd:** gentle push and shove (vt848–860, PushStrength), **CrowdRun**, blending with monks
@@ -190,7 +190,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **One-hand catch** (`hangfree_onehand`, `hangwall_onehand`) → SecondHandGrab.
 - [ ] **Impacts:** `hangfree_impact_*` (catching at elbow/shoulder height, 50 cm, 150 cm).
 - [ ] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground).
-- [ ] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
+- [~] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
+      **→ decoded (RE/03 §7.8b); type Wait / front ported with the game's actions and roots. Open: EdgeStop (needs the ledge stop),
+      side and beam variants, HandPassOver, ReleaseToInAir, the decision layer's event 70 input**
 - [ ] **Ledge → Climb:** down/side onto climb holds; the free-hang drop-to-climb sequence (states 14/15, `TryFreeHangDropToClimb`).
 - [ ] **Ledge → Ladder** (ToLadder).
 - [ ] **Exits:** knock-off / damage reactions (events 2/4/5) → InAir.

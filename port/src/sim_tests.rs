@@ -546,3 +546,26 @@ fn shimmy_onto_an_overhang_switches_to_a_free_hang() {
     assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
     assert!((s.body().feet.y - 0.2).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
 }
+
+#[test]
+fn pull_down_from_a_roof_edge_into_a_wall_hang() {
+    use crate::player::ledge_moves::{MoveKind, PULLDOWN_DESCENT, PULLDOWN_ORIENT};
+    // roof A: x 5..11, h 3.5; stand near its +X edge facing +X (over the drop)
+    let mut s = Sim::new(Vec3::new(10.6, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.run(0.2);
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::Ledge), "no pull-down: {:?}", s.loco().current);
+    let mv = s.data().ledge.mv.expect("orientation");
+    assert_eq!(mv.kind, MoveKind::PullDown { stage: 1 });
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(PULLDOWN_ORIENT[1]));
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::PullDown { stage: 2 })));
+    assert_eq!(s.data().ledge.mv.unwrap().seq[0].map(|a| a.id), Some(PULLDOWN_DESCENT));
+    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none()), "never settled: {:?}", s.data().ledge.mv.map(|m| m.kind));
+    let l = &s.data().ledge;
+    assert_eq!(l.hang_type, ledge::LedgeHangType::Wall);
+    assert!(l.normal.dot(Vec3::X) > 0.99, "hanging on the +X face: {:?}", l.normal);
+    assert!((l.hand_l.y - 3.5).abs() < 0.05);
+    let f = s.body().feet;
+    assert!((f.y - 2.4).abs() < 0.05 && (f.x - 11.5).abs() < 0.05, "wall-hang root: {f:?}");
+    assert_eq!(s.loco().current, ActorContextId::Ledge);
+}

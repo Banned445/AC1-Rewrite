@@ -67,6 +67,8 @@ pub struct LedgeEntry {
     pub sub_state: LedgeSubState,
     /// The reception after a jump at the ledge (`ledge_moves::arrival_move`); replaces the plain grab.
     pub entry_move: Option<LedgeMove>,
+    /// Further moves played after `entry_move` (the pull-down's descent and reception).
+    pub entry_rest: [Option<LedgeMove>; 2],
 }
 
 impl LedgeEntry {
@@ -80,6 +82,7 @@ impl LedgeEntry {
             from_feet,
             sub_state,
             entry_move: None,
+            entry_rest: [None, None],
         }
     }
 }
@@ -113,6 +116,8 @@ pub struct HumanLedgeData {
     after: Option<After>,
     /// Running corner turn / ledge jump / hop up (`ledge_moves`).
     pub mv: Option<LedgeMove>,
+    /// Moves queued after `mv` (pull-down stages); each starts from where the previous one ended.
+    pub queue: Vec<LedgeMove>,
     /// Free hang forced by the hop (0xDDAB00) until the next move re-evaluates the wall below.
     /// PORT: the game switches back through TrySwitchHangType's free → wall anims (not ported).
     pub force_free: bool,
@@ -135,8 +140,9 @@ impl HumanLedgeData {
         self.after = Some(After::Hang);
         self.last_action = "grab";
         self.step_seq += 1;
+        self.queue = e.entry_rest.iter().flatten().copied().collect();
         if let Some(m) = e.entry_move {
-            // the game's reception for the jump that arrived (0xE07D00)
+            // the game's reception for the jump that arrived (0xE07D00), or the pull-down's first stage
             self.mv = Some(m);
             self.sub_state = LedgeSubState::HandPlacement;
         } else {
@@ -286,6 +292,13 @@ pub fn update_ledge(
             body.feet = p;
             body.heading = heading_of(mv.facing());
             limbs.hands = None;
+            if done && !d.queue.is_empty() {
+                // next queued stage (pull-down: orientation → descent → reception)
+                let mut next = d.queue.remove(0);
+                next.from = body.feet;
+                d.mv = Some(next);
+                continue;
+            }
             if done && mv.end_stand {
                 // knee / waist arrivals end standing on top (Ledge SubState 4 → pull-up). Game: NarrowObject
                 // on the edge; PORT: Ground

@@ -565,6 +565,39 @@ The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
   - PullDownSubState = Orientation. The update (`StatePullDown_Update` 0xDDFCF0) ends in Entry (state 5), or in **InAir when PullDownSubState == 4 ReleaseToInAir** (fill 0xDDA100).
 - HandPassOver (state 9, SubState 12) is the vault over a ledge without hanging. HandPassOverSubState PassOver + anim done → **Ground context 4**.
 
+### 7.8b PullDown in full (verified 2026-10-01)
+**Request:** event **70** from the decision layer (the input mapping is not traced), with an edge report. The report holds the point at +16, the outward normal at +32, the drop height at +48 and a flag at +56.
+
+| Where | Guard | Fill | Type |
+|---|---|---|---|
+| Ground Movement (`Movement_HandleEvent` 0xDB1470) | `HumanGround__Guard_PullDownWait` 0xD9D6C0 | `FillPullDown_Wait` 0xD843E0 | **Wait (1)** |
+| Ledge-stop sub-state handler 0xDA4D90 | `HumanGround__Guard_PullDownEdgeStop` 0xD9D580, which also needs the ledge-stop action `0x06E8BD7F` playing | `FillPullDown_EdgeStop` 0xD84360 | **EdgeStop (0)** |
+
+Both guards require:
+- the report flag (+56) clear (Wait) and the playing item not locked (+60 & 0x20);
+- **facing along the outward normal** (forward · n > 0);
+- **drop > 2.0 m** (+48);
+- the body check `sub_B2E4F0`.
+
+The fills copy the report to LedgeData +240 (point +256, normal +272), set the type (+64), side Front (+68) and LedgeSubState **11**.
+
+**Stages** (`PullDown_Enter` 0xDDE4D0, `PullDown_Update` 0xDDE980, `StatePullDown_Update` 0xDDFCF0; PullDownSubState at LedgeData +84). Table `dword_1A2C3F0[side + 8·type]` = orientation, `[+4]` = descent. The ground types have front entries only; left/right rotate the facing ∓90°. Type 4 HandPassOver uses `0x09A0B647/49`, then `0x09A0B648/4A`, blended by +308.
+
+| Stage | Action | Root target (interpolator over the action) | Other |
+|---|---|---|---|
+| 1 Orientation | `0xB5EBD80B` `ledge_stop_start_footl_pulldown_front_orientation` (EdgeStop) or `0x06E8BD80` `ledge_lookdown_front_pulldown_front_orientation` (Wait) | **p + 0.5·n**, facing −n | Limb IK on |
+| 2 Descent | `0x082F8C53` `ledge_pulldown_soft_front` | **p + 1.0·n − 0.8 m** | First, two guidance probes (`sub_1170A00`, ±0.3 / 0.7) find the hands at p ∓ 0.25·side; **none → ReleaseToInAir** (stage 4 → InAir, fill 0xDDA100) |
+| 3 Reception, foot support (`sub_B16130`) | `0x06E8BD81` (115916161) `pulldown_soft_to_hangwall_{straight,30_out,45_in}_a`, then `0x082F820C` `_b` + `_tr`. Weights by the signed wall angle: ≥ 0 → straight/30 out by angle/30°, < 0 → straight/45 in by −angle/45° | Wall-hang root (`sub_B157B0`) | Hang type 0 |
+| 3 Reception, no support | `0x082F9F3B` (137338683) `pulldown_soft_front_to_hangfree_a`, then `0x082F9F3C` | Free root (`sub_B15AD0`) | Hang type 1 |
+
+When the reception action is done (`PullDownReceptionDone` 0xDCDAA0), PullDownSubState → 0 and the state goes to Entry, i.e. hanging.
+
+**Port** (`ledge_moves::pulldown`, three queued ledge moves; `ground.rs` `try_pulldown`):
+- Type Wait, front side; reception weights straight.
+- **PORT trigger:** Legs in low profile, facing an edge within 0.5 m with a drop over 2 m.
+- Not ported: EdgeStop (no ledge-stop state yet), the side variants, beam pull-downs, HandPassOver, and the release into InAir when no hands are found (the port then simply doesn't pull down).
+- `AC_AUTOPILOT=pulldown`.
+
 ### 7.9 Entry routing (`EnterCommon` 0xDE26D0, from HumanLedgeData.SubState)
 | SubState in | state | extra |
 |---|---|---|
