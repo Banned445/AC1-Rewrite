@@ -1,0 +1,247 @@
+//! The player ("Human") and its locomotion-context framework.
+//!
+//! Mirrors the game's architecture (RE/01):
+//! - exactly one *locomotion context* is active (AIActor extension slot 1);
+//! - contexts are identified by `ActorContextID` (values verbatim from the exe, desc 0x19640EC);
+//! - a switch is immediate (`AIActor::SwitchLocomotionContext` 0x55F7E0): old context exits, a
+//!   `TransitionSetup` object is applied to the destination's data block, the new context enters,
+//!   and the new context skips its first update (the `justSwitched` byte);
+//! - every context's runtime data lives in one `HumanDataBundle` (HumanData+0x30 in the game).
+
+pub mod air;
+pub mod climb;
+pub mod ground;
+pub mod ledge;
+pub mod targets;
+
+use bevy::prelude::*;
+
+use crate::tuning::*;
+
+/// `ActorContextID` (subset used so far; numbering matches the exe).
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ActorContextId {
+    Ground = 4,
+    Ladder = 5,
+    Pole = 6,
+    Rope = 7,
+    InAir = 8,
+    Ledge = 9,
+    Climb = 10,
+    Walling = 11,
+    NarrowObject = 12,
+}
+
+#[derive(Component)]
+pub struct Player;
+
+/// Locomotion slot state (AIActor slot 1: current / previous id + justSwitched).
+#[derive(Component, Debug)]
+pub struct Locomotion {
+    pub current: ActorContextId,
+    pub previous: ActorContextId,
+    pub just_switched: bool,
+}
+
+/// Kinematic body: feet position, facing (yaw, radians; 0 = facing -Z) and velocity.
+#[derive(Component, Debug, Default)]
+pub struct Body {
+    pub feet: Vec3,
+    pub heading: f32,
+    pub velocity: Vec3,
+    pub grounded: bool,
+}
+
+impl Body {
+    pub fn forward(&self) -> Vec3 {
+        Vec3::new(-self.heading.sin(), 0.0, -self.heading.cos())
+    }
+}
+
+pub fn heading_of(dir: Vec3) -> f32 {
+    (-dir.x).atan2(-dir.z)
+}
+
+/// Right-hand vector for a facing direction (horizontal).
+pub fn right_of(forward: Vec3) -> Vec3 {
+    Vec3::new(-forward.z, 0.0, forward.x)
+}
+
+/// IK targets for the four limbs (the game's limb-IK component at Human+1328: 0 L hand, 1 R hand,
+/// 2 L foot, 3 R foot). `None` = limb free (plays animation only).
+#[derive(Component, Debug, Default, Clone, Copy)]
+pub struct LimbTargets {
+    pub hands: Option<(Vec3, Vec3)>,
+    pub feet: Option<(Vec3, Vec3)>,
+    /// Wall / edge normal of the contacts (out of the wall).
+    pub normal: Vec3,
+    /// Time a limb takes to travel to a new hold (the running move's duration).
+    pub transit: f32,
+}
+
+/// Linear root interpolation used by all discrete moves (`sub_711130` / `sub_7113F0(human+80)`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RootInterp {
+    pub from: Vec3,
+    pub to: Vec3,
+    pub t: f32,
+    pub duration: f32,
+}
+
+impl RootInterp {
+    pub fn new(from: Vec3, to: Vec3, duration: f32) -> Self {
+        Self { from, to, t: 0.0, duration: duration.max(1e-3) }
+    }
+    /// Advance; returns (position, progress 0..1).
+    pub fn advance(&mut self, dt: f32) -> (Vec3, f32) {
+        self.t = (self.t + dt).min(self.duration);
+        let s = self.t / self.duration;
+        (self.from.lerp(self.to, s), s)
+    }
+    pub fn done(&self) -> bool {
+        self.t >= self.duration
+    }
+}
+
+/// All per-context runtime data of a Human (the game's HumanDataBundle, RE/07 §4b).
+#[derive(Component, Debug, Default)]
+pub struct HumanDataBundle {
+    pub ground: ground::HumanGroundData,
+    pub air: air::HumanInAirData,
+    pub ledge: ledge::HumanLedgeData,
+    pub climb: climb::HumanClimbData,
+}
+
+/// Transition setup objects (`TransitionSetupDataToMovement` / `…ToInAir` …, RE/01 §4.2).
+pub enum TransitionSetup {
+    ToMovement { landing: Option<air::Landing> },
+    ToInAir(air::InAirEntry),
+    ToLedge(ledge::LedgeEntry),
+    ToClimb(climb::ClimbEntry),
+}
+
+/// Immediate context switch (0x55F7E0): exit old, apply setup to destination data, enter new.
+pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: TransitionSetup) {
+    loco.previous = loco.current;
+    loco.current = match setup {
+        TransitionSetup::ToMovement { landing } => {
+            data.ground.enter(landing);
+            ActorContextId::Ground
+        }
+        TransitionSetup::ToInAir(entry) => {
+            data.air.enter(entry);
+            ActorContextId::InAir
+        }
+        TransitionSetup::ToLedge(entry) => {
+            data.ledge.enter(entry);
+            ActorContextId::Ledge
+        }
+        TransitionSetup::ToClimb(entry) => {
+            data.climb.enter(entry);
+            ActorContextId::Climb
+        }
+    };
+    loco.just_switched = true;
+}
+
+#[derive(Resource)]
+pub struct SpawnPoint(pub Vec3);
+
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(SpawnPoint(Vec3::new(0.0, 0.0, 4.0)))
+            .add_systems(Startup, spawn_player)
+            .add_systems(
+                Update,
+                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, sync_visuals).chain(),
+            );
+    }
+}
+
+#[derive(Component)]
+struct HandMarker(usize);
+
+pub fn player_components(feet: Vec3, heading: f32) -> impl Bundle {
+    (
+        Player,
+        Locomotion { current: ActorContextId::Ground, previous: ActorContextId::Ground, just_switched: false },
+        Body { feet, heading, grounded: true, ..default() },
+        HumanDataBundle::default(),
+        LimbTargets::default(),
+    )
+}
+
+fn spawn_player(
+    mut commands: Commands,
+    spawn: Res<SpawnPoint>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // PLACEHOLDER body: capsule + a "nose" so facing is visible. Replaced by Altaïr's Mesh/Skeleton
+    // once those .forge resources are decoded (stage 3).
+    let body_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.93, 0.93, 0.95), ..default() });
+    let sash_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.65, 0.08, 0.08), ..default() });
+    commands
+        .spawn((player_components(spawn.0, std::f32::consts::PI), Transform::from_translation(spawn.0), Visibility::default()))
+        .with_children(|p| {
+            let h = CAPSULE_HEIGHT - 2.0 * CAPSULE_RADIUS;
+            p.spawn((
+                crate::model::PlaceholderBody,
+                Mesh3d(meshes.add(Capsule3d::new(CAPSULE_RADIUS, h))),
+                MeshMaterial3d(body_mat),
+                Transform::from_xyz(0.0, CAPSULE_HEIGHT * 0.5, 0.0),
+            ));
+            p.spawn((
+                crate::model::PlaceholderBody,
+                Mesh3d(meshes.add(Cuboid::new(0.12, 0.12, 0.3))),
+                MeshMaterial3d(sash_mat.clone()),
+                Transform::from_xyz(0.0, 1.55, -0.3),
+            ));
+        });
+    // limb IK target markers (hands red, feet dark)
+    let hand_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.85, 0.15, 0.1), unlit: true, ..default() });
+    let foot_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.2, 0.2, 0.25), unlit: true, ..default() });
+    for i in 0..4 {
+        commands.spawn((
+            HandMarker(i),
+            Mesh3d(meshes.add(Sphere::new(0.07))),
+            MeshMaterial3d(if i < 2 { hand_mat.clone() } else { foot_mat.clone() }),
+            Transform::default(),
+            Visibility::Hidden,
+        ));
+    }
+}
+
+fn sync_visuals(
+    q: Query<(&Body, &LimbTargets), With<Player>>,
+    mut t: Query<&mut Transform, With<Player>>,
+    mut markers: Query<(&HandMarker, &mut Transform, &mut Visibility), Without<Player>>,
+    rig: Query<(), With<crate::model::Rig>>,
+) {
+    let Ok((b, limbs)) = q.single() else { return };
+    // with the real model the IK puts the hands on the holds; markers only on request
+    let show = rig.is_empty() || std::env::var_os("AC_IK_MARKERS").is_some();
+    if let Ok(mut tr) = t.single_mut() {
+        tr.translation = b.feet;
+        tr.rotation = Quat::from_rotation_y(b.heading);
+    }
+    for (m, mut tr, mut vis) in &mut markers {
+        let p = match m.0 {
+            0 => limbs.hands.map(|h| h.0),
+            1 => limbs.hands.map(|h| h.1),
+            2 => limbs.feet.map(|f| f.0),
+            _ => limbs.feet.map(|f| f.1),
+        };
+        match p {
+            Some(p) if show => {
+                tr.translation = p;
+                *vis = Visibility::Visible;
+            }
+            _ => *vis = Visibility::Hidden,
+        }
+    }
+}

@@ -1,0 +1,326 @@
+== HumanData desc@0x1954b80 size=0x370 hash=c77192ec parent=44bd91f2 props=49 enums=['HumanData::HumanDeathState', 'HumanData::AnimSyncState', 'HumanData::WeaponState'] groups=['Bone Pointers', None, None, 'Carried objects', None, None]
+   +0x020  type 0x000d  namehash e55a5469  flags 00000000  
+   +0x030  type 0x0014  namehash 8e603222  flags 00000280  typehash 8e603222
+   +0x034  type 0x0012  namehash 4291997a  flags 00000000  typehash 0984415e
+   +0x038  type 0x0012  namehash a24cc619  flags 00000000  typehash 0984415e
+   +0x03c  type 0x0012  namehash 97c4d59d  flags 00000000  typehash 0984415e
+   +0x040  type 0x0012  namehash de3b4197  flags 00000000  typehash 0984415e
+   +0x044  type 0x0012  namehash 72a46b41  flags 00000000  typehash 0984415e
+   +0x048  type 0x0019  namehash e0426bf6  flags 00000000  HumanData::WeaponState
+   +0x04c  type 0x0012  namehash f3c772bd  flags 00000000  typehash 0984415e
+   +0x050  type 0x0013  namehash 169a41ae  flags 00000000  typehash 169a41ae
+   +0x160  type 0x0014  namehash 3351cfa4  flags 00000000  typehash 0984415e
+   +0x164  type 0x0014  namehash e0c3238e  flags 00000000  typehash 0984415e
+   +0x168  type 0x000a  namehash 5d2caaac  flags 00000000  
+   +0x16c  type 0x000a  namehash b5506029  flags 00000000  
+   +0x170  type 0x000a  namehash e59a66eb  flags 00000000  
+   +0x174  type 0x0012  namehash a15db60d  flags 00000000  typehash 0984415e
+   +0x178  type 0x0019  namehash 269ed88f  flags 00000000  HumanData::HumanDeathState
+   +0x17c  type 0x0019  namehash ef50a308  flags 00000000  HumanData::AnimSyncState
+   +0x180  type 0x0016  namehash 07c159a2  flags 00000000  typehash c11ea419
+   +0x188  type 0x0016  namehash b021fd58  flags 00000000  typehash c11ea419
+   +0x190  type 0x0016  namehash b675f36c  flags 00000000  typehash c11ea419
+   +0x198  type 0x0016  namehash 75f94d30  flags 00000000  typehash c11ea419
+   +0x1a0  type 0x0016  namehash 58988870  flags 00000000  typehash c11ea419
+   +0x1a8  type 0x0016  namehash 9b14362c  flags 00000000  typehash c11ea419
+   +0x1b0  type 0x0016  namehash 52cf0706  flags 00000000  typehash c11ea419
+   +0x1b8  type 0x0016  namehash dd1f9d6d  flags 00000000  typehash c11ea419
+   +0x1c0  type 0x0016  namehash 0ac84a5b  flags 00000000  typehash c11ea419
+   +0x1c8  type 0x0016  namehash 1493f7ff  flags 00000000  typehash c11ea419
+   +0x1d0  type 0x0016  namehash 4e8cb5c7  flags 00000000  typehash c11ea419
+   +0x1d8  type 0x0016  namehash dffe9414  flags 00000000  typehash c11ea419
+   +0x1e0  type 0x0016  namehash cd4b3bfa  flags 00000000  typehash c11ea419
+   +0x1e8  type 0x0016  namehash 75f75c9f  flags 00000000  typehash c11ea419
+   +0x1f0  type 0x0016  namehash e8206426  flags 00000000  typehash c11ea419
+   +0x1f8  type 0x0016  namehash 509c0343  flags 00000000  typehash c11ea419
+   +0x200  type 0x00c0  namehash b5355453  flags 00000000  
+   +0x200  type 0x00c0  namehash f2fc865c  flags 00000000  
+   +0x200  type 0x00c0  namehash 6fda3c19  flags 00000000  
+   +0x200  type 0x00c0  namehash 7d2c1c37  flags 00000000  
+   +0x201  type 0x0000  namehash 76431f27  flags 00000000  
+   +0x202  type 0x0000  namehash 283c5481  flags 00000000  
+   +0x204  type 0x000a  namehash 5cad504b  flags 00000000  
+   +0x208  type 0x000a  namehash 3a48363f  flags 00000000  
+   +0x20c  type 0x000a  namehash 1f5b2d28  flags 00000000  
+   +0x210  type 0x000a  namehash ecd6a23e  flags 00000000  
+   +0x214  type 0x0000  namehash f2f1746f  flags 00000000  
+   +0x215  type 0x0000  namehash 91baea3d  flags 00000000  
+   +0x216  type 0x0000  namehash 2fc32b66  flags 00000000  
+   +0x217  type 0x0000  namehash e5ed68fe  flags 00000000  
+   +0x218  type 0x0000  namehash 9f6ccf02  flags 00000000  
+== HumanGroundData desc@0x1996288 size=0x300 hash=e00ae315 parent=2386c8bb props=38 enums=['HumanGroundData::ObstacleLeanType', 'HumanGroundData::MvtDivisions', 'HumanGroundData::HumanGroundSubState'] groups=['fight system', None]
+   +0x010  type 0x000d  namehash 2ee49e12  flags 02000001  
+   +0x020  type 0x000d  namehash b4c3cd9c  flags 02000001  
+   +0x030  type 0x000d  namehash 3e06e9a6  flags 02000001  
+   +0x040  type 0x000d  namehash 92231d81  flags 02000001  
+   +0x050  type 0x000d  namehash 8b89adec  flags 02000001  
+   +0x060  type 0x000d  namehash 8b578829  flags 00000000  
+   +0x070  type 0x000d  namehash 5014fa86  flags 02000001  
+   +0x080  type 0x000d  namehash a3dfbc15  flags 02000001  
+   +0x090  type 0x000d  namehash 7a8ec0ac  flags 02000001  
+   +0x0a0  type 0x000d  namehash a9e02021  flags 02000001  
+   +0x0b0  type 0x0019  namehash e1977073  flags 02000001  HumanGroundData::HumanGroundSubState
+   +0x0b4  type 0x000a  namehash 9e77b818  flags 02000001  
+   +0x0b8  type 0x000a  namehash 0cbe043c  flags 02000001  
+   +0x0bc  type 0x000a  namehash f29eb799  flags 02000001  
+   +0x0c0  type 0x000a  namehash 9e1c2efd  flags 02000001  
+   +0x0c4  type 0x0007  namehash 6abe2f42  flags 02000001  
+   +0x0c8  type 0x0007  namehash c81fc49b  flags 02000001  
+   +0x0cc  type 0x0012  namehash ab78caa5  flags 00000000  typehash 0984415e
+   +0x0d0  type 0x0012  namehash 3fa96222  flags 02000001  typehash ef82fce4
+   +0x0d4  type 0x000a  namehash ef9760e0  flags 02000001  
+   +0x0d8  type 0x000a  namehash 99a53c6d  flags 02000001  
+   +0x0dc  type 0x0019  namehash a284d818  flags 02000001  HumanGroundData::ObstacleLeanType
+   +0x0e0  type 0x000a  namehash fa2c13f9  flags 02000001  
+   +0x0e4  type 0x0012  namehash 0149b29e  flags 02000001  typehash 0984415e
+   +0x0e8  type 0x000a  namehash 87954054  flags 00000000  
+   +0x0ec  type 0x000a  namehash bd94b0bc  flags 00000000  
+   +0x0f0  type 0x000d  namehash e5e3e4de  flags 00000000  
+   +0x100  type 0x0013  namehash 66e39e4b  flags 02000001  typehash 66e39e4b
+   +0x114  type 0x0006  namehash f5779610  flags 02000001  
+   +0x118  type 0x0006  namehash a5dd1d28  flags 02000001  
+   +0x11c  type 0x0000  namehash 87daf62e  flags 02000001  
+   +0x11d  type 0x0000  namehash 936194c5  flags 02000001  
+   +0x11e  type 0x0000  namehash f25fd4b0  flags 02000001  
+   +0x11f  type 0x0000  namehash 4cbf3fd3  flags 02000001  
+   +0x120  type 0x0000  namehash cb537879  flags 02000001  
+   +0x121  type 0x0000  namehash 7bd2bff1  flags 02000001  
+   +0x122  type 0x0000  namehash 01851a3e  flags 02000001  
+   +0x123  type 0x0000  namehash e82c5081  flags 02000001  
+== HumanInAirData desc@0x1995920 size=0x400 hash=e00ae315 parent=3949582e props=32 enums=['HumanInAirData::FallOrigin', 'HumanInAirData::JumpType'] groups=[]
+   +0x010  type 0x0010  namehash 1f3fee4f  flags 00000000  
+   +0x050  type 0x0010  namehash 439e3641  flags 00000000  
+   +0x090  type 0x0010  namehash 880db04c  flags 00000000  
+   +0x0d0  type 0x000d  namehash 7157be0d  flags 00000000  
+   +0x0e0  type 0x000d  namehash 95793b93  flags 00000000  
+   +0x0f0  type 0x000d  namehash c277fc17  flags 00000000  
+   +0x100  type 0x0010  namehash caaa226f  flags 00000000  
+   +0x140  type 0x0010  namehash b9512e37  flags 00000000  
+   +0x180  type 0x000d  namehash aa3eb1bb  flags 00000000  
+   +0x190  type 0x000d  namehash 2676b971  flags 00000000  
+   +0x1a0  type 0x0007  namehash 46fe9e9e  flags 00000000  
+   +0x1a4  type 0x0007  namehash 94e57ca6  flags 00000000  
+   +0x1a8  type 0x0007  namehash 66e935a3  flags 00000000  
+   +0x1ac  type 0x0007  namehash 8c6b7c5d  flags 00000000  
+   +0x1b0  type 0x0007  namehash 4f7dfd4d  flags 00000000  
+   +0x1b4  type 0x0007  namehash 9767ecf7  flags 00000000  
+   +0x1b8  type 0x0019  namehash 233f2580  flags 00000000  HumanInAirData::JumpType
+   +0x1bc  type 0x051d  namehash 271cd7f7  flags 00000000  
+   +0x1c4  type 0x051d  namehash 9839874d  flags 00000000  
+   +0x1cc  type 0x051d  namehash d4ca3805  flags 00000000  
+   +0x1d4  type 0x051d  namehash be42be60  flags 00000000  
+   +0x1dc  type 0x051d  namehash 1d0658c8  flags 00000000  
+   +0x1e4  type 0x000a  namehash ee0dc59f  flags 00000000  
+   +0x1e8  type 0x000a  namehash 17b57612  flags 00000000  
+   +0x1ec  type 0x000a  namehash e46399e0  flags 00000000  
+   +0x1f0  type 0x000a  namehash 8eeb1f85  flags 00000000  
+   +0x1f4  type 0x0019  namehash 98fbeb98  flags 00000000  HumanInAirData::FallOrigin
+   +0x1f8  type 0x0000  namehash 84932e55  flags 00000000  
+   +0x1f9  type 0x0000  namehash 85f8623e  flags 00000000  
+   +0x1fa  type 0x0000  namehash 73ebbc8e  flags 00000000  
+   +0x1fb  type 0x0000  namehash 542b8de7  flags 00000000  
+   +0x1fc  type 0x0000  namehash d4cdfc68  flags 00000000  
+== HumanLedgeData desc@0x1994f10 size=0x150 hash=e00ae315 parent=5bfb3dee props=21 enums=['HumanLedgeData::NextHandToMove', 'HumanLedgeData::PullDownPart', 'HumanLedgeData::LedgeSubState', 'HumanLedgeData::HandPassOverSubState', 'HumanLedgeData::PullDownSubState', 'HumanLedgeData::LedgeHangType', 'HumanLedgeData::PullDownSide', 'HumanLedgeData::GraspType', 'HumanLedgeData::HangFreeReceptionType', 'HumanLedgeData::PullDownType'] groups=['GuidanceObject reports']
+   +0x010  type 0x000d  namehash 1b534fc5  flags 02000001  
+   +0x020  type 0x000d  namehash 600b4b20  flags 02000001  
+   +0x030  type 0x000d  namehash 03f45ef2  flags 02000001  
+   +0x040  type 0x0019  namehash 54f3d7d9  flags 02000001  HumanLedgeData::PullDownType
+   +0x044  type 0x0019  namehash fbac9b45  flags 02000001  HumanLedgeData::PullDownSide
+   +0x048  type 0x0019  namehash e6821377  flags 02000001  HumanLedgeData::GraspType
+   +0x04c  type 0x0019  namehash e1977073  flags 02000001  HumanLedgeData::LedgeSubState
+   +0x050  type 0x0019  namehash 7e71b6a2  flags 02000001  HumanLedgeData::HandPassOverSubState
+   +0x054  type 0x0019  namehash d7901f0b  flags 02000001  HumanLedgeData::PullDownSubState
+   +0x058  type 0x0007  namehash d7e9b7b5  flags 02000001  
+   +0x05c  type 0x000a  namehash 9e77b818  flags 02000001  
+   +0x060  type 0x000a  namehash 0cbe043c  flags 02000001  
+   +0x064  type 0x0019  namehash ba20816b  flags 02000001  HumanLedgeData::NextHandToMove
+   +0x068  type 0x0019  namehash 9e8d37e7  flags 02000001  HumanLedgeData::LedgeHangType
+   +0x06c  type 0x0019  namehash cb53fa6d  flags 02000001  HumanLedgeData::HangFreeReceptionType
+   +0x070  type 0x000a  namehash 7dbe59b2  flags 02000001  
+   +0x074  type 0x0016  namehash 333931dd  flags 02000001  typehash 58cd7a31
+   +0x07c  type 0x0016  namehash 7603c5ee  flags 02000001  typehash 58cd7a31
+   +0x084  type 0x0003  namehash 22b1efae  flags 02000001  
+   +0x085  type 0x0000  namehash ab9a196e  flags 02000001  
+   +0x086  type 0x0000  namehash 7d4216cc  flags 02000001  
+== HumanClimbData desc@0x19978d8 size=0x70 hash=e00ae315 parent=e96177a2 props=17 enums=['HumanClimbData::EntryPoseType', 'HumanClimbData::ClimbSubState', 'HumanClimbData::EntryType'] groups=['IK values', None]
+   +0x010  type 0x000d  namehash 1b534fc5  flags 00000000  
+   +0x020  type 0x0019  namehash e1977073  flags 00000000  HumanClimbData::ClimbSubState
+   +0x024  type 0x0019  namehash 10ca1d28  flags 00000000  HumanClimbData::EntryType
+   +0x028  type 0x0019  namehash 77e6b5e5  flags 00000000  HumanClimbData::EntryPoseType
+   +0x02c  type 0x000a  namehash 9e77b818  flags 00000000  
+   +0x030  type 0x000a  namehash 0cbe043c  flags 00000000  
+   +0x034  type 0x000a  namehash 8ba24c09  flags 00000000  
+   +0x038  type 0x000a  namehash 2747d8fb  flags 00000000  
+   +0x03c  type 0x0000  namehash c1f2dd4b  flags 00000000  
+   +0x040  type 0x000a  namehash ece9b663  flags 00000000  
+   +0x044  type 0x000a  namehash 17072d49  flags 00000000  
+   +0x048  type 0x000a  namehash 83076de5  flags 00000000  
+   +0x04c  type 0x000a  namehash 58474aa8  flags 00000000  
+   +0x050  type 0x000a  namehash eea3c43f  flags 00000000  
+   +0x054  type 0x000a  namehash 0e7e9b5c  flags 00000000  
+   +0x058  type 0x000a  namehash 9ace1afd  flags 00000000  
+   +0x05c  type 0x000a  namehash 4e95f740  flags 00000000  
+== HumanLadderData desc@0x1995370 size=0x2d0 hash=e00ae315 parent=578f5435 props=13 enums=['HumanLadderData::MvtDivisions', 'HumanLadderData::EntryType', 'HumanLadderData::InclinationType', 'HumanLadderData::MvtAnimState'] groups=[]
+   +0x010  type 0x000d  namehash 92231d81  flags 02000001  
+   +0x020  type 0x000d  namehash 8b89adec  flags 02000001  
+   +0x030  type 0x0019  namehash 10ca1d28  flags 02000001  HumanLadderData::EntryType
+   +0x034  type 0x0019  namehash f9eeee28  flags 02000001  HumanLadderData::InclinationType
+   +0x038  type 0x0019  namehash ac007829  flags 02000001  HumanLadderData::MvtDivisions
+   +0x03c  type 0x0019  namehash 3e9077be  flags 02000001  HumanLadderData::MvtAnimState
+   +0x040  type 0x000a  namehash 9e77b818  flags 02000001  
+   +0x044  type 0x000a  namehash 0cbe043c  flags 02000001  
+   +0x048  type 0x0012  namehash 3011b913  flags 00000080  typehash 0984415e
+   +0x04c  type 0x000a  namehash a6ba2f03  flags 02000001  
+   +0x050  type 0x000a  namehash 7f640cfc  flags 02000001  
+   +0x054  type 0x0000  namehash 366499d3  flags 02000001  
+   +0x055  type 0x0000  namehash 42a11a8f  flags 02000001  
+== HumanPoleData desc@0x1994210 size=0x200 hash=e00ae315 parent=4f6e6770 props=12 enums=['HumanPoleData::EntryType', 'HumanPoleData::MvtDivisions', 'HumanPoleData::MvtAnimState', 'HumanPoleData::InclinationType'] groups=[]
+   +0x010  type 0x000d  namehash 8b89adec  flags 02000001  
+   +0x020  type 0x000d  namehash 3766f2ba  flags 02000001  
+   +0x030  type 0x000d  namehash 0fa8ec84  flags 02000001  
+   +0x040  type 0x0019  namehash 10ca1d28  flags 02000001  HumanPoleData::EntryType
+   +0x044  type 0x0019  namehash f9eeee28  flags 02000001  HumanPoleData::InclinationType
+   +0x048  type 0x0019  namehash ac007829  flags 02000001  HumanPoleData::MvtDivisions
+   +0x04c  type 0x0019  namehash 3e9077be  flags 02000001  HumanPoleData::MvtAnimState
+   +0x050  type 0x0006  namehash 18e1a4d0  flags 02000001  
+   +0x054  type 0x000a  namehash 0cbe043c  flags 02000001  
+   +0x058  type 0x0012  namehash 5d52eddf  flags 00000080  typehash 0984415e
+   +0x05c  type 0x0000  namehash 366499d3  flags 02000001  
+   +0x05d  type 0x0000  namehash 42a11a8f  flags 02000001  
+== HumanRopeData desc@0x1993b70 size=0x40 hash=e00ae315 parent=795fa2ed props=6 enums=[] groups=[]
+   +0x010  type 0x000d  namehash 8b89adec  flags 00000000  
+   +0x020  type 0x000d  namehash a9e937fb  flags 00000000  
+   +0x030  type 0x0012  namehash 112c7809  flags 00000080  typehash 0984415e
+   +0x034  type 0x000a  namehash 0cbe043c  flags 00000000  
+   +0x038  type 0x0000  namehash 366499d3  flags 00000000  
+   +0x039  type 0x0000  namehash 42a11a8f  flags 00000000  
+== HumanWallingData desc@0x19935d8 size=0x24 hash=e00ae315 parent=d4d82ad5 props=7 enums=['HumanWallingData::WallingSide', 'HumanWallingData::WallingType', 'HumanWallingData::WallingSubState'] groups=['rebound distances']
+   +0x008  type 0x0019  namehash e1977073  flags 00000000  HumanWallingData::WallingSubState
+   +0x00c  type 0x0019  namehash 335e3a0b  flags 00000000  HumanWallingData::WallingType
+   +0x010  type 0x0019  namehash 9c017697  flags 00000000  HumanWallingData::WallingSide
+   +0x014  type 0x000a  namehash 8b109983  flags 00000000  
+   +0x018  type 0x000a  namehash 1dabe61b  flags 00000000  
+   +0x01c  type 0x000a  namehash 21786960  flags 00000000  
+   +0x020  type 0x0000  namehash 53913dfd  flags 00000000  
+== HumanNarrowObjectData desc@0x1994740 size=0x1c0 hash=e00ae315 parent=90d9d7f1 props=21 enums=['HumanNarrowObjectData::PilotisEntryType', 'HumanNarrowObjectData::LeanState', 'HumanNarrowObjectData::FreeRunSubState', 'HumanNarrowObjectData::NarrowObjectSubState', 'HumanNarrowObjectData::NarrowEdgeState'] groups=['Jump distances', None, None, 'Beam Variables']
+   +0x010  type 0x000d  namehash 35e6f433  flags 00000000  
+   +0x020  type 0x000d  namehash d7969bfa  flags 00000000  
+   +0x030  type 0x000a  namehash 3a99af52  flags 00000000  
+   +0x034  type 0x000a  namehash c0969231  flags 00000000  
+   +0x040  type 0x000d  namehash 27b3ba1e  flags 00000000  
+   +0x050  type 0x000d  namehash 69b36700  flags 00000000  
+   +0x060  type 0x000d  namehash e710cc96  flags 00000000  
+   +0x070  type 0x000d  namehash 9017fc00  flags 00000000  
+   +0x080  type 0x000d  namehash 71e9c457  flags 00000000  
+   +0x090  type 0x000d  namehash eac205a2  flags 00000000  
+   +0x0a0  type 0x000d  namehash 7d7163d9  flags 00000000  
+   +0x0b0  type 0x000d  namehash bb162937  flags 00000000  
+   +0x0c0  type 0x000a  namehash 4d0abfff  flags 00000000  
+   +0x0c4  type 0x000a  namehash 76e5ba18  flags 00000000  
+   +0x0c8  type 0x0019  namehash e1977073  flags 00000000  HumanNarrowObjectData::NarrowObjectSubState
+   +0x0cc  type 0x0019  namehash 786de5f9  flags 00000000  HumanNarrowObjectData::PilotisEntryType
+   +0x0d0  type 0x0019  namehash 94f51ac7  flags 00000000  HumanNarrowObjectData::NarrowEdgeState
+   +0x0d4  type 0x000a  namehash b8ecd913  flags 00000000  
+   +0x0d8  type 0x000a  namehash 5fc76b12  flags 00000000  
+   +0x0dc  type 0x0019  namehash fdeb69fb  flags 00000000  HumanNarrowObjectData::LeanState
+   +0x0e0  type 0x0019  namehash b75876c0  flags 00000000  HumanNarrowObjectData::FreeRunSubState
+HumanUpperBodyData: descriptor not found
+== HumanLookAtData desc@0x1994828 size=0x14 hash=e00ae315 parent=27125198 props=1 enums=[] groups=[]
+   +0x008  type 0x0917  namehash 7e5ba346  flags 02000001  typehash 41c32aca
+== HumanCustomActionData desc@0x1997510 size=0x10 hash=e00ae315 parent=dc8fefa5 props=3 enums=[] groups=[]
+   +0x008  type 0x0007  namehash 8df50052  flags 02000001  
+   +0x00c  type 0x0000  namehash 3936a09e  flags 02000001  
+   +0x00d  type 0x0000  namehash 7210ad0f  flags 02000001  
+== HumanDataBundle desc@0x19973b8 size=0x1180 hash=00000002 parent=8e603222 props=20 enums=[] groups=[]
+   +0x010  type 0x0013  namehash bd2d01d8  flags 02000001  typehash 3c3ac73b
+   +0x040  type 0x0013  namehash 84ebee81  flags 02000001  typehash 2386c8bb
+   +0x340  type 0x0013  namehash 334903ca  flags 02000001  typehash 3949582e
+   +0x740  type 0x0013  namehash f0e2720f  flags 02000001  typehash 578f5435
+   +0xa10  type 0x0013  namehash 4f9ba4fe  flags 02000001  typehash 4f6e6770
+   +0xc10  type 0x0013  namehash 79aa6163  flags 02000001  typehash 795fa2ed
+   +0xc50  type 0x0013  namehash 51fb660a  flags 02000001  typehash 5bfb3dee
+   +0xda0  type 0x0013  namehash e3612c46  flags 02000001  typehash e96177a2
+   +0xe10  type 0x0013  namehash 12739e41  flags 02000001  typehash d4d82ad5
+   +0xe40  type 0x0013  namehash 6ec24da5  flags 02000001  typehash 90d9d7f1
+   +0x1000  type 0x0013  namehash d14de8bd  flags 02000001  typehash 7620ce87
+   +0x1040  type 0x0013  namehash abb70d00  flags 02000001  typehash c1c920ee
+   +0x1070  type 0x0013  namehash 229475f1  flags 02000001  typehash dc8fefa5
+   +0x1080  type 0x0013  namehash 5b4fa41b  flags 02000001  typehash 5b4fa41b
+   +0x10b0  type 0x0013  namehash 2bbfadbe  flags 02000001  typehash 2bbfadbe
+   +0x10cc  type 0x0013  namehash 807f77a2  flags 02000001  typehash 27125198
+   +0x10e0  type 0x0013  namehash 4745b49a  flags 02000001  typehash 4d45ef7e
+   +0x1110  type 0x0013  namehash 92e4fe0f  flags 02000001  typehash 92113d81
+   +0x1120  type 0x0013  namehash d4bffdaa  flags 02000001  typehash 231b0143
+   +0x1150  type 0x0013  namehash 754680af  flags 02000001  typehash ac677e8f
+HumanRidingData: descriptor not found
+== HumanPushableContextData desc@0x1993e48 size=0x30 hash=e00ae315 parent=c1c920ee props=3 enums=[] groups=[]
+   +0x010  type 0x000d  namehash cee7d1f2  flags 00000000  
+   +0x020  type 0x000a  namehash d9b3699a  flags 00000000  
+   +0x024  type 0x0000  namehash b1d60d03  flags 00000000  
+== StPadControlledData desc@0x1970ed8 size=0x40 hash=45e9858d parent=c9511c03 props=1 enums=[] groups=[]
+   +0x008  type 0x0013  namehash 8ee4277c  flags 02000001  typehash bf5bd56b
+== NavigationContextData desc@0x1910938 size=0xc hash=00000002 parent=9953b16e props=2 enums=['NavigationContextData::NavStyleType', 'NavigationContextData::NavSpeed'] groups=[]
+   +0x004  type 0x0019  namehash 9dd1c648  flags 02000001  NavigationContextData::NavStyleType
+   +0x008  type 0x0019  namehash cee7d1f2  flags 00000000  NavigationContextData::NavSpeed
+== MainNavigationData desc@0x1956768 size=0x7c hash=02ab47bd parent=9592f417 props=9 enums=[] groups=[]
+   +0x008  type 0x0013  namehash 8ab38548  flags 02000001  typehash 3bdcd82b
+   +0x014  type 0x0013  namehash bc621827  flags 02000001  typehash 7b710b13
+   +0x020  type 0x0013  namehash 6f09bb0b  flags 02000001  typehash de66e668
+   +0x02c  type 0x0013  namehash 67de580b  flags 02000001  typehash d6b10568
+   +0x038  type 0x0013  namehash 9dd5a87f  flags 02000001  typehash 423a5366
+   +0x044  type 0x0013  namehash 335783d8  flags 02000001  typehash abdea9c0
+   +0x054  type 0x0013  namehash 74dc72f6  flags 02000001  typehash 106835cd
+   +0x060  type 0x0013  namehash 8292b513  flags 02000001  typehash 1a1b9f0b
+   +0x070  type 0x0013  namehash d5302391  flags 02000001  typehash 645f7ef2
+== AssassinAbilitySet desc@0x19b55c8 size=0x18 hash=00000002 parent=ba317db0 props=38 enums=['AssassinAbilitySet::MaxSpeed'] groups=['SuperSets', None, None]
+   +0x008  type 0x60c0  namehash 0781a928  flags 02000001  
+   +0x008  type 0x60c0  namehash 87daf62e  flags 02000001  
+   +0x008  type 0x60c0  namehash 1b8b5df5  flags 02000001  
+   +0x008  type 0x60c0  namehash fa2a4432  flags 02000001  
+   +0x008  type 0x60c0  namehash 9c68780e  flags 02000001  
+   +0x008  type 0x60c0  namehash 3011b913  flags 02000001  
+   +0x008  type 0x60c0  namehash f0c5e14d  flags 02000001  
+   +0x008  type 0x60c0  namehash f6c170eb  flags 02000001  
+   +0x008  type 0x60c0  namehash 7aded82a  flags 02000001  
+   +0x008  type 0x60c0  namehash 5c3cd882  flags 02000001  
+   +0x008  type 0x60c0  namehash b18de51d  flags 02000001  
+   +0x008  type 0x60c0  namehash be76e963  flags 02000001  
+   +0x008  type 0x60c0  namehash e06b6b52  flags 02000001  
+   +0x008  type 0x60c0  namehash 61d1d79a  flags 02000001  
+   +0x008  type 0x60c0  namehash 52c7a102  flags 02000001  
+   +0x008  type 0x60c0  namehash 10a880e8  flags 02000001  
+   +0x008  type 0x60c0  namehash 3674faba  flags 02000001  
+   +0x008  type 0x60c0  namehash 5a37970e  flags 02000001  
+   +0x008  type 0x60c0  namehash 3ec75ad9  flags 02000001  
+   +0x008  type 0x60c0  namehash 3abddcd8  flags 02000001  
+   +0x008  type 0x60c0  namehash 1aabd1f6  flags 02000001  
+   +0x008  type 0x60c0  namehash b5908a27  flags 02000001  
+   +0x008  type 0x60c0  namehash 47a0f50c  flags 02000001  
+   +0x008  type 0x60c0  namehash ff08b95a  flags 02000001  
+   +0x008  type 0x60c0  namehash a7a66839  flags 02000001  
+   +0x008  type 0x60c0  namehash a39abf3f  flags 02000001  
+   +0x008  type 0x60c0  namehash b65622a5  flags 02000001  
+   +0x008  type 0x60c0  namehash 7bd5cd9e  flags 02000001  
+   +0x008  type 0x60c0  namehash e6e0d64c  flags 02000001  
+   +0x008  type 0x60c0  namehash ec272f0d  flags 02000001  
+   +0x008  type 0x60c0  namehash ac636be8  flags 02000001  
+   +0x008  type 0x60c0  namehash 06382f16  flags 02000001  
+   +0x008  type 0x60c0  namehash dfac76dc  flags 02000001  
+   +0x008  type 0x60c0  namehash d7c8ae5c  flags 02000001  
+   +0x010  type 0x0019  namehash 15cfe647  flags 02000001  AssassinAbilitySet::MaxSpeed
+   +0x014  type 0x00c0  namehash c2747d72  flags 02000001  
+   +0x014  type 0x00c0  namehash f878d4a1  flags 02000001  
+   +0x015  type 0x00c0  namehash 2a0224ca  flags 02000001  
+== HumanHayStackData desc@0x195f090 size=0x30 hash=e00ae315 parent=231b0143 props=3 enums=[] groups=[]
+   +0x010  type 0x000d  namehash 8b89adec  flags 00000000  
+   +0x020  type 0x0019  namehash 10ca1d28  flags 00000000  HumanHayStackEntryType
+   +0x024  type 0x0012  namehash d8fdbe1a  flags 00000000  typehash 0984415e
+== HumanKioskData desc@0x195ef10 size=0x30 hash=e00ae315 parent=4d45ef7e props=4 enums=[] groups=[]
+   +0x010  type 0x000d  namehash 8b89adec  flags 00000000  
+   +0x020  type 0x0019  namehash 10ca1d28  flags 00000000  HumanKioskEntryType
+   +0x024  type 0x0019  namehash bf9551b4  flags 00000000  HumanKioskEntrySide
+   +0x028  type 0x0012  namehash 32d63834  flags 00000000  typehash 0984415e
+== HumanDeadData desc@0x1997028 size=0x10 hash=e00ae315 parent=92113d81 props=3 enums=[] groups=[]
+   +0x008  type 0x000a  namehash 09b7aa9b  flags 00000000  
+   +0x00c  type 0x0000  namehash 982cf504  flags 00000000  
+   +0x00d  type 0x0000  namehash a7eccc12  flags 00000000  

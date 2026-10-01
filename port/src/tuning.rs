@@ -1,0 +1,188 @@
+//! Movement constants recovered from AssassinsCreed_Dx9.exe (v1.02 b86610).
+//!
+//! Every value cites the function it was read from (see RE/*.md). Values the game takes from
+//! animation root motion (not yet decoded) are marked PLACEHOLDER and must be replaced once
+//! RE/09 (animation format) exists.
+//!
+//! Coordinate note: the game is Z-up, Bevy is Y-up. "Height" below means game Z = Bevy Y.
+
+// ---------------------------------------------------------------- input (RE/01 §6)
+/// Stick dead-zone; speed = (|stick| - 0.35) / 0.65.  GoAssassinActionInterpreter 0xEE65A0
+pub const STICK_DEADZONE: f32 = 0.35;
+/// "Legs" (jump) button buffer, seconds.  0xEEDE60
+pub const JUMP_BUFFER: f32 = 0.3;
+/// Turn attenuation: beyond 45° from facing, speed scales down to 0 at 90°; floor 0.1. 0xEE65A0
+pub const TURN_ATTEN_START: f32 = std::f32::consts::FRAC_PI_4;
+pub const TURN_ATTEN_RANGE: f32 = std::f32::consts::FRAC_PI_4;
+pub const TURN_ATTEN_UP_RATE: f32 = 5.0;
+pub const TURN_ATTEN_DOWN_RATE: f32 = 10.0;
+pub const TURN_ATTEN_FLOOR: f32 = 0.1;
+
+// ---------------------------------------------------------------- ground (RE/02)
+/// Speed parameter bands (0..1): Walk <= 0.25 < Jog <= 0.5 < Run <= 0.75 < Sprint. GetSpeedBand 0xD807B0
+pub const BAND_WALK: f32 = 0.25;
+pub const BAND_JOG: f32 = 0.5;
+pub const BAND_RUN: f32 = 0.75;
+/// Target speed parameter = base + 0.25 * stick; base 0 / 0.5 / 0.75. RE/02 §1
+pub const BASE_LOW_PROFILE: f32 = 0.0;
+pub const BASE_HIGH_PROFILE: f32 = 0.5;
+pub const BASE_SPRINT: f32 = 0.75;
+pub const STICK_SPAN: f32 = 0.25;
+/// Speed parameter rises at 1.0/s. 0xDA0810
+pub const SPEED_PARAM_UP_RATE: f32 = 1.0;
+/// PLACEHOLDER: the game decelerates through a curve whose keys are not decoded yet. 0xDA0810
+pub const SPEED_PARAM_DOWN_RATE: f32 = 2.0;
+/// Player turn rate (rad/s): min 270°/s, max 360°/s; thresholds are 0 so effectively 360°/s.
+/// HumanGround__UpdateHeading 0xD95290 → RotateTowards 0xD94F30
+pub const PLAYER_TURN_RATE: f32 = std::f32::consts::TAU;
+
+/// Root-motion speeds (m/s) at the top of each band, MEASURED from the game's clips (DISPLACEMENT
+/// track ÷ duration, RE/10): walk xx_l_walk 1.90, jog xx_h_jog 3.54, run xx_h_run 5.12,
+/// sprint xx_h_sprint 6.28. Between bands the game blends clips; here speed is interpolated linearly.
+pub const ROOT_SPEED_AT_BAND: [(f32, f32); 5] =
+    [(0.0, 0.0), (BAND_WALK, 1.90), (BAND_JOG, 3.54), (BAND_RUN, 5.12), (1.0, 6.28)];
+
+/// Ground loss → InAir fall types by fall height 1 / 2 / 8 m and horizontal speed 2.5 m/s. 0xD8C380
+pub const FALL_TYPE_HEIGHTS: [f32; 3] = [1.0, 2.0, 8.0];
+
+// ---------------------------------------------------------------- in air (RE/04)
+/// Hard-coded gravity, m/s². 0xDFFC90
+pub const GRAVITY: f32 = 9.8;
+/// Max horizontal speed while steering a free-fall onto the real target, m/s. 0xE0DEF0
+pub const FREEFALL_MAX_HORIZONTAL: f32 = 15.0;
+/// Non-target drift: decays at 4 m/s², capped at 5 m/s. 0x19BA434 / 0x19BA438
+pub const DRIFT_DECEL: f32 = 4.0;
+pub const DRIFT_MAX: f32 = 5.0;
+/// Jump arrives when the clip ends within 0.01 m of the target. CheckJumpTargetArrival 0xE07D00
+pub const ARRIVAL_TOLERANCE: f32 = 0.01;
+/// Over-drop rule: if the target is > 5 m below (3 m for Leap of Faith) aim 5 m down, then free-fall. 0xB1B8C0
+pub const OVERDROP: f32 = 5.0;
+/// Landing damage by fall height (from apex): heavy > 6.3 m, fatal > 7.0 m. ComputeLandingType 0xE00FE0
+pub const FALL_HEAVY: f32 = 6.3;
+pub const FALL_FATAL: f32 = 7.0;
+/// Total drop > 3 m plays a roll + camera shake, else soft landing. SetupToGround_Landing 0xE05940
+pub const ROLL_DROP: f32 = 3.0;
+
+/// PLACEHOLDER jump "clip": duration = a + b·distance, apex = c + d·distance. The real game plays
+/// takeoff/flight/landing clips chosen by Human__ComputeJumpAnimBlend 0xB1EC40.
+pub const JUMP_DUR_BASE: f32 = 0.45;
+pub const JUMP_DUR_PER_M: f32 = 0.06;
+pub const JUMP_APEX_BASE: f32 = 0.6;
+pub const JUMP_APEX_PER_M: f32 = 0.1;
+/// PLACEHOLDER untargeted "free jump" (IHumanGround vt28): nominal forward distance, m.
+pub const FREE_JUMP_DISTANCE: f32 = 2.5;
+
+// ---------------------------------------------------------------- jump targets (RE/01 §7b)
+/// Candidate must lie within a 45° cone of the wanted direction and no lower than -3 m. 0xE96BF0
+pub const TARGET_CONE: f32 = std::f32::consts::FRAC_PI_4;
+pub const TARGET_MIN_DZ: f32 = -3.0;
+/// Ground-type target bands (max up, near, mid, far). Human__ComputeJumpAnimBlend 0xB1EC40
+pub const GROUND_MAX_UP: f32 = 1.3;
+pub const GROUND_FAR: f32 = 7.0;
+/// Landing point is placed this far inside a roof edge. PLACEHOLDER (game uses the guidance contact).
+pub const LAND_INSET: f32 = 0.45;
+
+// ---------------------------------------------------------------- ledge (RE/03 §7)
+/// Wall hang: root (feet) 1.1 m below the hands and 0.5 m out from the wall. 0xDD6730 / 0xDE1060
+pub const WALL_HANG_DROP: f32 = 1.1;
+pub const WALL_HANG_OUT: f32 = 0.5;
+/// Free hang: root 2.4 m below the hands. 0xDD6730
+pub const FREE_HANG_DROP: f32 = 2.4;
+/// Free-hang root offset from the edge, from xx_h_hangfree_wait (wrists 0.04 m behind the root; RE/11 §5.1).
+pub const FREE_HANG_OUT: f32 = 0.01;
+/// Shimmy free-space sweep: sphere r 0.15, length 1.55, origin 0.75 out + 0.2 up. ProbeLateral 0xDD9640
+pub const SHIMMY_SWEEP_R: f32 = 0.15;
+pub const SHIMMY_SWEEP_LEN: f32 = 1.55;
+pub const SHIMMY_SWEEP_OUT: f32 = 0.75;
+pub const SHIMMY_SWEEP_UP: f32 = 0.2;
+/// Blocked if free distance − 0.15 < 0.7; step = min(d − 0.4, 1.0 − |handL − handR|); min step 0.15.
+pub const SHIMMY_MIN_FREE: f32 = 0.7;
+pub const SHIMMY_WALL_MARGIN: f32 = 0.4;
+pub const SHIMMY_MAX_SPACING: f32 = 1.0;
+pub const SHIMMY_MIN_STEP: f32 = 0.15;
+/// PLACEHOLDER: hand spacing after a closing step (the game re-snaps the trailing hand to the chain).
+pub const HAND_SPACING: f32 = 0.4;
+/// Lost-ledge check radius = 0.25 + half the hand spacing. HasLostLedge 0xDD20D0
+pub const LOST_LEDGE_R: f32 = 0.25;
+/// Vertical hand-over-hand step to a ledge 0.6–1.2 m away (StartHandStep 0xDDE0C0); jump-up probe
+/// 1.2 m above the hands (TryJumpUpToLedge 0xDD5E10).
+pub const VSTEP_MIN: f32 = 0.45;
+pub const VSTEP_MAX: f32 = 1.25;
+pub const JUMP_UP_MAX: f32 = 2.0;
+/// Pull-up: root ends 0.5 m inside the ledge (Pullup_Start 0xDDBE80).
+pub const PULLUP_IN: f32 = 0.5;
+/// Move durations = the game clips' lengths (RE/10): xx_h_hangwall_strafe_*_050cm_open 0.533 s /
+/// _close 0.600 s, xx_h_hangwall_u_climb_1m 0.600 s, _d_climb_1m 0.533 s.
+pub const SHIMMY_OPEN_TIME: f32 = 0.533;
+pub const SHIMMY_CLOSE_TIME: f32 = 0.600;
+/// Vertical hand step halves = the game's step clips (ledge tables 0x1A2C4C0 / 0x1A2C4F0, RE/13):
+/// wall first hand up xx_h_hangwall_climb_1m_u_1l?u 0.6 s, down _1m_d_ 0.4 s; every second half and every
+/// free-hang half 0.533 s.
+pub const VSTEP_TIME: f32 = 0.6;
+pub const VSTEP_DOWN_TIME: f32 = 0.4;
+pub const VSTEP_SECOND_TIME: f32 = 0.533;
+pub const JUMP_UP_TIME: f32 = 0.6;
+/// Pull-up = the game's clip chains (RE/11 §5): wall hang → hangknee → stand = 0.333+0.4+0.467+0.4 s;
+/// free hang → hangwaist → hangknee → stand = 0.8+0.2+0.733+0.467+0.4 s.
+pub const PULLUP_WALL_TIME: f32 = 1.6;
+pub const PULLUP_FREE_TIME: f32 = 2.6;
+/// Catching a ledge: the reception clip (xx_fall_tr_hangwall_straight_min a+b = 0.667 s).
+pub const GRAB_TIME: f32 = 0.667;
+
+// ---------------------------------------------------------------- climb (RE/03 §4)
+/// Hold grid: columns 0.75 m, rows 0.6 m; hands sit 2 rows above their foot cell. BuildHoldGrid 0xDF6A40
+pub const CLIMB_COL: f32 = 0.75;
+pub const CLIMB_ROW: f32 = 0.6;
+pub const CLIMB_HAND_ROWS: i32 = 2;
+/// Probe: radius 0.375, vertical tolerance 0.3, max edge angle 45°.
+pub const CLIMB_PROBE_R: f32 = 0.375;
+pub const CLIMB_PROBE_VTOL: f32 = 0.3;
+/// Stick magnitude above which the LONG move table is tried first. ChooseMove 0xDFDE90
+pub const CLIMB_LONG_STICK: f32 = 0.5;
+/// Climb move duration = the game move clips xx_l_climb_* (0.533 s; StartMove 0xDFA0C0 uses the clip length, 0.5 s without one).
+pub const CLIMB_MOVE_TIME: f32 = 0.533;
+/// Root distance from the hold line while climbing, from xx_climb_wait_* (RE/11 §5.1).
+pub const CLIMB_ROOT_OUT: f32 = 0.49;
+/// Root below the lower foot hold (xx_climb_wait_1m: ankles 0.03 m above the animation origin).
+pub const CLIMB_ROOT_BELOW_FOOT: f32 = 0.03;
+
+// ---------------------------------------------------------------- air catch (RE/04)
+/// Ledge catch: hand box 0.4 x 0.3, edges within 70°, reach +1.4 (ledge) / +1.95 (wall). 0xE0A990 / 0xE0AC70
+pub const CATCH_BOX_R: f32 = 0.4;
+pub const CATCH_BOX_V: f32 = 0.3;
+pub const CATCH_MAX_ANGLE: f32 = 70.0 * std::f32::consts::PI / 180.0;
+pub const CATCH_REACH_LEDGE: f32 = 1.4;
+pub const CATCH_REACH_WALL: f32 = 1.95;
+/// Ledge-type jump targets: max up 3.0 m, distance bands 2.5 / 6 / 8 m. 0xB1EC40
+pub const LEDGE_MAX_UP: f32 = 3.0;
+pub const LEDGE_FAR: f32 = 8.0;
+
+// ---------------------------------------------------------------- body (PLACEHOLDER until Skeleton decoded)
+pub const CAPSULE_RADIUS: f32 = 0.3;
+pub const CAPSULE_HEIGHT: f32 = 1.8;
+pub const STEP_HEIGHT: f32 = 0.35;
+pub const GROUND_PROBE: f32 = 0.08;
+
+// ---------------------------------------------------------------- limb IK (RE/11, LimbIK__SolveEffectors 0xE57570)
+/// Limb weight rises at 4/s while the limb has a contact (0.25 s fade-in).
+pub const IK_WEIGHT_IN_RATE: f32 = 4.0;
+/// …and falls at 5/s once released (0.2 s fade-out).
+pub const IK_WEIGHT_OUT_RATE: f32 = 5.0;
+/// PORT: a contact moving further than this counts as a new hold (limb travels to it).
+pub const IK_RETARGET_DIST: f32 = 0.02;
+/// Wrist relative to the edge point it grips. Game data: the wall hang root is 1.1 m below / 0.5 m out
+/// from the hands (0xDD6730) while xx_h_hangwall_wait puts the wrists 1.0 m above / 0.45 m in front of
+/// its root (→ wrist ~0.1 m below / 0.05 m out), and every hang/climb clip curls the middle finger 0.07 m
+/// forward / 0.12 m up from the wrist. PORT: 0.08 / 0.04 so the curled fingers end over the lip.
+pub const IK_HAND_DROP: f32 = -0.08;
+pub const IK_HAND_OUT: f32 = 0.04;
+/// Ankle relative to the foot hold: level with it, 0.17 m out (xx_climb_wait_*: ankles 0.32 m in front
+/// of the root, wrists 0.44 m → the wall plane is ~0.49 m in front).
+pub const IK_FOOT_UP: f32 = 0.0;
+pub const IK_FOOT_OUT: f32 = 0.17;
+/// PORT: the contact fit moves the animated body at most this far.
+pub const IK_FIT_MAX: f32 = 0.35;
+/// PORT: the body is pulled towards the hands until they need at most this fraction of arm reach.
+pub const IK_REACH_FRACTION: f32 = 0.97;
+/// PORT: a hold moved while the clip keeps that limb in contact and never releases it: settle after this long.
+pub const IK_CONTACT_WAIT: f32 = 0.3;

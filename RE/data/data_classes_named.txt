@@ -1,0 +1,347 @@
+﻿# Decoded reflected layouts. name = CRC32-recovered property name ('?' = unrecovered, '(?)' = possible collision).
+# offset = packed>>18; type from high 16 bits of +0xC (meanings inferred).
+
+== HumanData  (descriptor 0x1954b80, 49 props, groups ['Bone Pointers', 'Carried objects'])
+  +0x0020  vec4      ?                            [e55a5469] 
+  +0x0030  ptr       HumanDataBundle              [8e603222] 
+  +0x0034  objref    LeftHandObject               [4291997a] 
+  +0x0038  objref    RightHandObject              [a24cc619] 
+  +0x003c  objref    ?                            [97c4d59d] 
+  +0x0040  objref    ?                            [de3b4197] 
+  +0x0044  objref    ?                            [72a46b41] 
+  +0x0048  enum      CurrentWeaponState           [e0426bf6] HumanData::WeaponState
+  +0x004c  objref    CurrentWeapon                [f3c772bd] 
+  +0x0050  struct    Interpolator                 [169a41ae] 
+  +0x0160  ptr       DbgLeftHand                  [3351cfa4] 
+  +0x0164  ptr       DbgRightHand                 [e0c3238e] 
+  +0x0168  float     FootMeshOffset               [5d2caaac] 
+  +0x016c  float     ToeMeshOffset                [b5506029] 
+  +0x0170  float     Tolerance                    [e59a66eb] 
+  +0x0174  objref    RidableBeast                 [a15db60d] 
+  +0x0178  enum      DeathState                   [269ed88f] HumanData::HumanDeathState
+  +0x017c  enum      SyncState                    [ef50a308] HumanData::AnimSyncState
+  +0x0180  handle64  Head                         [07c159a2] 
+  +0x0188  handle64  Pelvis                       [b021fd58] 
+  +0x0190  handle64  LeftHand                     [b675f36c] 
+  +0x0198  handle64  RightHand                    [75f94d30] 
+  +0x01a0  handle64  LeftFoot                     [58988870] 
+  +0x01a8  handle64  RightFoot                    [9b14362c] 
+  +0x01b0  handle64  ?                            [52cf0706] 
+  +0x01b8  handle64  ?                            [dd1f9d6d] 
+  +0x01c0  handle64  ?                            [0ac84a5b] 
+  +0x01c8  handle64  ?                            [1493f7ff] 
+  +0x01d0  handle64  ?                            [4e8cb5c7] 
+  +0x01d8  handle64  ?                            [dffe9414] 
+  +0x01e0  handle64  ?                            [cd4b3bfa] 
+  +0x01e8  handle64  ?                            [75f75c9f] 
+  +0x01f0  handle64  ?                            [e8206426] 
+  +0x01f8  handle64  ?                            [509c0343] 
+  +0x0200  bitflag   ?                            [b5355453] 
+  +0x0200  bitflag   ?                            [f2fc865c] 
+  +0x0200  bitflag   ?                            [6fda3c19] 
+  +0x0200  bitflag   ?                            [7d2c1c37] 
+  +0x0201  bool      ?                            [76431f27] 
+  +0x0202  bool      ?                            [283c5481] 
+  +0x0204  float     ?                            [5cad504b] 
+  +0x0208  float     ?                            [3a48363f] 
+  +0x020c  float     ?                            [1f5b2d28] 
+  +0x0210  float     ?                            [ecd6a23e] 
+  +0x0214  bool      ?                            [f2f1746f] 
+  +0x0215  bool      ?                            [91baea3d] 
+  +0x0216  bool      ?                            [2fc32b66] 
+  +0x0217  bool      ?                            [e5ed68fe] 
+  +0x0218  bool      GodMode                      [9f6ccf02] 
+
+== HumanDataBundle  (descriptor 0x19973b8, 20 props, groups [])
+  +0x0010  struct    DebugData                    [bd2d01d8] 
+  +0x0040  struct    GroundData                   [84ebee81] 
+  +0x0340  struct    InAirData                    [334903ca] 
+  +0x0740  struct    LadderData                   [f0e2720f] 
+  +0x0a10  struct    PoleData                     [4f9ba4fe] 
+  +0x0c10  struct    RopeData                     [79aa6163] 
+  +0x0c50  struct    LedgeData                    [51fb660a] 
+  +0x0da0  struct    ClimbData                    [e3612c46] 
+  +0x0e10  struct    WallingData                  [12739e41] 
+  +0x0e40  struct    NarrowObjectData             [6ec24da5] 
+  +0x1000  struct    RidingData                   [d14de8bd] 
+  +0x1040  struct    PushableContextData          [abb70d00] 
+  +0x1070  struct    CustomActionData             [229475f1] 
+  +0x1080  struct    HeadOrientationData          [5b4fa41b] 
+  +0x10b0  struct    VocalizationData             [2bbfadbe] 
+  +0x10cc  struct    LookAtData                   [807f77a2] 
+  +0x10e0  struct    KioskData                    [4745b49a] 
+  +0x1110  struct    DeadData                     [92e4fe0f] 
+  +0x1120  struct    HayStackData                 [d4bffdaa] 
+  +0x1150  struct    UpperBodyData                [754680af] 
+
+== HumanGroundData  (descriptor 0x1996288, 38 props, groups ['fight system'])
+  +0x0010  vec4      CollideNormal                [2ee49e12] 
+  +0x0020  vec4      ?                            [b4c3cd9c] 
+  +0x0030  vec4      DestSight                    [3e06e9a6] 
+  +0x0040  vec4      ?                            [92231d81] 
+  +0x0050  vec4      DestHeading                  [8b89adec] 
+  +0x0060  vec4      ?                            [8b578829] 
+  +0x0070  vec4      CollidePosition              [5014fa86] 
+  +0x0080  vec4      m_FXInputRj (?)              [a3dfbc15] 
+  +0x0090  vec4      ?                            [7a8ec0ac] 
+  +0x00a0  vec4      ?                            [a9e02021] 
+  +0x00b0  enum      SubState                     [e1977073] HumanGroundData::HumanGroundSubState
+  +0x00b4  float     ?                            [9e77b818] 
+  +0x00b8  float     ?                            [0cbe043c] 
+  +0x00bc  float     ?                            [f29eb799] 
+  +0x00c0  float     ?                            [9e1c2efd] 
+  +0x00c4  int32     ParamFlags                   [6abe2f42] 
+  +0x00c8  int32     InternalFlags                [c81fc49b] 
+  +0x00cc  objref    LinkSettingsColor (?)        [ab78caa5] 
+  +0x00d0  objref    ?                            [3fa96222] 
+  +0x00d4  float     CurrentBodyAngle             [ef9760e0] 
+  +0x00d8  float     ?                            [99a53c6d] 
+  +0x00dc  enum      ObstacleLeanType             [a284d818] HumanGroundData::ObstacleLeanType
+  +0x00e0  float     CollideHeight                [fa2c13f9] 
+  +0x00e4  objref    CollideEntity                [0149b29e] 
+  +0x00e8  float     ?                            [87954054] 
+  +0x00ec  float     ?                            [bd94b0bc] 
+  +0x00f0  vec4      ?                            [e5e3e4de] 
+  +0x0100  struct    PinDownData                  [66e39e4b] 
+  +0x0114  u32       ?                            [f5779610] 
+  +0x0118  u32       ?                            [a5dd1d28] 
+  +0x011c  bool      Crouch                       [87daf62e] 
+  +0x011d  bool      ?                            [936194c5] 
+  +0x011e  bool      ?                            [f25fd4b0] 
+  +0x011f  bool      ?                            [4cbf3fd3] 
+  +0x0120  bool      IsSet (?)                    [cb537879] 
+  +0x0121  bool      ?                            [7bd2bff1] 
+  +0x0122  bool      ?                            [01851a3e] 
+  +0x0123  bool      Sprint                       [e82c5081] 
+
+== HumanInAirData  (descriptor 0x1995920, 32 props, groups [])
+  +0x0010  mat4?     JumpOrigin                   [1f3fee4f] 
+  +0x0050  mat4?     ?                            [439e3641] 
+  +0x0090  mat4?     ?                            [880db04c] 
+  +0x00d0  vec4      ?                            [7157be0d] 
+  +0x00e0  vec4      ?                            [95793b93] 
+  +0x00f0  vec4      ?                            [c277fc17] 
+  +0x0100  mat4?     ?                            [caaa226f] 
+  +0x0140  mat4?     ?                            [b9512e37] 
+  +0x0180  vec4      ReboundDirection             [aa3eb1bb] 
+  +0x0190  vec4      ?                            [2676b971] 
+  +0x01a0  int32     ?                            [46fe9e9e] 
+  +0x01a4  int32     JumpOrientationAction        [94e57ca6] 
+  +0x01a8  int32     ?                            [66e935a3] 
+  +0x01ac  int32     ?                            [8c6b7c5d] 
+  +0x01b0  int32     JumpFallAction               [4f7dfd4d] 
+  +0x01b4  int32     ?                            [9767ecf7] 
+  +0x01b8  enum      JumpType                     [233f2580] HumanInAirData::JumpType
+  +0x01bc  array     ?                            [271cd7f7] 
+  +0x01c4  array     ?                            [9839874d] 
+  +0x01cc  array     ?                            [d4ca3805] 
+  +0x01d4  array     ?                            [be42be60] 
+  +0x01dc  array     ?                            [1d0658c8] 
+  +0x01e4  float     ?                            [ee0dc59f] 
+  +0x01e8  float     ?                            [17b57612] 
+  +0x01ec  float     ?                            [e46399e0] 
+  +0x01f0  float     ?                            [8eeb1f85] 
+  +0x01f4  enum      FallOrigin                   [98fbeb98] HumanInAirData::FallOrigin
+  +0x01f8  bool      ?                            [84932e55] 
+  +0x01f9  bool      ?                            [85f8623e] 
+  +0x01fa  bool      ?                            [73ebbc8e] 
+  +0x01fb  bool      ?                            [542b8de7] 
+  +0x01fc  bool      ?                            [d4cdfc68] 
+
+== HumanLedgeData  (descriptor 0x1994f10, 21 props, groups ['GuidanceObject reports'])
+  +0x0010  vec4      ?                            [1b534fc5] 
+  +0x0020  vec4      ?                            [600b4b20] 
+  +0x0030  vec4      JumpDirection                [03f45ef2] 
+  +0x0040  enum      PullDownType                 [54f3d7d9] HumanLedgeData::PullDownType
+  +0x0044  enum      PullDownSide                 [fbac9b45] HumanLedgeData::PullDownSide
+  +0x0048  enum      GraspType                    [e6821377] HumanLedgeData::GraspType
+  +0x004c  enum      SubState                     [e1977073] HumanLedgeData::LedgeSubState
+  +0x0050  enum      HandPassOverSubState         [7e71b6a2] HumanLedgeData::HandPassOverSubState
+  +0x0054  enum      PullDownSubState             [d7901f0b] HumanLedgeData::PullDownSubState
+  +0x0058  int32     DirectionType                [d7e9b7b5] 
+  +0x005c  float     ?                            [9e77b818] 
+  +0x0060  float     ?                            [0cbe043c] 
+  +0x0064  enum      NextHandToMove               [ba20816b] HumanLedgeData::NextHandToMove
+  +0x0068  enum      LedgeHangType                [9e8d37e7] HumanLedgeData::LedgeHangType
+  +0x006c  enum      HangFreeReceptionType        [cb53fa6d] HumanLedgeData::HangFreeReceptionType
+  +0x0070  float     SwingStrength                [7dbe59b2] 
+  +0x0074  handle64  ?                            [333931dd] 
+  +0x007c  handle64  ?                            [7603c5ee] 
+  +0x0084  type0x3   ?                            [22b1efae] 
+  +0x0085  bool      ?                            [ab9a196e] 
+  +0x0086  bool      ?                            [7d4216cc] 
+
+== HumanClimbData  (descriptor 0x19978d8, 17 props, groups ['IK values'])
+  +0x0010  vec4      ?                            [1b534fc5] 
+  +0x0020  enum      SubState                     [e1977073] HumanClimbData::ClimbSubState
+  +0x0024  enum      EntryType                    [10ca1d28] HumanClimbData::EntryType
+  +0x0028  enum      EntryPoseType                [77e6b5e5] HumanClimbData::EntryPoseType
+  +0x002c  float     ?                            [9e77b818] 
+  +0x0030  float     ?                            [0cbe043c] 
+  +0x0034  float     ?                            [8ba24c09] 
+  +0x0038  float     ?                            [2747d8fb] 
+  +0x003c  bool      UseIK                        [c1f2dd4b] 
+  +0x0040  float     LeftToePull                  [ece9b663] 
+  +0x0044  float     RightToePull                 [17072d49] 
+  +0x0048  float     LeftHandPull                 [83076de5] 
+  +0x004c  float     RightHandPull                [58474aa8] 
+  +0x0050  float     ?                            [eea3c43f] 
+  +0x0054  float     ?                            [0e7e9b5c] 
+  +0x0058  float     ?                            [9ace1afd] 
+  +0x005c  float     ?                            [4e95f740] 
+
+== HumanLadderData  (descriptor 0x1995370, 13 props, groups [])
+  +0x0010  vec4      ?                            [92231d81] 
+  +0x0020  vec4      DestHeading                  [8b89adec] 
+  +0x0030  enum      EntryType                    [10ca1d28] HumanLadderData::EntryType
+  +0x0034  enum      InclinationType              [f9eeee28] HumanLadderData::InclinationType
+  +0x0038  enum      MvtDivision                  [ac007829] HumanLadderData::MvtDivisions
+  +0x003c  enum      MvtAnimState                 [3e9077be] HumanLadderData::MvtAnimState
+  +0x0040  float     ?                            [9e77b818] 
+  +0x0044  float     ?                            [0cbe043c] 
+  +0x0048  objref    Ladder                       [3011b913] 
+  +0x004c  float     LadderHeight                 [a6ba2f03] 
+  +0x0050  float     HeightInLadder               [7f640cfc] 
+  +0x0054  bool      ReachedTop                   [366499d3] 
+  +0x0055  bool      ReachedBottom                [42a11a8f] 
+
+== HumanPoleData  (descriptor 0x1994210, 12 props, groups [])
+  +0x0010  vec4      DestHeading                  [8b89adec] 
+  +0x0020  vec4      PoleJumpDirection            [3766f2ba] 
+  +0x0030  vec4      GrabPosition                 [0fa8ec84] 
+  +0x0040  enum      EntryType                    [10ca1d28] HumanPoleData::EntryType
+  +0x0044  enum      InclinationType              [f9eeee28] HumanPoleData::InclinationType
+  +0x0048  enum      MvtDivision                  [ac007829] HumanPoleData::MvtDivisions
+  +0x004c  enum      MvtAnimState                 [3e9077be] HumanPoleData::MvtAnimState
+  +0x0050  u32       ?                            [18e1a4d0] 
+  +0x0054  float     ?                            [0cbe043c] 
+  +0x0058  objref    Pole                         [5d52eddf] 
+  +0x005c  bool      ReachedTop                   [366499d3] 
+  +0x005d  bool      ReachedBottom                [42a11a8f] 
+
+== HumanRopeData  (descriptor 0x1993b70, 6 props, groups [])
+  +0x0010  vec4      DestHeading                  [8b89adec] 
+  +0x0020  vec4      ?                            [a9e937fb] 
+  +0x0030  objref    Rope                         [112c7809] 
+  +0x0034  float     ?                            [0cbe043c] 
+  +0x0038  bool      ReachedTop                   [366499d3] 
+  +0x0039  bool      ReachedBottom                [42a11a8f] 
+
+== HumanWallingData  (descriptor 0x19935d8, 7 props, groups ['rebound distances'])
+  +0x0008  enum      SubState                     [e1977073] HumanWallingData::WallingSubState
+  +0x000c  enum      WallingType                  [335e3a0b] HumanWallingData::WallingType
+  +0x0010  enum      WallingSide                  [9c017697] HumanWallingData::WallingSide
+  +0x0014  float     StartHeight                  [8b109983] 
+  +0x0018  float     ?                            [1dabe61b] 
+  +0x001c  float     ?                            [21786960] 
+  +0x0020  bool      ?                            [53913dfd] 
+
+== HumanNarrowObjectData  (descriptor 0x1994740, 21 props, groups ['Jump distances', 'Beam Variables'])
+  +0x0010  vec4      CurrentBeamDir               [35e6f433] 
+  +0x0020  vec4      CurrentBeamCenter            [d7969bfa] 
+  +0x0030  float     InformerBalanceAAE (?)       [3a99af52] 
+  +0x0034  float     ?                            [c0969231] 
+  +0x0040  vec4      BeamEntryVector              [27b3ba1e] 
+  +0x0050  vec4      BeamEntryPoint               [69b36700] 
+  +0x0060  vec4      ?                            [e710cc96] 
+  +0x0070  vec4      ?                            [9017fc00] 
+  +0x0080  vec4      CurrentEdgeDir               [71e9c457] 
+  +0x0090  vec4      ?                            [eac205a2] 
+  +0x00a0  vec4      ?                            [7d7163d9] 
+  +0x00b0  vec4      ?                            [bb162937] 
+  +0x00c0  float     CurrentLeanHeight            [4d0abfff] 
+  +0x00c4  float     CurrentLeanWidth             [76e5ba18] 
+  +0x00c8  enum      SubState                     [e1977073] HumanNarrowObjectData::NarrowObjectSubState
+  +0x00cc  enum      PilotisEntryType             [786de5f9] HumanNarrowObjectData::PilotisEntryType
+  +0x00d0  enum      EdgeState                    [94f51ac7] HumanNarrowObjectData::NarrowEdgeState
+  +0x00d4  float     ?                            [b8ecd913] 
+  +0x00d8  float     ?                            [5fc76b12] 
+  +0x00dc  enum      LeanState                    [fdeb69fb] HumanNarrowObjectData::LeanState
+  +0x00e0  enum      FreeRunSubState              [b75876c0] HumanNarrowObjectData::FreeRunSubState
+
+== HumanLookAtData  (descriptor 0x1994828, 1 props, groups [])
+  +0x0008  type0x917 LookAtTarget                 [7e5ba346] 
+
+== HumanPushableContextData  (descriptor 0x1993e48, 3 props, groups [])
+  +0x0010  vec4      Speed                        [cee7d1f2] 
+  +0x0020  float     ?                            [d9b3699a] 
+  +0x0024  bool      ?                            [b1d60d03] 
+
+== HumanCustomActionData  (descriptor 0x1997510, 3 props, groups [])
+  +0x0008  int32     ?                            [8df50052] 
+  +0x000c  bool      EndAction                    [3936a09e] 
+  +0x000d  bool      IsFinished                   [7210ad0f] 
+
+== HumanHayStackData  (descriptor 0x195f090, 3 props, groups [])
+  +0x0010  vec4      DestHeading                  [8b89adec] 
+  +0x0020  enum      EntryType                    [10ca1d28] HumanHayStackEntryType
+  +0x0024  objref    HayStack                     [d8fdbe1a] 
+
+== HumanKioskData  (descriptor 0x195ef10, 4 props, groups [])
+  +0x0010  vec4      DestHeading                  [8b89adec] 
+  +0x0020  enum      EntryType                    [10ca1d28] HumanKioskEntryType
+  +0x0024  enum      EntrySide                    [bf9551b4] HumanKioskEntrySide
+  +0x0028  objref    Kiosk                        [32d63834] 
+
+== HumanDeadData  (descriptor 0x1997028, 3 props, groups [])
+  +0x0008  float     ?                            [09b7aa9b] 
+  +0x000c  bool      ?                            [982cf504] 
+  +0x000d  bool      ?                            [a7eccc12] 
+
+== StPadControlledData  (descriptor 0x1970ed8, 1 props, groups [])
+  +0x0008  struct    ?                            [8ee4277c] 
+
+== NavigationContextData  (descriptor 0x1910938, 2 props, groups [])
+  +0x0004  enum      NavStyle                     [9dd1c648] NavigationContextData::NavStyleType
+  +0x0008  enum      Speed                        [cee7d1f2] NavigationContextData::NavSpeed
+
+== MainNavigationData  (descriptor 0x1956768, 9 props, groups [])
+  +0x0008  struct    ?                            [8ab38548] 
+  +0x0014  struct    FightDefaultData             [bc621827] 
+  +0x0020  struct    ?                            [6f09bb0b] 
+  +0x002c  struct    ?                            [67de580b] 
+  +0x0038  struct    ?                            [9dd5a87f] 
+  +0x0044  struct    ?                            [335783d8] 
+  +0x0054  struct    ?                            [74dc72f6] 
+  +0x0060  struct    ?                            [8292b513] 
+  +0x0070  struct    ?                            [d5302391] 
+
+== AssassinAbilitySet  (descriptor 0x19b55c8, 38 props, groups ['SuperSets'])
+  +0x0008  bitflag   Jump                         [0781a928] 
+  +0x0008  bitflag   Crouch                       [87daf62e] 
+  +0x0008  bitflag   PassOver                     [1b8b5df5] 
+  +0x0008  bitflag   Walling                      [fa2a4432] 
+  +0x0008  bitflag   Climb                        [9c68780e] 
+  +0x0008  bitflag   Ladder                       [3011b913] 
+  +0x0008  bitflag   Grasp                        [f0c5e14d] 
+  +0x0008  bitflag   Persuasion                   [f6c170eb] 
+  +0x0008  bitflag   ?                            [7aded82a] 
+  +0x0008  bitflag   StealthAssassination         [5c3cd882] 
+  +0x0008  bitflag   AirAssassination             [b18de51d] 
+  +0x0008  bitflag   WeaponAccess                 [be76e963] 
+  +0x0008  bitflag   Fight                        [e06b6b52] 
+  +0x0008  bitflag   Targeting                    [61d1d79a] 
+  +0x0008  bitflag   Charge                       [52c7a102] 
+  +0x0008  bitflag   LeapOfFaith                  [10a880e8] 
+  +0x0008  bitflag   CounterGrab                  [3674faba] 
+  +0x0008  bitflag   CounterDodge                 [5a37970e] 
+  +0x0008  bitflag   CounterKill                  [3ec75ad9] 
+  +0x0008  bitflag   ComboKill                    [3abddcd8] 
+  +0x0008  bitflag   ?                            [1aabd1f6] 
+  +0x0008  bitflag   ?                            [b5908a27] 
+  +0x0008  bitflag   m_PivotConnectorEnable (?)   [47a0f50c] 
+  +0x0008  bitflag   Push                         [ff08b95a] 
+  +0x0008  bitflag   Dismount                     [a7a66839] 
+  +0x0008  bitflag   ?                            [a39abf3f] 
+  +0x0008  bitflag   JumpFromHorse                [b65622a5] 
+  +0x0008  bitflag   Rearing                      [7bd5cd9e] 
+  +0x0008  bitflag   ?                            [e6e0d64c] 
+  +0x0008  bitflag   LookDown                     [ec272f0d] 
+  +0x0008  bitflag   EagleVision                  [ac636be8] 
+  +0x0008  bitflag   BalanceAlways                [06382f16] 
+  +0x0008  bitflag   ?                            [dfac76dc] 
+  +0x0008  bitflag   ?                            [d7c8ae5c] 
+  +0x0010  enum      MaxSpeed                     [15cfe647] AssassinAbilitySet::MaxSpeed
+  +0x0014  bitflag   HighProfile                  [c2747d72] 
+  +0x0014  bitflag   AllActions                   [f878d4a1] 
+  +0x0015  bitflag   ?                            [2a0224ca] 
