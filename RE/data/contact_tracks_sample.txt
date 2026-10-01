@@ -1,0 +1,40 @@
+== xx_l_walk_hipm_footl dur=0.533
+  CONTACTS (ByteLowest): 0.000:Lheel+Ltoe  0.067:Ltoe  0.267:Rheel  0.333:Rheel+Rtoe
+== xx_h_run_hipm_footl dur=0.333
+  CONTACTS (ByteLowest): 0.000:Ltoe  0.067:-  0.267:Rheel+Rtoe  0.333:Rtoe
+== xx_l_walk_hipm_footr dur=0.467
+  CONTACTS (ByteLowest): 0.000:Rheel+Rtoe  0.067:Rtoe  0.267:Lheel  0.333:Lheel+Ltoe
+== xx_fall_tr_hangwall_straight_min_a dur=0.067
+  CONTACTS (ByteLowest): 0.000:-  0.067:Lhand+Rhand
+== xx_fall_tr_hangwall_straight_min_b dur=0.600
+  CONTACTS (ByteLowest): 0.000:Lhand+Rhand  0.400:Rtoe+Lhand+Rhand  0.600:Ltoe+Rtoe+Lhand+Rhand
+== xx_h_jumpfalling01 dur=0.667
+== xx_h_hangwall_tr_hangknee_footl_a dur=0.333
+  CONTACTS (ByteLowest): 0.000:-
+== xx_h_hangwall_wait dur=2.133
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  2.133:Ltoe+Rtoe+Lhand+Rhand
+== xx_h_hangfree_wait dur=2.133
+  CONTACTS (ByteLowest): 0.000:Lhand+Rhand
+== xx_h_hangfree_strafe_right_050cm_open dur=0.533
+  CONTACTS (ByteLowest): 0.000:Lhand+Rhand  0.067:Lhand  0.533:Lhand+Rhand
+  STEPPHASE (ByteLowest): 0.000:0  0.533:0
+== xx_h_hangwall_strafe_right_050cm_open dur=0.533
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.067:Ltoe+Rtoe+Lhand  0.200:Ltoe+Rtoe+Lhand  0.267:Ltoe+Lhand+Rhand  0.467:Ltoe+Lhand+Rhand  0.533:Ltoe+Rtoe+Lhand+Rhand
+== xx_h_hangwall_strafe_right_050cm_close dur=0.600
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.067:Ltoe+Rtoe+Lhand+Rhand  0.133:Ltoe+Rtoe+Rhand  0.267:Ltoe+Rtoe+Rhand  0.333:Ltoe+Rtoe+Lhand+Rhand  0.400:Rtoe+Lhand+Rhand  0.533:Rtoe+Lhand+Rhand  0.600:Ltoe+Rtoe+Lhand+Rhand
+== xx_h_hangwall_climb_1m_u_1lu dur=0.600
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.133:Ltoe+Rtoe+Rhand  0.333:Rtoe+Rhand  0.533:Rtoe+Lhand+Rhand  0.600:Ltoe+Rtoe+Lhand+Rhand
+  STEPPHASE (ByteLowest): 0.000:0  0.600:0
+== xx_climb_wait_1m dur=1.333
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  1.333:Ltoe+Rtoe+Lhand+Rhand
+== xx_climb_wait_1lu dur=1.333
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  1.333:Ltoe+Rtoe+Lhand+Rhand
+== xx_l_climb_1m_u_1lu dur=0.533
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.067:Rtoe+Rhand  0.333:Rtoe+Lhand+Rhand  0.533:Ltoe+Rtoe+Lhand+Rhand
+  STEPPHASE (ByteLowest): 0.000:0  0.533:0
+== xx_l_climb_1m_l_2m dur=0.533
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.133:Rtoe+Lhand+Rhand  0.267:Rtoe+Rhand  0.333:Ltoe+Rtoe+Rhand  0.533:Ltoe+Rtoe+Lhand+Rhand
+  STEPPHASE (ByteLowest): 0.000:0  0.533:0
+== xx_l_climb_1lu_u_1m dur=0.533
+  CONTACTS (ByteLowest): 0.000:Ltoe+Rtoe+Lhand+Rhand  0.067:Ltoe+Lhand  0.533:Ltoe+Rtoe+Lhand+Rhand
+  STEPPHASE (ByteLowest): 0.000:0  0.533:0

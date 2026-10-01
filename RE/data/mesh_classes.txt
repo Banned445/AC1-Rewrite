@@ -1,0 +1,77 @@
+== Mesh (desc 0x1934c38, own hash 415d9568, base ec6ac357)
+  +0x00c SmallArray<float>        SubMeshes                [59936024] typehash 5755de7f 
+  +0x014 ObjectPtr                CompiledMesh             [fc9e1595] typehash fc9e1595 
+  +0x018 SmallArray<quat>         ?                        [7018782b] typehash 85c817c3 
+  +0x020 SmallArray<vec2>         Bones                    [149b422f] typehash 9ef0e7a1 
+  +0x028 u16                      ?                        [81fda4f4] typehash 00000000 
+  +0x02a u16                      ?                        [84578797] typehash 00000000 
+  +0x02c bool                     ?                        [4664a408] typehash 00000000 
+  +0x02d bool                     ?                        [f8734e44] typehash 00000000 
+== SubMesh (desc 0x19353e0, own hash 5755de7f, base bb96607d)
+  +0x008 Enum                     Type                     [2cecf817] typehash d83970d6 SubMesh::TriangleType
+  +0x00c BigArray<s8>             Indices                  [cf8a22e7] typehash 00000000 
+  +0x018 BigArray<u8>             ?                        [627e49f6] typehash 00000000 
+  +0x024 BigArray<u8>             ?                        [07dc8ed8] typehash 00000000 
+  +0x030 BigArray<char>           ?                        [a2381dd8] typehash 00000000 
+  +0x03c BigArray<s32>            ?                        [546e67df] typehash 00000000 
+  +0x048 BigArray<s32>            ?                        [73f5559e] typehash 00000000 
+  +0x054 BigArray<s32>            ?                        [4c8ddd1c] typehash 00000000 
+  +0x060 BigArray<s32>            ?                        [37500e5f] typehash 00000000 
+  +0x06c BigArray<u8>             ?                        [c512c6a9] typehash 00000000 
+  +0x078 BigArray<u8>             ?                        [dfce7fac] typehash 00000000 
+  +0x084 BigArray<u8>             LayerWeights             [65381c08] typehash 00000000 
+  +0x090 BigArray<s32>            BoneWeights              [81e62f6c] typehash 00000000 
+  +0x09c BigArray<char>           BoneIndices              [9b03474f] typehash 00000000 
+  +0x0a8 BigArray<s8>             ?                        [923c14c9] typehash 00000000 
+  +0x0b4 Reference                Material                 [85c817c3] typehash 85c817c3 
+  +0x0b8 ObjectPtr                ?                        [8a4a2e2b] typehash 5755de7f 
+  +0x0bc BigArray<vec2>           ?                        [e9aa4907] typehash 325c97ee 
+  +0x0c8 BigArray<vec2>           ?                        [d2bf420f] typehash bdad8273 
+  +0x0d4 bool<bool>               ?                        [84163328] typehash 00000000 
+  +0x0d4 bool<bool>               ?                        [dfb86a34] typehash 00000000 
+== CompiledMesh (desc 0x1945d80, own hash fc9e1595, base 85d90806)
+  +0x004 BigArray<char>           Data                     [0dc15c5d] typehash 00000000 
+  +0x010 ObjectPtr                Mesh                     [415d9568] typehash 415d9568 
+  +0x014 u32                      ?                        [ebb0281f] typehash 00000000 
+  +0x018 u32                      ?                        [abedecac] typehash 00000000 
+== Bone (desc 0x1908178, own hash 95741049, base 00000002)
+  +0x004 u32                      BoneID                   [2ddf1266] typehash 00000000 
+  +0x008 ObjectPtr                ?                        [c46ef58d] typehash 95741049 
+  +0x00c BaseObjectPtr            ?                        [6350e5a6] typehash 6350e5a6 
+  +0x010 SmallArray<float>        Modifiers                [5a587cd0] typehash 8a901914 
+  +0x018 u8<?>                    Index                    [41b24805] typehash 00000000 
+  +0x018 u8<?>                    ?                        [778ff80e] typehash 00000000 
+== SkeletonComponent (desc 0x18cfb40, own hash 71fda747, base cb0f23f4)
+  +0x000 Enum                     SkeletonType             [9c78eb24] typehash efe7f38e Skeleton::SkeletonType
+  +0x000 ObjectPtr                ?                        [b3adf542] typehash b3adf542 
+  +0x020 vec4                     ?                        [3d8d7543] typehash 00000000 
+  +0x030 Reference                ?                        [bc9c5810] typehash 24aecb7c 
+  +0x034 SmallArray<quat>         ?                        [408196bb] typehash 24aecb7c 
+  +0x03c u32                      ?                        [1fccabe2] typehash 00000000 
+  +0x040 u32                      ?                        [1d23deeb] typehash 00000000 
+  +0x044 Reference                ?                        [c05d590d] typehash 515c31cd 
+  +0x050 Object                   ?                        [807f77a2] typehash 807f77a2 
+  +0x130 ObjectPtr                ?                        [046d00d1] typehash 046d00d1 
+  +0x134 SmallArray<vec2>         ?                        [f8c0e244] typehash 881b5d38 
+  +0x13c BaseObject               ?                        [e7f9a244] typehash e7f9a244 
+  +0x14c Enum<char>               ?                        [ffe40806] typehash a093512b LODLevel
+  +0x14c bool<bool>               ?                        [68989576] typehash 00000000 
+  +0x14c bool<bool>               ?                        [68b7f6c4] typehash 00000000 
+== Visual (desc 0x1934498, own hash ec658d29, base 956b3fbc)
+  +0x014 Reference                Object                   [af01aeda] typehash ec6ac357 
+  +0x018 ObjectPtr                InstanceData             [5073cb67] typehash 3a1cd4d3 
+  +0x01c float                    ?                        [11f4eae9] typehash 00000000 
+  +0x020 float                    ?                        [50a7a05a] typehash 00000000 
+  +0x024 bool<bool>               ?                        [b4fb42a5] typehash 00000000 
+  +0x024 bool<bool>               ?                        [31a250f6] typehash 00000000 
+  +0x024 bool<bool>               ?                        [fed5a88b] typehash 00000000 
+  +0x024 bool<bool>               ?                        [8ff1ec8b] typehash 00000000 
+== LODSelector (desc 0x1944a68, own hash 51dc6b80, base ec6ac357)
+  +0x00c StaticArray<vec2>        ?                        [4d7a7272] typehash a360319a 
+  +0x05c bool<bool>               ?                        [8c5a4605] typehash 00000000 
+  +0x05c bool<bool>               ?                        [2916ea00] typehash 00000000 
+== GraphicObject (desc 0x1934788, own hash ec6ac357, base bb96607d)
+  +0x008 Enum                     ?                        [ff3a7b97] typehash c1ed067f ResourceCategory
+== BodyPartMapping (desc 0x19085d0, own hash b3adf542, base bb96607d)
+  +0x008 SmallArray<float>        ?                        [22d1c620] typehash dcbae9e3 
+  +0x010 Reference                ?                        [02251ed8] typehash 02251ed8 

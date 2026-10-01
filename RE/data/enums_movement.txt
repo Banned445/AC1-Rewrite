@@ -1,0 +1,332 @@
+## ACTBlendType  (desc 0x18e3058, 6 values)
+0=ACTBLENDTYPE_NONE, 1=ACTBLENDTYPE_AROLLBROLL, 2=ACTBLENDTYPE_ASTOPBROLL, 3=ACTBLENDTYPE_AROLLBSTOP, 4=ACTBLENDTYPE_ASTOPBSTOP, 5=ACTBLENDTYPE_ASTOPBSTOPCUBICQUAT
+## ACTEndEvent  (desc 0x18e26fc, 5 values)
+1=ACTENDEVENT_KEEPGOING, 2=ACTENDEVENT_PAUSE, 4=ACTENDEVENT_STOP, 8=ACTENDEVENT_LOOP, 16=ACTENDEVENT_STOPTGASEQUENCE
+## ACTPlayState  (desc 0x18e26b0, 3 values)
+0=ACTPLAYSTATE_STOP, 1=ACTPLAYSTATE_PLAY, 2=ACTPLAYSTATE_PAUSE
+## ACTTargetFlag  (desc 0x18d0a78, 16 values)
+0=ACTTARGETFLAG_NONE, 1=ACTTARGETFLAG_RESTARTREDUNDANT, 2=ACTTARGETFLAG_STOPSECONDARY, 4=ACTTARGETFLAG_IGNORETRANSITION, 8=ACTTARGETFLAG_AUTOTRANSITOUT, 16=ACTTARGETFLAG_IGNOREAUTOTRANSITOUT, 32=ACTTARGETFLAG_KILLACTIONONFINISH, 64=ACTTARGETFLAG_QUEUEAFTERACTION, 128=ACTTARGETFLAG_QUEUEAFTERACTIONITEM, 256=ACTTARGETFLAG_AUTOSTARTONEND, 512=ACTTARGETFLAG_IGNORETRANSITIONACTION, 1024=ACTTARGETFLAG_IGNOREASSOCIATEDACTION, 2048=ACTTARGETFLAG_KILLWHENPARENTEND, 4096=ACTTARGETFLAG_IGNOREKILLWHENPARENTEND, 8192=ACTTARGETFLAG_KILLALLASSOCIATEDACTIONS, 16384=ACTTARGETFLAG_IGNOREKILLALLASSOCIATEDACTIONS
+## AIActor::ExtensionSlot  (desc 0x18d67dc, 7 values)
+-1=EXTENSION_SLOT_NOTSET, 0=Extension_Slot1, 1=Extension_Slot2, 2=Extension_Slot3, 3=Extension_Slot4, 4=Extension_Slot5, 5=EXTENSION_SLOT_SIZE
+## ActivateEvent::ActivateEventAction  (desc 0x190a11c, 3 values)
+0=TurnOn, 1=TurnOff, 2=Switch
+## ActorContextID  (desc 0x19640ec, 23 values)
+0=ContextID_NO_TRANSITION, 1=ContextID_INITIALIZATION, 2=ContextID_NOT_DEFINED, 3=ContextID_Debug, 4=ContextID_Ground, 5=ContextID_Ladder, 6=ContextID_Pole, 7=ContextID_Rope, 8=ContextID_InAir, 9=ContextID_Ledge, 10=ContextID_Climb, 11=ContextID_Walling, 12=ContextID_NarrowObject, 13=ContextID_Riding, 14=ContextID_PushableContext, 15=ContextID_RagdollGround, 16=ContextID_Vocalization, 17=ContextID_CustomAction, 18=ContextID_LookAt, 19=ContextID_Kiosk, 20=ContextID_Dead, 21=ContextID_HayStack, 22=ContextID_UpperBody
+## AcuatorEvData::AcuatorContactType  (desc 0x19b7d24, 2 values)
+0=AcuatorContactType_On, 1=AcuatorContactType_Off
+## AcuatorsContactsTypes  (desc 0x18da0b8, 8 values)
+0=ACUATORCONTACTTYPE_LEFT_HEEL, 1=ACUATORCONTACTTYPE_RIGHT_HEEL, 2=ACUATORCONTACTTYPE_LEFT_TOES, 3=ACUATORCONTACTTYPE_RIGHT_TOES, 4=ACUATORCONTACTTYPE_LEFT_HAND, 5=ACUATORCONTACTTYPE_RIGHT_HAND, 6=ACUATORCONTACTTYPE_NOLOOKAT, 7=ACUATORCONTACTTYPE_COUNT
+## AmbienceEvent::Target  (desc 0x19b73a0, 2 values)
+0=Target_Region, 1=Target_GlobalWallaData
+## AnimComponent::AnimPlayState  (desc 0x18d7d74, 3 values)
+0=PLAYSTATE_PLAY, 1=PLAYSTATE_STOP, 2=PLAYSTATE_PAUSE
+## AnimTrack::FixedTrackIds  (desc 0x18dac8c, 10 values)
+0=FIXEDTRACKID_DISPLACEMENT, 1=FIXEDTRACKID_PIVOT, 2=FIXEDTRACKID_ACUATORCONTACTS, 3=FIXEDTRACKID_STEPPHASES, 4=FIXEDTRACKID_CENTEROFMASS, -16=FIXEDTRACKID_SOUNDEVENT, -15=FIXEDTRACKID_FXEVENT, -14=FIXEDTRACKID_AIEVENT, -6=FIXEDTRACKID_CONTACTEVENT, -1=INVALID_TRACKID
+## AssassinAbilityEvent::Action  (desc 0x19b5740, 3 values)
+0=Action_Set, 1=Action_Remove, 2=Action_INVALID
+## AssassinAbilitySet::MaxSpeed  (desc 0x19b54f4, 5 values)
+0=NoMovementAllowed, 1=Walk, 2=Jog, 3=Run, 4=Sprint
+## AssassinButtonPressedCameraActivator::AssassinButton  (desc 0x19b4d54, 5 values)
+0=AssassinButton_HighProfile, 1=AssassinButton_HeadButton, 2=AssassinButton_WeaponButton, 3=AssassinButton_UnarmedButton, 4=AssassinButton_LegsButton
+## AssassinButtons  (desc 0x1953ea0, 16 values)
+0=Assassin_Button_ChangeProfile, 1=Assassin_Button_Head, 2=Assassin_Button_ArmedHand, 3=Assassin_Button_UnarmedHand, 4=Assassin_Button_Legs, 5=Assassin_Button_Ghost1, 6=Assassin_Button_Ghost2, 7=Assassin_Button_Target, 8=Assassin_Button_Knowledge, 9=Assassin_Button_Parry, 10=Assassin_Button_SelectSword, 11=Assassin_Button_SelectDagger, 12=Assassin_Button_SelectUnarmed, 13=Assassin_Button_SelectHiddenBlade, 14=Assassin_Button_Pause, 15=Assassin_Button_NUM_BUTTONS
+## AssassinDareObjectType  (desc 0x1957c18, 20 values)
+5=AssassinDareObjectType_Ambience40, 6=AssassinDareObjectType_AmbiencePad, 7=AssassinDareObjectType_AmbiencePadMTC, 8=AssassinDareObjectType_AmbienceRandomFX, 9=AssassinDareObjectType_AmbienceMusicBand, 10=AssassinDareObjectType_Music_2, 11=AssassinDareObjectType_Music_3, 12=AssassinDareObjectType_Music_4, 13=AssassinDareObjectType_SFX40, 14=AssassinDareObjectType_SFXMenu, 15=AssassinDareObjectType_AmbiencePadInterior, 16=AssassinDareObjectType_AmbiencePadMTCInterior, 17=AssassinDareObjectType_AmbienceRandomFXInterior, 18=AssassinDareObjectType_Ambience3DSoundInterior, 19=AssassinDareObjectType_DialogIdle, 20=AssassinDareObjectType_DialogAssassination, 21=AssassinDareObjectType_DialogScript, 22=AssassinDareObjectType_DialogAI, 23=AssassinDareObjectType_SFXTCR, 24=AssassinDareObjectType_SFXAssassination
+## BlendingSourceType  (desc 0x19639f4, 11 values)
+0=BlendingSourceType_None, 1=BlendingSourceType_HayStack, 2=BlendingSourceType_Trap, 3=BlendingSourceType_Pray, 4=BlendingSourceType_Bench, 5=BlendingSourceType_HidingSpot, 6=BlendingSourceType_Clip, 7=BlendingSourceType_Ghost, 8=BlendingSourceType_Crowd, 9=BlendingSourceType_HorseWalk, 10=BlendingSourceType_ClipDelay
+## BumpState  (desc 0x18c3910, 2 values)
+0=FIK_BUMPSTART, 1=FIK_BUMPSTOP
+## CameraAnalogStick  (desc 0x18d9a64, 3 values)
+0=CameraPad_Left, 1=CameraPad_Right, 2=CameraPad_Both
+## CharacterInteractionMode  (desc 0x18cf1c8, 4 values)
+0=CharacterInteraction_Blocking, 1=CharacterInteraction_Debris, 2=CharacterInteraction_Pushable, 3=CharacterInteraction_Ignore
+## ClothCollisionMode  (desc 0x18e1fdc, 3 values)
+0=CLOTHCOLLISION_USESKINNING, 1=CLOTHCOLLISION_MOVEBACK, 2=CLOTHCOLLISION_NONE
+## CollisionMaterial::AIType  (desc 0x19063e8, 3 values)
+0=AIType_None, 1=AIType_UnreachableAreaByAI, 2=AIType_StepOff
+## ConditionClip::ConditionType  (desc 0x1905be0, 8 values)
+0=LaunchScene, 1=Wait, 2=JumpToCheckpoint, 3=ActivateOutput, 4=RandomJump, 5=SetVariableToValue, 6=AddValueToVariable, 7=DoNothing
+## ContactEvent::ContactEventKind  (desc 0x18e175c, 3 values)
+0=CEC_UNDEFINED, 1=CEC_Horse, 2=CEC_Human
+## ContactEventTypeHorse  (desc 0x18e19c0, 28 values)
+0=CONTACTEVENTTYPEHORSE_hoof_walk_start, 1=CONTACTEVENTTYPEHORSE_hoof_walk_end, 2=CONTACTEVENTTYPEHORSE_hoof_walk_front_l, 3=CONTACTEVENTTYPEHORSE_hoof_walk_front_r, 4=CONTACTEVENTTYPEHORSE_hoof_walk_rear_l, 5=CONTACTEVENTTYPEHORSE_hoof_walk_rear_r, 6=CONTACTEVENTTYPEHORSE_hoof_run_front, 7=CONTACTEVENTTYPEHORSE_hoof_run_rear, 8=CONTACTEVENTTYPEHORSE_hoof_brake_short, 9=CONTACTEVENTTYPEHORSE_hoof_brake_long, 10=CONTACTEVENTTYPEHORSE_hoof_jump, 11=CONTACTEVENTTYPEHORSE_hoof_land_lt_front, 12=CONTACTEVENTTYPEHORSE_hoof_land_lt_rear, 13=CONTACTEVENTTYPEHORSE_hoof_land_hvy_front, 14=CONTACTEVENTTYPEHORSE_hoof_land_hvy_rear, 15=CONTACTEVENTTYPEHORSE_hoof_step_light, 16=CONTACTEVENTTYPEHORSE_hoof_scrape, 17=CONTACTEVENTTYPEHORSE_body_fall, 18=CONTACTEVENTTYPEHORSE_body_roll, 19=CONTACTEVENTTYPEHORSE_hoof_step_light_scuff, 20=CONTACTEVENTTYPEHORSE_hoof_trot_front_l, 21=CONTACTEVENTTYPEHORSE_hoof_trot_front_r, 22=CONTACTEVENTTYPEHORSE_hoof_trot_rear_l, 23=CONTACTEVENTTYPEHORSE_hoof_trot_rear_r, 24=CONTACTEVENTTYPEHORSE_hoof_ggallop_front, 25=CONTACTEVENTTYPEHORSE_hoof_ggallop_rear, 26=CONTACTEVENTTYPEHORSE_COUNT, -1=CONTACTEVENTTYPEHORSE_INVALID
+## ContactEventTypeHuman  (desc 0x18e185c, 17 values)
+0=CONTACTEVENTTYPEHUMAN_ft_body_roll, 1=CONTACTEVENTTYPEHUMAN_ft_jump_start, 2=CONTACTEVENTTYPEHUMAN_ft_land_hands, 3=CONTACTEVENTTYPEHUMAN_ft_land_heavy, 4=CONTACTEVENTTYPEHUMAN_ft_land_light, 5=CONTACTEVENTTYPEHUMAN_ft_land_medium, 6=CONTACTEVENTTYPEHUMAN_ft_pivot, 7=CONTACTEVENTTYPEHUMAN_ft_run_cycle, 8=CONTACTEVENTTYPEHUMAN_ft_slide, 9=CONTACTEVENTTYPEHUMAN_ft_sneak_cycle, 10=CONTACTEVENTTYPEHUMAN_ft_step_foot, 11=CONTACTEVENTTYPEHUMAN_ft_step_toe, 12=CONTACTEVENTTYPEHUMAN_ft_walk_cycle, 13=CONTACTEVENTTYPEHUMAN_ft_walk_end, 14=CONTACTEVENTTYPEHUMAN_ft_walk_start, 15=CONTACTEVENTTYPEHUMAN_COUNT, -1=CONTACTEVENTTYPEHUMAN_INVALID
+## ContactMaterial  (desc 0x18e117c, 29 values)
+0=Dirt, 1=Mud, 2=Sand, 3=Pebbles, 4=Stone_Clean, 5=Stone_Dirt, 6=Marble, 7=Ceramic, 8=Wood_Solid, 9=Wood_Plank, 10=Wood_Dirt, 11=Wood_Creak, 12=Carpet, 13=Straw, 14=Grass_Short, 15=Grass_Long, 16=Leaves, 17=Leaves_Branch, 18=Water_Puddle, 19=Water_Shallow, 20=Snow, 21=Glass, 22=Concrete_Polished, 23=Metal_Dome, 24=Metal_Grill, 25=ContactMaterial_NormalCount, 4000=ContactMaterial_Overrider, 4001=ContactMaterial_Default, -1=ContactMaterial_Invalid
+## ContactTagType  (desc 0x18da048, 20 values)
+0=CONTACTTAGTYPE_UNDEFINED, 1=CONTACTTAGTYPE_HEAD, 2=CONTACTTAGTYPE_BODY, 3=CONTACTTAGTYPE_HAND, 4=CONTACTTAGTYPE_KNEE, 5=CONTACTTAGTYPE_FOOT_LEFT, 6=CONTACTTAGTYPE_FOOT_RIGHT, 7=CONTACTTAGTYPE_WEAPON, 8=CONTACTTAGTYPE_DROPOBJECT, 9=CONTACTTAGTYPE_FALL, 10=CONTACTTAGTYPE_DIE, 11=CONTACTTAGTYPE_SLASHWEAK_ARMED, 12=CONTACTTAGTYPE_SLASHSTRONG_ARMED, 13=CONTACTTAGTYPE_STABWEAK_ARMED, 14=CONTACTTAGTYPE_STABSTRONG_ARMED, 15=CONTACTTAGTYPE_SLASHWEAK_UNARMED, 16=CONTACTTAGTYPE_SLASHSTRONG_UNARMED, 17=CONTACTTAGTYPE_STABWEAK_UNARMED, 18=CONTACTTAGTYPE_STABSTRONG_UNARMED, 19=CONTACTTAGTYPE_BLOODSPLATTER_CUSTOM
+## ContactTagTypeHorse  (desc 0x18da17c, 15 values)
+0=CONTACTTAGTYPE_HORSE_UNDEFINED, 1=CONTACTTAGTYPE_HORSE_HEAD, 2=CONTACTTAGTYPE_HORSE_BODY, 3=CONTACTTAGTYPE_HORSE_FRONT_LEFT, 4=CONTACTTAGTYPE_HORSE_FRONT_RIGHT, 5=CONTACTTAGTYPE_HORSE_REAR_LEFT, 6=CONTACTTAGTYPE_HORSE_REAR_RIGHT, 7=CONTACTTAGTYPE_HORSE_WEAPON, 8=CONTACTTAGTYPE_HORSE_DROPOBJECT, 9=CONTACTTAGTYPE_HORSE_FALL, 10=CONTACTTAGTYPE_HORSE_DIE, 11=CONTACTTAGTYPE_HORSE_SLASHWEAK, 12=CONTACTTAGTYPE_HORSE_SLASHSTRONG, 13=CONTACTTAGTYPE_HORSE_STABWEAK, 14=CONTACTTAGTYPE_HORSE_STABSTRONG
+## ContactTags::ContactEventKind  (desc 0x1905744, 3 values)
+0=CEC_UNDEFINED, 1=CEC_Horse, 2=CEC_Human
+## ControlSchemeButton  (desc 0x1962c08, 4 values)
+0=ControlSchemeButton_Head, 1=ControlSchemeButton_Weapon, 2=ControlSchemeButton_Hand, 3=ControlSchemeButton_Leg
+## ControlType  (desc 0x1962ae0, 50 values)
+0=ControlType_None, 1=ControlType_Assassinate, 2=ControlType_Attack, 3=ControlType_Calm, 4=ControlType_CounterAttack, 5=ControlType_CounterDodge, 6=ControlType_CounterGrab, 7=ControlType_Crouch, 8=ControlType_Defense, 9=ControlType_EagleVision, 10=ControlType_FreeRun, 11=ControlType_Gallop, 12=ControlType_GentlePush, 13=ControlType_GetOffHorse, 14=ControlType_GetOut, 15=ControlType_Grab, 16=ControlType_Grasp, 17=ControlType_Hide, 18=ControlType_Info, 19=ControlType_Interact, 20=ControlType_Intimidate, 21=ControlType_Jump, 22=ControlType_Kick, 23=ControlType_Listen, 24=ControlType_Mount, 25=ControlType_PickPocket, 26=ControlType_Pray, 27=ControlType_Punch, 28=ControlType_Push, 29=ControlType_QuickDrop, 30=ControlType_Rearing, 31=ControlType_SheathWeapon, 32=ControlType_Sit, 33=ControlType_SitDownOnHorse, 34=ControlType_StandUpOnHorse, 35=ControlType_Step, 36=ControlType_StopPray, 37=ControlType_Swing, 38=ControlType_Synchronize, 39=ControlType_Tackle, 40=ControlType_Talk, 41=ControlType_ThrowKnife, 42=ControlType_UnsheathWeapon, 43=ControlType_Vision, 44=ControlType_Walk, 45=ControlType_Count, 46=ControlType_ContextGlitchOnly, 47=ControlType_ContextVision, 48=ControlType_ContextWeapon, -1=ControlType_Unset
+## CtxFollowNavData::FollowDistanceType  (desc 0x19aa4f4, 3 values)
+0=FollowDistance_Near, 1=FollowDistance_Far, 2=FollowDistance_Specific
+## DTMode  (desc 0x18e100c, 5 values)
+0=DTMode_Fixed, 1=DTMode_RealTimeWithFixedSteps, 2=DTMode_RealTime, 3=DTMode_Damped, 4=DTMode_COUNT
+## DisableCruiseControlEvent::Response  (desc 0x1969adc, 3 values)
+0=Unhandled, 1=Accepted, 2=Rejected
+## DisplayOptions::ProfilerSortType  (desc 0x19313d8, 2 values)
+0=SortByTime, 1=SortByName
+## DisplayOptions::ProfilerStats  (desc 0x1931408, 26 values)
+0=ProfilerStatsNone, 1=ProfilerStatsVertexShader, 2=ProfilerStatsGeometryShader, 3=ProfilerStatsPixelShader, 4=ProfilerStatsVertexIndexBuffer, 5=ProfilerStatsMemory, 6=ProfilerStatsStates, 7=ProfilerStatsDirectDisplay, 8=ProfilerStatsCalls, 9=ProfilerStatsVisibility, 10=ProfilerStatsShadow0, 11=ProfilerStatsShadow1, 12=ProfilerStatsShadow2, 13=ProfilerStatsShadow3, 14=ProfilerStatsOpaque, 15=ProfilerStatsTransparent, 16=ProfilerStatsSkyDome, 17=ProfilerStatsClutter, 18=ProfilerStatsLODBlends, 19=ProfilerStatsLayers, 20=ProfilerStatsDepth, 21=ProfilerStatsGlowMask, 22=ProfilerStatsMaterialMask, 23=ProfilerStatsPostEffects, 24=ProfilerStatsFinalize, 25=ProfilerStatsLast
+## EnableCruiseControlEvent::Response  (desc 0x1969a80, 3 values)
+0=Unhandled, 1=Accepted, 2=Rejected
+## EntityDescriptor::EntityDescriptorMainSubType  (desc 0x1951a90, 2 values)
+0=EntityDescriptor_Altair, 1=EntityDescriptor_Jack
+## EntityDescriptor::EntityDescriptorObjectSubType  (desc 0x1951a80, 10 values)
+0=EntityDescriptorObject_All, 1=EntityDescriptorObject_Weapon, 2=EntityDescriptorObject_Ladder, 3=EntityDescriptorObject_Pole, 4=EntityDescriptorObject_Rope, 5=EntityDescriptorObject_Breakable, 6=EntityDescriptorObject_Kiosk, 7=EntityDescriptorObject_Scaffold, 8=EntityDescriptorObject_HayStack, 9=EntityDescriptorObject_HidingPlace
+## EntitySpawnedActor::OnSceneEndAction  (desc 0x1902af8, 2 values)
+0=PersistActor, 1=DestroyActor
+## EventDesc::ContactType  (desc 0x1902638, 1 values)
+2147483647=INVALID_ContactID
+## EventSeed::ContactType  (desc 0x18d2698, 1 values)
+2147483647=INVALID_ContactID
+## ExecutionStep  (desc 0x190d858, 4 values)
+0=ExecutionStep_Idle, 1=ExecutionStep_In, 2=ExecutionStep_Main, 3=ExecutionStep_Out
+## FXClip::FXStopType  (desc 0x1901bac, 3 values)
+0=FXStop_DoNothing, 1=FXStop_WhenClipResolves, 2=FXStop_WhenClipEnds
+## FXCommand::CommandType  (desc 0x18ce1f0, 2 values)
+0=COMMANDTYPE_STARTFX, 1=COMMANDTYPE_STOPFX
+## FXContactSource::FXContactType  (desc 0x18f8ce8, 6 values)
+0=Ground, 1=Slope, 2=Wall, 3=Ceiling, 4=Invisible, 5=Any
+## FXPropertyType  (desc 0x18e0d10, 6 values)
+0=FXPROPTYPE_INVALID, 1=FXPROPTYPE_FLOAT, 2=FXPROPTYPE_INTEGER, 3=FXPROPTYPE_VECTOR, 4=FXPROPTYPE_QUATERNION, 5=FXPROPTYPE_TEXTURE
+## FightDamageContactType  (desc 0x196051c, 2 values)
+0=FightDamageContactType_Prediction, 1=FightDamageContactType_Resolution
+## FightTutorialClip::FightActionType  (desc 0x19a46c4, 3 values)
+0=Attack, 1=Grab, 2=Defense
+## FindCorpseMode::LocomotionType  (desc 0x19646a8, 3 values)
+0=Walk, 1=Run, 2=Sprint
+## FollowClip::FollowClipResolveType  (desc 0x19a37fc, 3 values)
+0=ResolveOnStart, 1=ResolveOnReachTarget, 2=ResolveOnStop
+## FreeRoamingCameraSettings::DistanceConstraintType  (desc 0x18de780, 3 values)
+0=DCT_None, 1=DCT_Initial, 2=DCT_Permanent
+## GenericObject::PropertyType  (desc 0x1930910, 4 values)
+0=GenericObj, 1=GenericPointer, 2=GenericReference, 3=GenericHandle
+## GoGamePlayBaseData::NavigationSpeeds  (desc 0x199e3f8, 8 values)
+0=NavigationSpeeds_WalkVerySlow, 1=NavigationSpeeds_WalkSlow, 2=NavigationSpeeds_Walk, 3=NavigationSpeeds_WalkFast, 4=NavigationSpeeds_Jog, 5=NavigationSpeeds_Run, 6=NavigationSpeeds_Sprint, 7=NavigationSpeeds_COUNT
+## GoPatternNavigationData::Direction  (desc 0x199c2f0, 2 values)
+0=Forward, 1=BackAndForth
+## GoalID  (desc 0x195fe38, 110 values)
+-1=GoalID_UNDEFINED, 0=GoalID_ActionInterpreter, 1=GoalID_DebugNav, 2=GoalID_DestinationPlanner, 3=GoalID_FollowEntity, 4=GoalID_HorseFollowMaster, 5=GoalID_StopForEasyMounting, 6=GoalID_Flee, 7=GoalID_HorseFlee, 8=GoalID_AskToSpare, 9=GoalID_Danger, 10=GoalID_PatternNavigation, 11=GoalID_Fight, 12=GoalID_FightSpectator, 13=GoalID_FightRanged, 14=GoalID_FightFlanker, 15=GoalID_FightDefensive, 16=GoalID_FightHeavyFighter, 17=GoalID_FightTutorial, 18=GoalID_Idle, 19=GoalID_PadActionInterpreter, 20=GoalID_GroundNavigation, 21=GoalID_AirNavigation, 22=GoalID_LadderNavigation, 23=GoalID_PoleNavigation, 24=GoalID_RopeNavigation, 25=GoalID_SellMerchandise, 26=GoalID_BuyMerchandise, 27=GoalID_Death, 28=GoalID_Perform, 29=GoalID_PickPocket, 30=GoalID_Positionning, 31=GoalID_Socialize, 32=GoalID_Entertain, 33=GoalID_Observe, 34=GoalID_React, 35=GoalID_InterceptEntity, 36=GoalID_Pindown, 37=GoalID_PindownStruggle, 38=GoalID_Confront, 39=GoalID_ClearPath, 40=GoalID_Search, 41=GoalID_TargetSearch, 42=GoalID_HeadManagement, 43=GoalID_Mount, 44=GoalID_Dismount, 45=GoalID_Patrol, 46=GoalID_LeaveNavZone, 47=GoalID_Oration, 48=GoalID_Rest, 49=GoalID_GroundRest, 50=GoalID_CarriyngObject, 51=GoalID_ReactToSound, 52=GoalID_Conversation, 53=GoalID_NeedWander, 54=GoalID_NeedDuty, 55=GoalID_NeedFeed, 56=GoalID_NeedRest, 57=GoalID_NeedSocialize, 58=GoalID_NeedEntertain, 59=GoalID_GamePlayBase, 60=GoalID_GamePlay, 61=GoalID_BlockOffDutyInitial, 62=GoalID_Block, 63=GoalID_BlockOffDuty, 64=GoalID_Blend, 65=GoalID_Hide, 66=GoalID_Denounce, 67=GoalID_TrapPush, 68=GoalID_TrapHarass, 69=GoalID_TrapHarassIdle, 70=GoalID_EavesDropping, 71=GoalID_PickPocketTarget, 72=GoalID_PickPocketIntro, 73=GoalID_FreeMissionHarasser, 74=GoalID_FreeMissionVictim, 75=GoalID_SimplePatrol, 76=GoalID_GuardPatrol, 77=GoalID_GuardPost, 78=GoalID_Despot, 79=GoalID_Puppet, 80=GoalID_Massacre, 81=GoalID_InformerEscort, 82=GoalID_Delay, 83=GoalID_TargetSuspicion, 84=GoalID_ProtectEntity, 85=GoalID_TargetEscape, 86=GoalID_TargetTaunt, 87=GoalID_FreeMissionInformationGiver, 88=GoalID_Thrown, 89=GoalID_Ladder_HandleUsers, 90=GoalID_Enticer, 91=GoalID_GamePlayHandler, 92=GoalID_LadderSetup, 93=GoalID_PoleSetup, 94=GoalID_RopeSetup, 95=GoalID_ObjectNavigation, 96=GoalID_Pause, 97=GoalID_TargetEnticer, 98=GoalID_PickPocketHandler, 99=GoalID_ProximityHandler, 100=GoalID_PushHandler, 101=GoalID_PersuasionHandler, 102=GoalID_GuardCircleVictim, 103=GoalID_GuardCircleObserver, 104=GoalID_GuardCircleTormentor, 105=GoalID_Templar, 106=GoalID_DebugInputInterpreter, 107=GoalID_TestNavigation, 108=GoalID_MAXGoalID
+## GrabDirection  (desc 0x195f5d8, 6 values)
+0=GrabDirection_Front, 1=GrabDirection_Left, 2=GrabDirection_Right, 3=GrabDirection_Back, 4=GrabDirection_Max, 5=GrabDirection_Pull
+## GroundIKState  (desc 0x18c38e8, 6 values)
+0=FIK_DELAYTOFADEIN, 1=FIK_FADEIN, 2=FIK_RUNNING, 3=FIK_DELAYTOFADEOUT, 4=FIK_FADEOUT, 5=FIK_STOPPED
+## GuidanceObjectSubType  (desc 0x18e087c, 9 values)
+0=GuidanceObjectSubTypeNone, 1=GuidanceObjectSubTypeLedgeGrab, 2=GuidanceObjectSubTypeBeam, 3=GuidanceObjectSubTypeLadder, 4=GuidanceObjectSubTypePole, 5=GuidanceObjectSubTypeRope, 6=GuidanceObjectSubTypeSurface, 7=GuidanceObjectSubTypeQuadruped, 8=GuidanceObjectSubTypeKiosk
+## GuidanceSystemGenerationType  (desc 0x18d492c, 5 values)
+0=GuidanceSystemGenerationTypeUnknow, 1=GuidanceSystemGenerationTypeNone, 2=GuidanceSystemGenerationTypeInertComponent, 3=GuidanceSystemGenerationTypeRigidBody, 4=GuidanceSystemGenerationTypeBehaviour
+## GuidanceSystemManager::Constants  (desc 0x18c8f7c, 1 values)
+24=MANAGER_ID
+## GuidanceSystemOptimizer::CollisionType  (desc 0x18fca38, 2 values)
+0=Dynamic, 1=Static
+## GuidanceZoneCutType  (desc 0x18e0650, 3 values)
+0=GuidanceZoneCutNone, 1=GuidanceZoneCutInclude, 2=GuidanceZoneCutExclude
+## HorseSpeedCameraActivator::HorseSpeed  (desc 0x1997dac, 7 values)
+0=HorseSpeed_Idle, 1=HorseSpeed_Walk, 2=HorseSpeed_Trot, 3=HorseSpeed_Run, 4=HorseSpeed_FastRun, 5=HorseSpeed_InAir, 6=HorseSpeed_Rearing
+## HumanClimbData::ClimbSubState  (desc 0x1997854, 1 values)
+0=SubState_Wait
+## HumanClimbData::EntryPoseType  (desc 0x1997844, 2 values)
+0=EntryPoseType_1M, 1=EntryPoseType_2M
+## HumanClimbData::EntryType  (desc 0x1997864, 4 values)
+0=EntryType_Default, 1=EntryType_FromLedge, 2=EntryType_FromLedgeParallelJump, 3=EntryType_FromGround
+## HumanData::AnimSyncState  (desc 0x19549dc, 4 values)
+0=AnimSyncState_None, 1=AnimSyncState_Active, 2=AnimSyncState_ShouldFall, 3=AnimSyncState_ShouldDie
+## HumanData::HumanDeathState  (desc 0x19549cc, 5 values)
+0=HumanDeathState_NotDead, 1=HumanDeathState_Agonizing, 2=HumanDeathState_KO, 3=HumanDeathState_Dead, 4=HumanDeathState_DeathHeight
+## HumanData::WeaponState  (desc 0x19549ec, 4 values)
+0=WeaponState_None, 1=WeaponState_Sheathed, 2=WeaponState_Grabbed, 3=WeaponState_Unsheathed
+## HumanFXPack::ConstantID  (desc 0x1996dac, 9 values)
+-1097616740=CAMERASHAKE_ASSASSINFALL_INTENSITY_CONSTID, 1181188288=SWORDHIT_WEAPONIMPACT_LOCALPOS_CONSTID, 1181188288=SWORDHIT_GLOBALPOSITION_CONSTID, 691535044=SWORDHIT_GLOBALROTATION_CONSTID, 1181188288=UNARMEDHIT_GLOBALPOSITION_CONSTID, -1097616740=PROJECTILE_VELOCITY_CONSTID, 1181188288=PROJECTILE_GLOBALPOSITION_CONSTID, 1181188288=BLOOD_LOCALOFFSET_CONSTID, 691535044=BLOOD_LOCALROTATION_CONSTID
+## HumanGroundData::HumanGroundSubState  (desc 0x19961c8, 6 values)
+0=SubState_Movement, 1=SubState_Fight, 2=SubState_FreeRun, 3=SubState_OrientedMove, 4=SubState_Hurt, 5=SubState_ObstacleCollision
+## HumanGroundData::MvtDivisions  (desc 0x19961b8, 9 values)
+0=MvtDivision_WaitLow, 1=MvtDivision_WaitHigh, 2=MvtDivision_WalkVerySlow, 3=MvtDivision_Walk, 4=MvtDivision_Jog, 5=MvtDivision_Run, 6=MvtDivision_Crouch, 7=MvtDivision_MAX, 8=MvtDivision_Invalid
+## HumanGroundData::ObstacleLeanType  (desc 0x19961a8, 2 values)
+0=ObstacleLeanType_Hands, 1=ObstacleLeanType_Feet
+## HumanHayStackEntryType  (desc 0x195f010, 6 values)
+-1=HumanHayStackEntryType_Invalid, 0=HumanHayStackEntryType_Top, 1=HumanHayStackEntryType_FreeStep, 2=HumanHayStackEntryType_Ground, 3=HumanHayStackEntryType_SideJump, 4=HumanHayStackEntryType_MAX
+## HumanInAirData::FallOrigin  (desc 0x199587c, 4 values)
+0=FallOrigin_Ground, 1=FallOrigin_Climb, 2=FallOrigin_HangWall, 3=FallOrigin_HangFree
+## HumanInAirData::JumpType  (desc 0x199588c, 3 values)
+0=JumpType_Straight, 1=JumpType_1m, 2=JumpType_3m5m
+## HumanInventorySlotType  (desc 0x195eda4, 17 values)
+0=HumanInventorySlotType_Default, 1=HumanInventorySlotType_RightHand, 2=HumanInventorySlotType_LeftHand, 3=HumanInventorySlotType_Sword, 4=HumanInventorySlotType_LargeSword, 5=HumanInventorySlotType_Dagger, 6=HumanInventorySlotType_Shield, 7=HumanInventorySlotType_Bow, 8=HumanInventorySlotType_ThrownDagger, 9=HumanInventorySlotType_Arrow, 10=HumanInventorySlotType_Item, 11=HumanInventorySlotType_GenericObject01, 12=HumanInventorySlotType_GenericObject02, 13=HumanInventorySlotType_GenericObject03, 14=HumanInventorySlotType_GenericObject04, 15=HumanInventorySlotType_GenericObject05, 16=HumanInventorySlotType_MAX
+## HumanKioskEntrySide  (desc 0x195ee68, 6 values)
+-1=HumanKioskEntrySide_Invalid, 0=HumanKioskEntrySide_FrontLeft, 1=HumanKioskEntrySide_FrontRight, 2=HumanKioskEntrySide_LateralLeft, 3=HumanKioskEntrySide_LateralRight, 4=HumanKioskEntrySide_MAX
+## HumanKioskEntryType  (desc 0x195ee10, 4 values)
+-1=HumanKioskEntryType_Invalid, 0=HumanKioskEntryType_FreeStep, 1=HumanKioskEntryType_HangKnee, 2=HumanKioskEntryType_MAX
+## HumanLadderData::EntryType  (desc 0x1995308, 5 values)
+0=EntryType_FromGround, 1=EntryType_FromAirStraight, 2=EntryType_FromAirInclined, 3=EntryType_FromWalling, 4=EntryType_FromClimb
+## HumanLadderData::InclinationType  (desc 0x1995318, 3 values)
+0=Inclination_Vertical, 1=Inclination_Horizontal, 2=InclinationType_MAX
+## HumanLadderData::MvtAnimState  (desc 0x1995328, 20 values)
+0=MvtAnimState_WaitLow, 1=MvtAnimState_WaitHigh, 2=MvtAnimState_ClimbLow_Up, 3=MvtAnimState_ClimbLow_Down, 4=MvtAnimState_ClimbHigh_Up, 5=MvtAnimState_ClimbHigh_Down, 6=MvtAnimState_Revolve, 7=MvtAnimState_EnterFromGround_Low, 8=MvtAnimState_EnterFromGround_High, 9=MvtAnimState_EnterFromTop_Low, 10=MvtAnimState_EnterFromTop_High, 11=MvtAnimState_ExitToGround_Low, 12=MvtAnimState_ExitToGround_High, 13=MvtAnimState_ExitToTop_Low, 14=MvtAnimState_ExitToTop_High, 15=MvtAnimState_Release_Low, 16=MvtAnimState_Release_High, 17=MvtAnimState_Jump_Low, 18=MvtAnimState_Jump_High, 19=MvtAnimState_MAX
+## HumanLadderData::MvtDivisions  (desc 0x19952f8, 5 values)
+0=MvtDivision_WaitLow, 1=MvtDivision_WaitHigh, 2=MvtDivision_ClimbLow, 3=MvtDivision_ClimbHigh, 4=MvtDivision_MAX
+## HumanLedgeData::GraspType  (desc 0x1994e88, 7 values)
+0=GraspType_HangKnee, 1=GraspType_Climb, 2=GraspType_HangWaist, 3=GraspType_HangWall, 4=GraspType_HangFree_1Hand, 5=GraspType_HangFree_2Hands, 6=GraspType_MAX
+## HumanLedgeData::HandPassOverSubState  (desc 0x1994e48, 2 values)
+0=HandPassOverSubState_Entry, 1=HandPassOverSubState_PassOver
+## HumanLedgeData::HangFreeReceptionType  (desc 0x1994e98, 4 values)
+0=HangFreeReceptionType_None, 1=HangFreeReceptionType_Front, 2=HangFreeReceptionType_Straight, 3=HangFreeReceptionType_Back
+## HumanLedgeData::LedgeHangType  (desc 0x1994e68, 4 values)
+0=LedgeHangType_Wall, 1=LedgeHangType_Free, 2=LedgeHangType_WallFree, 3=LedgeHangType_MAX
+## HumanLedgeData::LedgeSubState  (desc 0x1994e38, 15 values)
+0=SubState_Entry, 1=SubState_Movement, 2=SubState_TurnCorner, 3=SubState_HandPlacement, 4=SubState_Pullup, 5=SubState_ReboundTransition, 6=SubState_HangWallReception, 7=SubState_HangFreeReception, 8=SubState_SwingReception, 9=SubState_TransitionInFromClimb, 10=SubState_TransitionInFromLadder, 11=SubState_PullDown, 12=SubState_HandPassOver, 13=SubState_Grasp, 14=SubState_ParallelJump
+## HumanLedgeData::NextHandToMove  (desc 0x1994e18, 3 values)
+0=NextHand_None, 1=NextHand_Left, 2=NextHand_Right
+## HumanLedgeData::PullDownPart  (desc 0x1994e28, 3 values)
+0=PullDownPart_Orientation, 1=PullDownPart_PullDown, 2=PullDownPart_Max
+## HumanLedgeData::PullDownSide  (desc 0x1994e78, 5 values)
+0=PullDownSide_Front, 1=PullDownSide_Back, 2=PullDownSide_Left, 3=PullDownSide_Right, 4=PullDownSide_Max
+## HumanLedgeData::PullDownSubState  (desc 0x1994e58, 5 values)
+0=PullDownSubState_None, 1=PullDownSubState_Orientation, 2=PullDownSubState_Descent, 3=PullDownSubState_Reception, 4=PullDownSubState_ReleaseToInAir
+## HumanLedgeData::PullDownType  (desc 0x1994ea8, 6 values)
+0=PullDownType_Ground_Soft_EdgeStop, 1=PullDownType_Ground_Soft_Wait, 2=PullDownType_Ground_Hard, 3=PullDownType_Beam_Soft, 4=PullDownType_HandPassOver, 5=PullDownType_Max
+## HumanNarrowObjectData::FreeRunSubState  (desc 0x1994688, 2 values)
+0=FreeRunSubState_EntryB, 1=FreeRunSubState_EntrySide
+## HumanNarrowObjectData::LeanState  (desc 0x1994678, 2 values)
+0=LeanState_FaceLeft, 1=LeanState_FaceRight
+## HumanNarrowObjectData::NarrowEdgeState  (desc 0x19946a8, 4 values)
+0=EdgeState_Invalid, 1=EdgeState_Front, 2=EdgeState_Right, 3=EdgeState_Left
+## HumanNarrowObjectData::NarrowObjectSubState  (desc 0x1994698, 10 values)
+0=SubState_Movement, 1=SubState_Beam, 2=SubState_BeamEntry, 3=SubState_BeamReception, 4=SubState_PilotisReception, 5=SubState_Edge, 6=SubState_FreeRun, 7=SubState_Lean, 8=SubState_CrowdRun, 9=SubState_ObstacleCollision
+## HumanNarrowObjectData::PilotisEntryType  (desc 0x1994668, 3 values)
+0=PilotisEntryType_FromFreeStep, 1=PilotisEntryType_FromInAir, 2=PilotisEntryType_FromJumpImpulsionStart
+## HumanPoleData::EntryType  (desc 0x19941a0, 3 values)
+0=EntryType_FromGround, 1=EntryType_FromAirStraight, 2=EntryType_FromAirInclined
+## HumanPoleData::InclinationType  (desc 0x19941d0, 4 values)
+0=Inclination_Light, 1=Inclination_Med, 2=Inclination_High, 3=InclinationType_MAX
+## HumanPoleData::MvtAnimState  (desc 0x19941c0, 11 values)
+0=MvtAnimState_WaitLow, 1=MvtAnimState_WaitHigh, 2=MvtAnimState_ClimbLow_Up, 3=MvtAnimState_ClimbLow_Down, 4=MvtAnimState_ClimbHigh_Up, 5=MvtAnimState_ClimbHigh_Down, 6=MvtAnimState_TurnLow_Left, 7=MvtAnimState_TurnHigh_Left, 8=MvtAnimState_TurnLow_Right, 9=MvtAnimState_TurnHigh_Right, 10=MvtAnimState_MAX
+## HumanPoleData::MvtDivisions  (desc 0x19941b0, 5 values)
+0=MvtDivision_WaitLow, 1=MvtDivision_WaitHigh, 2=MvtDivision_ClimbLow, 3=MvtDivision_ClimbHigh, 4=MvtDivision_MAX
+## HumanRidingData::RidingSubState  (desc 0x1993cf8, 4 values)
+0=SubState_None, 1=SubState_ClimbUp, 2=Substate_Riding, 3=Substate_ClimbDown
+## HumanSkeletonStyler::HipsMethod  (desc 0x19939a0, 2 values)
+0=HipsMethod_Override, 1=HipsMethod_Multiply
+## HumanSpeedCameraActivator::HumanSpeed  (desc 0x19937e0, 6 values)
+0=HumanSpeed_WalkVerySlow, 1=HumanSpeed_WalkSlow, 2=HumanSpeed_Walk, 3=HumanSpeed_Jog, 4=HumanSpeed_Run, 5=HumanSpeed_Sprint
+## HumanWallingData::WallingSide  (desc 0x1993578, 2 values)
+0=WallingSide_Left, 1=WallingSide_Right
+## HumanWallingData::WallingSubState  (desc 0x1993598, 8 values)
+0=SubState_None, 1=SubState_WallingEntryA, 2=SubState_WallingEntryB, 3=SubState_WallingVertical, 4=SubState_WallingHorizontal, 5=SubState_ReboundTransition, 6=SubState_WallingVerticalEnd, 7=SubState_WallStep
+## HumanWallingData::WallingType  (desc 0x1993588, 2 values)
+0=WallingType_Vertical, 1=WallingType_Horizontal
+## LandingEvent::LandingType  (desc 0x19919d0, 4 values)
+0=LandingType_Safe, 1=LandingType_SmallDamage, 2=LandingType_HeavyDamage, 3=LandingType_Fatal
+## LeapOfFaithClip::JumpClipResolveType  (desc 0x1991728, 2 values)
+0=ResolveOnJumpStarted, 1=ResolveOnJumpEnded
+## MISceneSeq_State  (desc 0x195e644, 3 values)
+0=MISceneSeq_State_Init, 1=MISceneSeq_State_Run, 2=MISceneSeq_State_Finalize
+## MIStepSeq_SequenceMode  (desc 0x195e418, 2 values)
+0=MIStepSeq_Mode_Serial, 1=MIStepSeq_Mode_Concurrent
+## MaterialPropertyPathNodeSolver::SolveMode  (desc 0x1943748, 2 values)
+0=SearchForAMatch, 1=AnyMaterial
+## MetaLinkTypeID  (desc 0x190d7d4, 9 values)
+0=MetaLinkTypeID_DirectLink, 1=MetaLinkTypeID_JumpLink, 2=MetaLinkTypeID_ObjectDirectLink, 3=MetaLinkTypeID_ObjectJumpLink, 4=MetaLinkTypeID_ObjectToObjectJumpLink, 5=MetaLinkTypeID_CrowdFlowLink, 6=MetaLinkTypeID_JumpLinkUniDir_0_1, 7=MetaLinkTypeID_JumpLinkUniDir_1_0, 15=MetaLinkTypeID_UNDEFINED
+## MissionManagerState  (desc 0x18df640, 3 values)
+0=MissionManagerState_Running, 1=MissionManagerState_Stop, 2=MissionManagerState_Paused
+## NPCBehaviorData::NavigationMode  (desc 0x1911008, 2 values)
+0=Basic, 1=FreeRunner
+## NPCRestType  (desc 0x195be24, 2 values)
+0=RestOnGround, 1=RestOnBench
+## NavMeshGenerationEventType  (desc 0x190d53c, 5 values)
+-1=NavMeshGenerationEventType_UNDEFINED, 0=NavMeshGenerationEventType_Register, 1=NavMeshGenerationEventType_Link, 2=NavMeshGenerationEventType_LinkUpdate, 3=NavMeshGenerationEventType_MAX
+## NavMeshTriangle::NMTDisplayType  (desc 0x1910a70, 2 values)
+0=NMTDISPLAY_BASIC, 1=NMTDISPLAY_FULL
+## NavigationContextData::NavSpeed  (desc 0x1910920, 6 values)
+0=NavSpeed_NavigationDriven, 1=NavSpeed_Sneak, 2=NavSpeed_Walk, 3=NavSpeed_Jog, 4=NavSpeed_Run, 5=NavSpeed_Sprint
+## NavigationContextData::NavStyleType  (desc 0x1910910, 3 values)
+0=NavStyle_Stealth, 1=NavStyle_Normal, 2=NavStyle_Aggressive
+## NavigationContextID  (desc 0x195bdb0, 16 values)
+-3=NavContextID_NO_TRANSITION, -2=NavContextID_INITIALIZATION, -1=NavContextID_NOT_DEFINED, 0=NavContextID_CtxCasualNav, 1=NavContextID_CtxRemoteNav, 2=NavContextID_CtxFollowNav, 3=NavContextID_CtxFightDefaultNav, 4=NavContextID_CtxChargeNav, 5=NavContextID_CtxFlockNav, 6=NavContextID_CtxWanderNav, 7=NavContextID_CtxFleeNav, 8=NavContextID_CtxRouteTestNav, 9=NavContextID_CtxInterceptNav, 10=NavContextID_CtxDeathNav, 11=NavContextID_CtxCliqueFormationNav, 12=NavContextID_CtxSearchNav
+## NavigationErrorEvent::SubType  (desc 0x191045c, 11 values)
+0=Undefined, 1=NoMeshToNavigateOn, 2=PathSearchIsLooping, 3=StartPositionOutsideNavMesh, 4=DestinationPositionOutsideNavMesh, 5=UnableToLinkStartPosToWaypoints, 6=UnableToLinkDestPosToWaypoints, 7=NoPathToDestination, 8=TooManyCharacterConstraints, 9=DataUnloadedByDynamicLoading, 10=FleeDirectionChanged
+## NavigationUpdateEvent::SubType  (desc 0x191039c, 7 values)
+0=Undefined, 1=PathFound, 2=ReachedDest, 3=ReachedInsertedDest, 4=ReachedTmpDest, 5=ReachedTmpInsertedDest, 6=ReachedFollowRadius
+## NavigationZoneActivation  (desc 0x190d294, 3 values)
+0=NZA_AlwaysOff, 1=NZA_Interruptible, 2=NZA_AlwaysOn
+## NavigationZoneCharacterFilter  (desc 0x190d2d4, 4 values)
+0=NZCF_Everybody, 1=NZCF_NoHorse, 2=NZCF_NoPeasant, 3=NZCF_HorseOnly
+## OnSceneEnd  (desc 0x195ab18, 4 values)
+0=PersistActor, 1=ReleaseActor, 2=DestroyActor, 3=ReleaseAndForgetActor
+## OptionsFocusableHandler_m::GameOptionControlType  (desc 0x196f6a8, 2 values)
+0=optButton, 1=optSlider
+## Pad::PadButton  (desc 0x192df78, 17 values)
+0=Button1, 1=Button2, 2=Button3, 3=Button4, 4=PadDown, 5=PadLeft, 6=PadUp, 7=PadRight, 8=Select, 9=Start, 10=ShoulderLeft1, 11=ShoulderLeft2, 12=ShoulderRight1, 13=ShoulderRight2, 14=StickLeft, 15=StickRight, 16=NbButtons
+## Pad::PadStick  (desc 0x192df88, 3 values)
+0=Left, 1=Right, 2=NbSticks
+## PadInputConditionClip::AnalogDirection  (desc 0x19808d8, 6 values)
+0=Analog_Front, 1=Analog_Back, 2=Analog_Left, 3=Analog_Right, 4=Analog_None, 5=Analog_Any
+## PadInputConditionClip::ButtonAction  (desc 0x19808b8, 4 values)
+0=JustPressed, 1=JustReleased, 2=IsPressed, 3=HeldAtLeast
+## PadInputConditionClip::DetectionMode  (desc 0x19808c8, 5 values)
+0=DetectButtons, 1=DetectAssassinButtons, 2=DetectLeftAnalog, 3=DetectRightAnalog, 4=DetectMenuButtons
+## ParticleEmitter::Step  (desc 0x19420e0, 5 values)
+0=STEP_BIRTH, 1=STEP_BEGINLIFE, 2=STEP_ENDLIFE, 3=STEP_DEATH, 4=STEPCOUNT
+## PinDownAction  (desc 0x195b524, 5 values)
+-1=PinDownAction_Invalid, 0=PinDownAction_Grabbed, 1=PinDownAction_GrabbedAndPunched, 2=PinDownAction_Release, 3=PinDownAction_Exit
+## PlayState  (desc 0x193b030, 3 values)
+0=PLAYSTATE_PLAY, 1=PLAYSTATE_STOP, 2=PLAYSTATE_PAUSE
+## PresentationEvent::ActorStateID  (desc 0x190e340, 70 values)
+0=ActorStateID_NONE, 1=ActorStateID_Narrow, 2=ActorStateID_Climb, 3=ActorStateID_Fight, 4=ActorStateID_AnyAttack, 5=ActorStateID_QuickAttack, 6=ActorStateID_StrongAttack, 7=ActorStateID_ComboAttack, 8=ActorStateID_ComboKill, 9=ActorStateID_Block, 10=ActorStateID_Deflect, 11=ActorStateID_CounterAttack, 12=ActorStateID_CounterDodge, 13=ActorStateID_Grab, 14=ActorStateID_GrabBreak, 15=ActorStateID_DefenseBreak, 16=ActorStateID_GetAssassinated, 17=ActorStateID_StealthAssassinate, 18=ActorStateID_Assassinate, 19=ActorStateID_AirAssassinateFromStep, 20=ActorStateID_AirAssassinateFromBeam, 21=ActorStateID_AirAssassinateFromClimb, 22=ActorStateID_PindownGrabbed, 23=ActorStateID_FreeFalling, 24=ActorStateID_Jumping, 25=ActorStateID_JumpingOnPlace, 26=ActorStateID_Landing, 27=ActorStateID_Ladder, 28=ActorStateID_Kiosk, 29=ActorStateID_Crouch, 30=ActorStateID_Eavesdrop, 31=ActorStateID_Pickpocket, 32=ActorStateID_Unbalanced, 33=ActorStateID_Walling, 34=ActorStateID_Rope, 35=ActorStateID_FirstPersonView, 36=ActorStateID_EagleVision, 37=ActorStateID_InHayStack, 38=ActorStateID_Debug, 39=ActorStateID_Roll, 40=ActorStateID_Beam, 41=ActorStateID_LeapOfFaith, 42=ActorStateID_Bench, 43=ActorStateID_Pole, 44=ActorStateID_Swinging, 45=ActorStateID_Drown, 46=ActorStateID_Ghost, 47=ActorStateID_LongFall, 48=ActorStateID_BrokenStructure, 49=ActorStateID_ThrowRock, 50=ActorStateID_Chased, 51=ActorStateID_ThrowArrow, 52=ActorStateID_Blending, 53=ActorStateID_VigilanteBlock, 54=ActorStateID_MilitaryInOpenConflic, 55=ActorStateID_Walk, 56=ActorStateID_Run, 57=ActorStateID_Pray, 58=ActorStateID_Push, 59=ActorStateID_ClimbTopLedge, 60=ActorStateID_LadderTop, 61=ActorStateID_Glitch, 62=ActorStateID_StandingOnLedge, 63=ActorStateID_ExitWhiteRoom, 64=ActorStateID_GrabAndThrow, 65=ActorStateID_Sprint, 66=ActorStateID_AssassinationCut, 67=ActorStateID_CameraReset, 68=ActorStateID_HorseDismount, 69=ActorStateID_Pilotis
+## ProgressionTypeEnum  (desc 0x18de3a4, 4 values)
+0=PT_AlongPath, 1=PT_Distance, 2=PT_NearPlayer, 3=PT_Time
+## PropertyPathNode::NodeCondition  (desc 0x192ea60, 8 values)
+0=NC_NOCONDITION, 1=NC_CLASSID, 2=NC_OBJECTID, 3=NC_AND, 4=NC_NOTAND, 5=NC_ANDEQUAL, 6=NC_EQUAL, 7=NC_DIFFERENT
+## PushDistance  (desc 0x1954b70, 2 values)
+0=PushDistance_Default, 1=PushDistance_NearOnly
+## PushResponse  (desc 0x195aee4, 3 values)
+0=PushResponse_Unhandled, 1=PushResponse_Accepted, 2=PushResponse_Failed
+## PushStateEvent::Response  (desc 0x197c034, 3 values)
+0=Unhandled, 1=Accepted, 2=Rejected
+## PushStrength  (desc 0x1954b48, 5 values)
+0=PushStrength_Gently, 1=PushStrength_Balance, 2=PushStrength_BalanceStrong, 3=PushStrength_Fall, 4=PushStrength_DoNotPush
+## QuadrupedData::QuadrupedClimbType  (desc 0x197be28, 6 values)
+0=Unknown, 1=FrontLeft, 2=FrontRight, 3=Left, 4=Right, 5=Back
+## ReachHighPointEvent::ReachHighPointEventSlot  (desc 0x195569c, 5 values)
+0=ReachHighPointEventSlot_EagleLands, 1=ReachHighPointEventSlot_EagleTakeOff, 2=ReachHighPointEventSlot_HighpointReached, 3=ReachHighPointEventSlot_Enable, 4=ReachHighPointEventSlot_Disable
+## ReactivePropEvent::ReactivePropEventSlot  (desc 0x1955c70, 2 values)
+0=ReactivePropEventSlot_Alarm, 1=ReactivePropEventSlot_Hide
+## ReactivePropEvent::ReactivePropEventType  (desc 0x1955c60, 2 values)
+0=ReactivePropEventType_Enter, 1=ReactivePropEventType_Exit
+## Resistance  (desc 0x18cf254, 4 values)
+0=Resistance_Fragile, 1=Resistance_Normal, 2=Resistance_Solid, 3=Resistance_Indestructible
+## RollBoneModifier::RollBoneType  (desc 0x18ee898, 4 values)
+0=RBTYPE_LEFTUPPERARM, 1=RBTYPE_LEFTFOREARM, 2=RBTYPE_RIGHTUPPERARM, 3=RBTYPE_RIGHTFOREARM
+## RopeComponentNew::TensorType  (desc 0x18ede58, 2 values)
+0=Sphere, 1=Box
+## RopeInteractionHandler::AttachPoint  (desc 0x18edc68, 6 values)
+0=LeftHand, 1=LeftLeg, 2=RightHand, 3=RightLeg, 4=Legs, 5=AttachPointSize
+## RopeInteractionHandler::InteraractionType  (desc 0x18edc78, 2 values)
+0=HorizontalRope, 1=VerticalRope
+## SceneActorSourceType  (desc 0x195aad8, 8 values)
+0=Source_None, 1=Source_SceneActorSourceList, 2=Source_ExternalSpawner, 3=Source_FromCrowd, 4=Source_SpecifiedObject, 5=Source_GameplayEnticer, 6=Source_SceneParentEntity, 7=Source_SpawnerComponent
+## StateID  (desc 0x195aa24, 23 values)
+-1=StateID_UNDEFINED, 0=StateID_PadControlled, 1=StateID_Wander, 2=StateID_Follower, 3=StateID_QuadrupedMounted, 4=StateID_Wait, 5=StateID_SelfPreservation, 6=StateID_RouteTest, 7=StateID_Fight, 8=StateID_NeedSimulation, 9=StateID_Death, 10=StateID_Observe, 11=StateID_Warning, 12=StateID_Callout, 13=StateID_Reaction, 14=StateID_QuadrupedReaction, 15=StateID_Search, 16=StateID_GamePlay, 17=StateID_Riding, 18=StateID_Patrol, 19=StateID_TargetEscape, 20=StateID_Tutorial, 21=StateID_MAXStateID
+## StepPhase  (desc 0x18d9f44, 9 values)
+0=STEPPHASE_WALK_DOUBLE_LEFT_MOVE, 1=STEPPHASE_WALK_SINGLE_LEFT_MOVE, 2=STEPPHASE_WALK_DOUBLE_RIGHT_MOVE, 3=STEPPHASE_WALK_SINGLE_RIGHT_MOVE, 4=STEPPHASE_RUN_SINGLE_LEFT_MOVE, 5=STEPPHASE_RUN_FLIGHT_LEFT_PASSING, 6=STEPPHASE_RUN_SINGLE_RIGHT_MOVE, 7=STEPPHASE_RUN_FLIGHT_RIGHT_PASSING, 8=STEPPHASE_INVALID
+## SweetCameraSettings::DistanceConstraintType  (desc 0x18e9a98, 2 values)
+0=DCT_None, 1=DCT_Initial
+## TargetEscapeInteractionObject::InteractionType  (desc 0x196c764, 3 values)
+0=Interaction_Push, 1=Interaction_Shoot, 2=Interaction_Break
+## TargetingCameraStateEvent::TargetingCameraState  (desc 0x196bff8, 2 values)
+0=TargetingCameraState_MinimalMovement, 1=TargetingCameraState_FreeLook
+## TrapControlEvent::TrapControlType  (desc 0x196ab98, 6 values)
+0=TRAPCONTROLTYPEID_UnKnown, 1=TRAPCONTROLTYPEID_Rest, 2=TRAPCONTROLTYPEID_StandUp, 3=TRAPCONTROLTYPEID_OratorNearBy, 4=TRAPCONTROLTYPEID_OratorEndDistraction, 5=TRAPCONTROLTYPEID_EavesdroppingSuccessful
+## VocalFamily  (desc 0x1958db8, 26 values)
+0=VocalFamily_None, 1=VocalFamily_Warning_FallFromHigh, 2=VocalFamily_Warning_Climbing, 3=VocalFamily_Surprised_FallFromHigh, 4=VocalFamily_Wowed_Climbing, 5=VocalFamily_React_WeaponLock, 6=VocalFamily_React_Push, 7=VocalFamily_React_Nonfatalhit, 8=VocalFamily_React_Proximity, 9=VocalFamily_Flee_WeaponLock, 10=VocalFamily_Flee_Push, 11=VocalFamily_Flee_Nonfatalhit, 12=VocalFamily_Provoke_Push, 13=VocalFamily_Confront_Push, 14=VocalFamily_Confront_Proximity, 15=VocalFamily_Careful_Push, 16=VocalFamily_Careful_Nonfatalhit, 17=VocalFamily_Sneakout_Push, 18=VocalFamily_Alert, 19=VocalFamily_Suspicious, 20=VocalFamily_Fistfight_Nonfatalhit, 21=VocalFamily_Swordfight_WeaponLock, 22=VocalFamily_Resolve_WeaponLock, 23=VocalFamily_Resolve_Proximity, 24=VocalFamily_Wander, 25=VocalFamily_MAX
+## WalkAndLookAtMode::WalkAndLookAtType  (desc 0x19643e0, 2 values)
+0=Undefined, 1=Normal
+## WalkabilityTypeID  (desc 0x190ce9c, 7 values)
+-1=WalkabilityTypeID_UNDEFINED, 0=WalkabilityTypeID_Impossible, 1=WalkabilityTypeID_Difficult, 2=WalkabilityTypeID_Full_NoSpawn, 3=WalkabilityTypeID_Full, 4=WalkabilityTypeID_IgnoredByNavMesh, 5=WalkabilityTypeID_MAXWalkabilityTypeID
+## WorldArea::JumpLinkRange  (desc 0x18d5450, 2 values)
+0=JumpLinkRange_Normal, 1=JumpLinkRange_Extended
