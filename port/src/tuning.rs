@@ -53,16 +53,18 @@ pub const OVERDROP: f32 = 5.0;
 /// Landing damage by fall height (from apex): heavy > 6.3 m, fatal > 7.0 m. ComputeLandingType 0xE00FE0
 pub const FALL_HEAVY: f32 = 6.3;
 pub const FALL_FATAL: f32 = 7.0;
-/// Total drop > 3 m plays a roll + camera shake, else soft landing. SetupToGround_Landing 0xE05940
+/// Total drop > 3 m plays the damage / damage-roll landing + camera shake (drop − 3)/7, else the soft/hard
+/// landing blend. SetupToGround_Landing 0xE05940 (`player::jump_blend::landing`)
 pub const ROLL_DROP: f32 = 3.0;
 
-/// PLACEHOLDER jump "clip": duration = a + b·distance, apex = c + d·distance. The real game plays
-/// takeoff/flight/landing clips chosen by Human__ComputeJumpAnimBlend 0xB1EC40.
+/// PLACEHOLDER jump-at-a-ledge "clip" (only for hang targets; every other jump plays the game's takeoff +
+/// flight items, `player::jump_blend`): duration = a + b·distance, apex = c + d·distance.
 pub const JUMP_DUR_BASE: f32 = 0.45;
 pub const JUMP_DUR_PER_M: f32 = 0.06;
 pub const JUMP_APEX_BASE: f32 = 0.6;
 pub const JUMP_APEX_PER_M: f32 = 0.1;
-/// PLACEHOLDER untargeted "free jump" (IHumanGround vt28): nominal forward distance, m.
+/// PORT: jump distance when no target is in range (the game always jumps to a target; vt28 resolves one,
+/// 0xD832F0). The jump itself uses the game's free-step blend.
 pub const FREE_JUMP_DISTANCE: f32 = 2.5;
 
 // ---------------------------------------------------------------- jump targets (RE/01 §7b)
@@ -73,6 +75,8 @@ pub const TARGET_MIN_DZ: f32 = -3.0;
 pub const GROUND_MAX_UP: f32 = 1.3;
 pub const GROUND_FAR: f32 = 7.0;
 /// Landing point is placed this far inside a roof edge. PLACEHOLDER (game uses the guidance contact).
+/// Ground loss → fall type 0–6 (0xD8C380): height < 1 (or < 2 with probe type 1) → 0/1, 2..8 with probe
+/// type 1 → 2/3, else 4/6; the faster type at a horizontal speed ≥ 2.5 m/s.
 pub const LAND_INSET: f32 = 0.45;
 
 // ---------------------------------------------------------------- ledge (RE/03 §7)

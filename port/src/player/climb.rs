@@ -340,7 +340,7 @@ pub fn update_climb(
                 InAirEntry::FreeJump { from: body.feet, dir: n, speed_param: 0.5 }
             } else {
                 // release (StartRelease 0xDE96A0 → InAir, FallOrigin_Climb)
-                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: FallOrigin::Climb }
+                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: FallOrigin::Climb, speed_param: 0.0 }
             };
             switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
             continue;

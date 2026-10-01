@@ -330,7 +330,7 @@ IHumanGround vt128/vt120, and Y-button adds/removes `dt` (dword_192DDA8 = frame 
 * Guidance probes on IHuman (`a2`): vt56/64/68/76/132/136/140/152 (radius 0.75, height 0.45, cone
   100° / 180°), results passed to IHumanGround:
   * vt24 `JumpToGuidanceTarget(target, dist, 0)` (high profile + jump buffer + stick > 0.35)
-  * vt28 free jump (no target), vt108 jump to ledge/handhold, vt36 jump onto nearby target (static jump when stick idle, high profile, buffer < 0.5 s)
+  * vt28 jump to a target of a given type (0xD832F0: resolves the type, then vt24 — there is no target-less jump, RE/04 §4.1.1), vt108 jump to ledge/handhold, vt36 jump onto nearby target (static jump when stick idle, high profile, buffer < 0.5 s)
   * vt112/116 wall-run ("walling") check & start, requires ability bit (D32580) and |stick angle| < 60°
   * vt736/740 climb/grab wall (`740(target, highProfile?1:0)`), vt744/748 high obstacle (min height 5.0)
   * vt764/768 climb-start (requires ability D325C0), vt840/844 (button 3 action)

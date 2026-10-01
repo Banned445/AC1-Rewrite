@@ -27,14 +27,22 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
       inside the item is a hypothesis (phase-synchronised); confirm it with a runtime trace (§10)**
 - [x] **Deceleration:** currently a constant fall rate. The game uses a **deceleration curve** whose keys aren't decoded yet (0xDA0810).
       **→ done: ResponseCurve at HG+0x63C, keys (0,1)(0.333,1)(0.4,0.3)(0.666,0.2)(1,1) (RE/02 §4.1.1)**
-- [ ] **Jumps:** currently a placeholder arc formula. The game plays **takeoff / flight / landing clips** chosen by
+- [x] **Jumps:** currently a placeholder arc formula. **→ done for running jumps to roof edges (free-step type 1): takeoff + flight items
+      chosen and weighted as 0xB1EC40, Σw·T durations, blended root motion + linear correction (RE/04 §4.1). Jumps at a ledge
+      still use the placeholder arc (their flights come from the ledge code, §4)** The game plays **takeoff / flight / landing clips** chosen by
       `Human::SetupJumpToTarget` 0xB20200 and `JumpType` (Straight / 1m / 3m5m), driven by their root motion plus the linear correction.
-- [ ] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance.
+- [~] **Free jump (vt28):** the nominal distance is a placeholder. Decode the real clip and distance. **→ vt28 is not a free jump: it
+      resolves a target type and calls vt24 (0xD832F0). The port's no-target jump (FREE_JUMP_DISTANCE) is PORT; find what the
+      game does with no target in range (decision layer)**
 - [ ] **Landing point:** currently `LAND_INSET` 0.45 m inside the roof. The game lands on the guidance contact.
-- [ ] **Landing recovery:** times are placeholders. Take them from the landing clips' lengths and exit flags.
-- [ ] **Landing momentum:** "soft landings and rolls keep speed" is a hypothesis. Verify it or replace it with the landing clips' root motion.
+- [x] **Landing recovery:** times are placeholders. Take them from the landing clips' lengths and exit flags. **→ done: the
+      landing / reception action plays with its root motion until it ends (0xE05940 / 0xE07D00, RE/04 §4.1.7–8)**
+- [x] **Landing momentum:** "soft landings and rolls keep speed" is a hypothesis. Verify it or replace it with the landing clips' root motion.
+      **→ done: landings move by their clips; the exit clip (walk / jog / sprint impulsion / wait) is chosen by the speed bucket of
+      HumanInAir+0x16C (its writer is not traced: hypothesis = ground speed ratio); HG+0x5E8 is not reset by OnEnterInit**
 - [x] **Fall pose sway:** remove it. The game's fall loop `xx_h_jumpfalling01` is a static pose. **→ done: removed; the fall is the game's grasp blend (RE/13 §4.1)**
-- [~] **Fall-entry clip choice:** currently chosen by my speed rule. The game chooses by fall type (fall height 1 / 2 / 8 m and **→ fall action from the graph; the entry clips are still chosen by name**
+- [~] **Fall-entry clip choice:** currently chosen by my speed rule. **→ fall type 0–6 decoded (RE/04 §4.1.9), port uses the 2.5 m/s
+      threshold; the type → entry action mapping (probe vt112) is still open.** The game chooses by fall type (fall height 1 / 2 / 8 m and **→ fall action from the graph; the entry clips are still chosen by name**
       horizontal speed 2.5 m/s, 0xD87720 / 0xD8C380).
 - [ ] **Ground jump up to a ledge:** currently uses jump-to-hang clips. The game goes through **Walling** (see §3.1).
 - [ ] **Pull-up trigger:** currently "hold up while blocked" (hypothesis). The game sends ledge event 0 from the decision layer.
@@ -99,6 +107,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Rebound jump** (0xE365C0): within ±89° of the wall normal; fallback 7 m out, 3 m down.
 - [ ] **Walling commands 0–4** from the pad controller (+0x38; meaning still open).
 ### 3.2 NarrowObject (context 12) — RE/05 §2
+- [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
+      The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
 - [ ] **Edge:** walking along a narrow wall ledge (EdgeState Front/Left/Right).
 - [ ] **Lean:** FaceLeft / FaceRight (lean height/width).

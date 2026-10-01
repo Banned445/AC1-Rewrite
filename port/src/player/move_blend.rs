@@ -209,8 +209,9 @@ impl MoveBlend {
         self.weights = w;
     }
 
-    /// Advance the step cycle and return the root speed (m/s) of the blended clips. (hypothesis) the
-    /// blended clips are phase-synchronised: the step lasts Σwᵢ·Tᵢ and covers Σwᵢ·dᵢ.
+    /// Advance the step cycle and return the root speed (m/s) of the blended clips. The item's clips share
+    /// one normalised clock: the step lasts Σwᵢ·Tᵢ (0x507650 → 0x5B9480) and the root covers the blended
+    /// displacement Σwᵢ·dᵢ (0x508260).
     pub fn advance(&mut self, dt: f32) -> f32 {
         let step = &SLOT_STEP[self.foot];
         let (mut d, mut t, mut wsum) = (0.0, 0.0, 0.0);
@@ -219,12 +220,11 @@ impl MoveBlend {
             t += w * step[k].1;
             wsum += w;
         }
-        if t <= 1e-4 || wsum <= 1e-6 {
+        // the item's clock runs over Σwᵢ·Tᵢ, not normalised (0x507650 → 0x5B9480; 0x507880 only rejects
+        // an all-zero weight set)
+        if t <= 1e-4 || wsum.abs() <= 0.000_5 {
             return 0.0;
         }
-        // (hypothesis) the blend is normalised by the total weight, as the pose blend is
-        let t = t / wsum;
-        let d = d / wsum;
         self.phase += dt / t;
         if self.phase >= 1.0 {
             self.phase -= 1.0;

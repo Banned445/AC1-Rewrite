@@ -273,11 +273,12 @@ All 34 clips have 2-key DISPLACEMENT tracks, so each one has a constant speed (R
 | 10–12, 14–15 run (+bank) | 1.707 / 0.3333 | same |
 | 13, 16 sprint / impulsion | 1.674 / 0.2667 | same |
 
-**(hypothesis)** The clips of an item play phase-synchronised and the blend is normalised by the total weight. Then one step lasts Σwᵢ·Tᵢ/Σwᵢ and covers Σwᵢ·dᵢ/Σwᵢ.
-- Support: the transition blender works in normalised phase (`bpos` modes 1/2 read the playing clip's normalised time, 0x773F90).
-- Not found: the item-level clip clock was not located (anim middleware 0x72xxxx–0x77xxxx; attempt cap reached).
-- Under this hypothesis the band tops are exact: walk 1.898, jog 3.538, run 5.121, sprint 6.277 m/s. Between bands the speed is below a linear mix: 4.20 m/s at s = 0.625 instead of 4.33.
-- **Needs a runtime trace** of position against HG+0x5E8 to confirm.
+**Verified (RE/04 §4.1.6):** the clips of an item share one normalised clock. The item lasts **Σwᵢ·Tᵢ**, not normalised (`AnimItem__GetBlendedDuration` 0x507650 → 0x5B9480), and its root covers the blended displacement Σwᵢ·dᵢ (`AnimItem__GetBlendedDisplacement` 0x5084F0).
+- The only weight check rejects an all-zero set (0x507880).
+- So the band tops are exact: walk 1.898, jog 3.538, run 5.121, sprint 6.277 m/s.
+- Between bands the speed is below a linear mix: 4.20 m/s at s = 0.625 instead of 4.33.
+- In the walk→jog band (weights not summing to 1) the step lasts Σwᵢ·Tᵢ as is.
+- A runtime trace is still worth doing to confirm the speeds.
 
 **Port:** `port/src/player/move_blend.rs` implements all of the above. The ground context moves by `MoveBlend::advance`, and the animator plays action `0x05923BDB` (item of the leading foot) with these weights at the sim's step phase.
 

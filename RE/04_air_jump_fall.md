@@ -120,8 +120,8 @@ Target-type flags (Data+0x290), from the switch in 0xE07D00:
 
 | flag | meaning |
 |---|---|
-| 1, 0x10000 | narrow object / pilotis |
-| 2 | ledge |
+| 1, 0x10000 | free step / narrow object / pilotis — roof-edge jumps land here (§4.1.7) |
+| 2 | pass-over vault (flight `…_to_passover`; arrival still uses the ledge path) — see §4.1.2 |
 | 0x40, 0x80, 4…0x20 | ledge / hang variants |
 | 0x100 | beam |
 | 0x200 | horse |
@@ -129,7 +129,7 @@ Target-type flags (Data+0x290), from the switch in 0xE07D00:
 | 0x800 | **haystack (Leap of Faith)** |
 | 0x1000 | ladder |
 | 0x2000 | pole |
-| 0x8000 | ground or NPC (air assassination) |
+| 0x8000 | NPC: air assassination (flight `…_to_assassinate`), not plain ground — §4.1.2 |
 
 LandingEvent (size 0x14): +8 LandingType {Safe, SmallDamage, HeavyDamage, Fatal}, +0xC FallHeight, +0x10 Damage.
 
@@ -205,6 +205,163 @@ UpdateJumpMotion():                         // 0xE0DEF0
 - for the first 0.3 s, rotate away from the wall at up to 3 rad/s;
 - slide back toward the release point at ≤ 2 m/s;
 - pushing NPCs: strength 1/2/3/4 by speed² ≤ 4 / 16 / 36 / higher (0xE06D70).
+
+## 4.1 Jump animations, jump motion and landings (verified 2026-10-01)
+
+### 4.1.1 Who calls the setup
+`Human__SetupJumpToTarget` 0xB20200 takes `(target, chained target, jump kind a4, target type a5, chained type a6, foot a7, flag a8)`.
+
+| Caller | Jump kind | Foot |
+|---|---|---|
+| `HumanGround__StartRunJumpToTarget` 0xD837A0 | **0** (running) | byte+60 bits 2–3 of the playing item, or 0 when not moving |
+| `HumanGround__StartFreeStepJumpToTarget` 0xD858A0 | 1 (free step) | same |
+
+- When the foot is 0, `Human__GetLeadingFoot` 0xB18850 compares two bone heights and returns 1 or 2.
+- IHumanGround vt28 (`HumanGround__JumpToTargetOfType` 0xD832F0) resolves the target type (`sub_B0E4E0`) and calls vt24. **There is no jump without a target**, which corrects RE/01 §6.3.
+
+### 4.1.2 Action choice (`Human__ComputeJumpAnimBlend` 0xB1EC40)
+Ids were converted with `int_convert` and resolved in `RE/data/action_graph_movement.txt`. A foot of 1 selects the first id of each pair.
+
+| Jump kind | Takeoff action | Clips |
+|---|---|---|
+| 0 run | `0x0A4C8C0E` / `0x0A4C8C0F` | 40 |
+| 1 free step | `0x0112B589` / `0x0112B5AC` | 40 |
+| 2 rebound | `0x01157C6B` / `0x01157C6C` | |
+| 4 pass-over | `0x0A4C8B07` / `0x0A4C8B06` | 6 |
+| other | `0x0292655B` swing | |
+| haystack, drop ≥ 3 m | `0x23A949B1` / `0x23A949B7` | faith jump |
+
+The 40-clip takeoff has five direction groups: 0–7 `run_*` (front), 8–15 left, 16–23 right, 24–31 back-left, 32–39 back-right. Each group holds front 050/300/550, down 050/300/550 and up 050/300 cm.
+
+| Target type (HumanInAirData+0x290) | up / down / near / mid / far (m) | Flight action |
+|---|---|---|
+| 1, 0x10000 (free step / narrow), 0x100 beam, 0x200 horse, 0x400 swing | 1.3 / −3 / 2.5 / 5.0 / 7.0 | `0x010DDAFA` / `0x010DF0D8` `air_*_to_freestep` (16 clips) |
+| 2 | same | `0x09A0A58D` / `0x09A0A58E` `…_to_passover` |
+| 0x8000 | same | `0x21B4DC3D` / `0x21B4DC3E` `…_to_assassinate` |
+| 0x40, 0x1000 ladder, 0x2000 pole, 0x4000 | 2.5 / −3 / 2.5 / 5.5 / 7.5 | `0x011E555B` / `0x011E555C` `…_to_surface` |
+| any other | 3.0 / −3 / 2.5 / 6.0 / 8.0 | `0x0121A149` / `0x0121A151` `…_to_swing` |
+| 0x800 haystack | 1.3 / −3 / 2.5 / 5.0 / 6.0; drop ≥ 3 m: −3 / −30, near 7.5 | freestep; `0x23A949B5` `faith_jump_fall` |
+
+So 0x8000 is the **air-assassination** target, not plain ground, and type 2 is the pass-over vault. This corrects the flag table in §2. A roof jump lands on a **free-step target (type 1)**.
+
+The 16-slot free-step flight is laid out as:
+
+| Slots | Clips |
+|---|---|
+| 0–2 | front 050/300/550 |
+| 3–6 | down 050/300/550/800 |
+| 7–8 | up 050/300 |
+| 9–11 | front …_down |
+| 12–15 | down …_deep 050/300/550/800 |
+
+Nine-slot flights use slots 0–8 only.
+
+### 4.1.3 Height blend and distance class (0xB1EC40)
+Inputs:
+- `o` = 0 for jump kinds 0, 1, 2 and 4, and −0.7 otherwise;
+- `v56 = −0.5 − o`;
+- `dz` = target − start height, clamped to ≥ −3 (raw dz is kept for the > 3 m rule below);
+- `k` = entity+0x7C (**hypothesis**: character scale; the port uses 1).
+
+```
+down = type != 2 && target.z < start.z + v56
+h    = clamp((dz − v56) / ((dz ≥ v56 ? up−o : down−o) − v56) / k, 0, 1)
+d < near           → class 0, f = d/near
+dz ≥ v56 (not down) → class 1, f = (d − near) / ((mid − near)(1 − h))
+d ≥ mid            → class 3, f = (d − mid) / ((far − mid)·h)
+else               → class 2, f = (d − near) / (mid − near)
+f clamped to [0, 1]
+```
+
+The target point used for d is first moved 0.5·k down along an axis vector (`sub_480D20`; **hypothesis**: up).
+
+### 4.1.4 Flight weights (`Human__ComputeJumpFlightWeights` 0xB140B0)
+Let (s0, s1, s2) be (9, 10, 11) when the type has deep variants (1, 0x10000, 0x100, 0x200, 0x400) and the jump is going down; otherwise (0, 1, 2).
+
+| Class | Weights |
+|---|---|
+| 0 | w[s0] = (1−h)(1−f), w[s1] = f(1−h); going down: w3 = h(1−f), w4 = fh; otherwise w7 = h(1−f), w8 = fh |
+| 1 | w1 = (1−f)(1−h), w2 = f(1−h), w8 = h |
+| 2 | w[s1] = (1−h)(1−f), w[s2] = f(1−h), w4 = h(1−f), w5 = fh |
+| 3 | w5 = (1−f)h, w6 = fh, w[s2] = 1−h |
+
+For deep types with raw dz < −3, after the takeoff weights are computed: `k = clamp((−dz − 3)/5)`. Then w12..15 = k·(w9+w7+w3, w10+w8+w4, w11+w5, w6), and those sources are scaled by 1−k.
+
+### 4.1.5 Takeoff weights (`Human__ComputeJumpTakeoffWeights` 0xB13A60)
+- The takeoff mirrors the flight blend on its own 8-clip family.
+- It is split between group A and group B by `t = (|angle| mod π/2)/(π/2)`. The angle is the side angle to the target, forced to **0 for jump kinds 0 and 4**, so a running jump plays only the `run_*` group.
+- **Class 0:** A.front050 = F[s0], A.front300 = F[s1]; then A.down050/300 = F3/F4, or A.up050/300 = F7/F8.
+- **Other classes:** A.front300 = F[s1], A.front550 = F[s2] + F6; then A.up300 = F8 (class 1), or A.down300/550 = F4/F5.
+- Quadrants:
+
+  | Angle | Group A | Group B |
+  |---|---|---|
+  | [0, 90°) | front | right |
+  | ≥ 90° | right | back-right |
+  | (−90°, 0) | front | left |
+  | ≤ −90° | left | back-left |
+
+  Kind 2 shifts the slots by +8; kind 3 uses the up variants; kind 4 blends by `HumanLedgeData+0x134`.
+
+### 4.1.6 Motion (0xB20200, 0xE0DEF0)
+The engine computes item times and displacement as follows:
+
+| Function | Computes |
+|---|---|
+| `AnimItem__GetBlendedDuration` 0x507650 → 0x5B9480 | item duration **Σ wᵢ·Tᵢ** (clip duration at +12), not normalised |
+| `AnimItem__HasNonZeroWeights` 0x507880 | only rejects \|Σw\| ≤ 0.0005 |
+| `AnimItem__GetBlendedDisplacement` 0x5084F0 → 0x508260 | the blended displacement over a normalised span of that duration |
+
+The setup then:
+- stores T₁ = takeoff duration (+0x1E4) and T₂ = flight duration (+0x1E8);
+- stores the takeoff and flight displacement matrices (+0x50 / +0x90);
+- sets the correction `target − (start + takeoffEnd + flightEnd)` (+0xE0).
+
+The root at time t is `start · disp(takeoff ⊕ flight, t) + (t/(T₁+T₂))·correction`. The flight item continues from the takeoff's end. JumpType := 2, target-driven := 1.
+
+### 4.1.7 Arrival on a free-step target (0xE07D00, types 1 / 0x10000)
+- Plays the reception `0x010DE1FE` / `0x010DF150` (`air_*_to_freestep_tr_freestep_entry`, 24 clips, FROMANIM). Slots 0–11 get the flight's weights ×(1 − r) and slots 12–23 (`_fast`) get ×r, where r = HumanInAir+0x16C.
+- Aligns over 0.067 s and sets result flag 2, which leads to **NarrowObject** (NarrowObjectData+200 = 6).
+- The reception's transitions lead to wait `0xD82508` or locomotion `0x05923BDB`.
+
+### 4.1.8 Ground landing (`HumanInAir__SetupToGround_Landing` 0xE05940)
+Inputs:
+- `drop` = start.z − z;
+- `horiz` = horizontal distance from the start (JumpOrigin translation, Data+0x40);
+- `b = min(drop/2.5, 1)`, raised to `min((horiz − 5)/7.5, 1)` when horiz > 5;
+- **speed bucket** from r = HumanInAir+0x16C: < 0.2 → 0, < 0.5 → 1, < 0.9 → 2, else 3.
+
+Choice:
+- **drop > 3:** `0x010DD707` `landing_damage_footl` (r ≤ 0.2) or `0x010DD70B` `landing_damage_footl_roll`. TransitionSetupToMovement type 10, camera shake `min((drop−3)/7, 1)`.
+- **drop ≤ 3, wanted move ~0 or more than 75° (1.309 rad) from the motion:** `0x6E9C702A` straight → walk/jog/sprint (bucket ≥ 1), or `0x6E9C7557` straight → wait. ActorState 25/24 ended.
+- **drop ≤ 3 otherwise:** by foot, `0x6D200160` / `0x6D200161` forward (bucket ≥ 1: 6 clips {soft, hard} × {walk, jog, sprint_impultion}; w[bucket−1] = 1−b, w[bucket+2] = b), or `0x6E9C754A` / `0x6E9C754C` forward → wait (bucket 0: [1−b, b]).
+- Transition type 9, +0x1C = 0.5. Every landing clip is FROMANIM, and its transitions return to `0x05923BDB`.
+- Landing with type 0x8000 (225 & 0x20) skips all this (GroundData+584 = 2).
+
+**r = HumanInAir+0x16C:** the ctor sets 0 (0xE100D5 → 0xE10124). Its only other writer is IHumanInAir slot 16 (0xE10350, vft 0x17010A4; the old name `SetFatalFallHeight` is likely wrong). Its caller is not traced. **(hypothesis)** It is the ground speed ratio, because the buckets pick walk, jog or sprint exits. The port passes the speed parameter at takeoff.
+
+### 4.1.9 Ground loss → fall type (`HumanGround__TransitionToInAirFall` 0xD8C380)
+- h = the ground probe's fall height (probe component Human+0xFC, vt112 → +48); v = horizontal speed (vector at +1264).
+- Fall type:
+
+  | Type | Condition |
+  |---|---|
+  | 0 / 1 | h < 1, or h < 2 when the probe type (vt328) is 1 |
+  | 2 / 3 | 2 ≤ h < 8 with probe type 1 |
+  | 4 / 6 | anything else |
+
+  The second value of each pair is used when v ≥ 2.5 m/s.
+- The type goes back through probe vt112 to pick the entry, and the result feeds `sub_D88AA0(setup, 2, …, 3)`. That mapping is **not traced**.
+- The port keeps name-based entry clips, but switches on the game's 2.5 m/s.
+
+### 4.1.10 Port (`port/src/player/jump_blend.rs`, `air.rs`, `ground.rs`)
+- §4.1.2–4.1.8 are ported exactly for running jumps to roof edges (type 1) and for ground landings.
+- The clips' durations and displacement (9 samples) come from `player/jump_clips.rs`. It is generated from the install by `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
+- Departures:
+  - **jumps at a ledge:** they keep a PLACEHOLDER arc, because their flights (`0x01271631`, `0x0121A598`, `0x0121A8B1`) are set up by the ledge code;
+  - **free-step arrival:** it continues in Ground with the reception playing, since NarrowObject is not ported;
+  - **no target in range:** the port still jumps `FREE_JUMP_DISTANCE` ahead (PORT);
+  - **leading foot:** taken from the playing locomotion item (**hypothesis** on the bit meaning).
 
 ## 5. Constants
 

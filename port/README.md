@@ -194,6 +194,18 @@ Limitations:
 - The sim owns the step cycle (`player/move_blend.rs`), and the animator shows it at the sim's phase. PORT
   (hypothesis): the clips inside the item are phase-synchronised.
 
+**Jumps and landings (RE/04 §4.1)**
+- A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then
+  its flight item (`air_*_to_freestep`, 16 clips), weighted by height and distance class exactly as
+  `Human__ComputeJumpAnimBlend` 0xB1EC40.
+- Their Σw·T durations and blended root motion, plus the game's linear correction, carry Altaïr onto the target.
+- Arrival plays the free-step reception. Ground contact plays the landing chosen by `SetupToGround_Landing` 0xE05940
+  (soft/hard × walk/jog/sprint exit, or damage / damage-roll above 3 m).
+- Both move Altaïr by their root motion until they end.
+- Clip durations and root curves are in `src/player/jump_clips.rs`. It is generated from your install by
+  `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
+- Jumps at a ledge still use a placeholder arc.
+
 **Debugging and verification**
 - `AC_SHOTS=t1,t2,…` freezes the simulation at each time and saves screenshots from every view in `AC_VIEWS` into
   `AC_SHOT_DIR`:

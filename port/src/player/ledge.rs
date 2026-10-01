@@ -269,7 +269,7 @@ pub fn update_ledge(
             let origin = if d.hang_type == LedgeHangType::Wall { FallOrigin::HangWall } else { FallOrigin::HangFree };
             limbs.hands = None;
             limbs.feet = None;
-            switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin }));
+            switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin, speed_param: 0.0 }));
             continue;
         }
         let dir = if pad.speed01 > 0.0 { Some(quantize(pad.dir, facing)) } else { None };
@@ -283,7 +283,7 @@ pub fn update_ledge(
             } else {
                 // let go (WantsLetGo 0xDCD4D0 â†’ LetGoToInAir)
                 let origin = if d.hang_type == LedgeHangType::Wall { FallOrigin::HangWall } else { FallOrigin::HangFree };
-                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin }
+                InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin, speed_param: 0.0 }
             };
             switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
             continue;

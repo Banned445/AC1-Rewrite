@@ -361,3 +361,44 @@ fn trace_climb() {
         if s.loco().current == ActorContextId::Ground && s.body().feet.y > 9.5 { break; }
     }
 }
+
+#[test]
+fn rooftop_jump_plays_the_game_items_and_free_step_reception() {
+    use crate::player::air::AirMode;
+    use crate::player::jump_blend::{RECEPTION_FREESTEP, TAKEOFF_RUN};
+    // roof A: x 5..11, h 3.5 ; roof B: x 14.5..20.5, h 3.0
+    let mut s = Sim::new(Vec3::new(7.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::InAir), "never jumped");
+    let air = &s.data().air;
+    let AirMode::Jump { real, duration, t_takeoff, .. } = air.mode else { panic!("not a jump: {:?}", air.mode) };
+    assert!(real);
+    let (to, fl) = (air.takeoff.unwrap(), air.flight.unwrap());
+    assert!(TAKEOFF_RUN.contains(&to.id));
+    // durations are the items' Σw·T (takeoff 0.13–0.33 s, flight 0.2–0.6 s for these clips)
+    assert!((t_takeoff - to.duration()).abs() < 1e-5 && (duration - t_takeoff - fl.duration()).abs() < 1e-5);
+    assert!(duration > 0.3 && duration < 1.2, "jump lasts {duration}");
+    let sum: f32 = fl.weights().iter().sum();
+    assert!((sum - 1.0).abs() < 1e-4);
+    // arrival → Ground with the free-step reception playing, then free movement
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ground), "never landed");
+    let os = s.ground().oneshot.expect("reception playing");
+    assert!(RECEPTION_FREESTEP.contains(&os.blend.id));
+    assert!(os.duration > 0.1);
+    assert!(s.run_until(2.0, |s| s.ground().oneshot.is_none()), "reception never ended");
+    assert!(s.ground().speed_param > 0.75, "kept the sprint speed: {}", s.ground().speed_param);
+}
+
+#[test]
+fn small_drop_lands_with_the_forward_landing_blend() {
+    use crate::player::jump_blend::{LAND_FORWARD_MOVE, LAND_STRAIGHT_MOVE};
+    // walk off roof B's far edge (3.0 m high, x 14.5..20.5) at jog speed: drop 3.0 m ≤ 3 → landing, b = 1 (hard)
+    let mut s = Sim::new(Vec3::new(19.0, 3.0, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, false);
+    assert!(s.run_until(4.0, |s| s.saw_air && s.loco().current == ActorContextId::Ground), "never landed");
+    let os = s.ground().oneshot.expect("landing action");
+    assert!(LAND_FORWARD_MOVE.contains(&os.blend.id) || os.blend.id == LAND_STRAIGHT_MOVE, "{:#x}", os.blend.id);
+    // speed ratio ~0.75 → bucket 2 (jog exit): weights in slots 1 (soft) and 4 (hard)
+    let w = os.blend.weights();
+    assert!(w[1] + w[4] > 0.99, "{w:?}");
+}
