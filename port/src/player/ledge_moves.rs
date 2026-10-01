@@ -71,6 +71,8 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     0x4C46037A, 0x4C46037B, 0x4C46037C, 0x4C46037D, 0x4C46037E, 0x4C46037F,
     0x1E67_E881, 0x1E67_E882, 0x1E67_E883, 0x1E67_E884, 0x1E67_E885, 0x1E67_E886, 0x1E67_E887, 0x1E67_E888,
     HOP_UP, HOP_UP_B,
+    // hang-type switches (0xDE1060)
+    TO_WALL[0], TO_WALL[1], TO_FREE[0], TO_FREE[1], TO_FREE[2], TO_FREE[3],
     // straight jump to a hand target (0xB21DA0) and its arrivals (0xE07D00)
     0x0129_0ECF, 0x0127_2A69, 0x0127_1631, 0x0127_1639, 0x0121_A598, 0x0121_A8B1,
     0x0129_0ED0, 0x0127_2A6A, 0x0127_163A, 0x0127_1632, 0x0121_B072, 0x0127_23A5,
@@ -86,6 +88,8 @@ pub enum MoveKind {
     HopUp,
     /// Received after a jump at a ledge (0xE07D00).
     Arrival,
+    /// Wall ↔ free hang (0xDE1060).
+    SwitchHang { to_wall: bool },
 }
 
 /// A running ledge move.
@@ -107,6 +111,8 @@ pub struct LedgeMove {
     pub lead: f32,
     /// The move ends in a free hang whatever the wall below (the hop, 0xDDAB00 sets LedgeHangType 1).
     pub end_free: bool,
+    /// The move ends in a wall hang (free → wall switch, wall receptions).
+    pub end_wall: bool,
     /// The move ends standing on top (knee / waist arrivals: Ledge SubState 4 → pull-up → Ground).
     pub end_stand: bool,
     /// Hands and wall normal once the move ends.
@@ -241,6 +247,7 @@ pub fn try_corner(
         follow_disp: false,
         lead: 0.0,
         end_free: false,
+        end_wall: false,
         end_stand: false,
         hand_l: hl,
         hand_r: hr,
@@ -304,6 +311,7 @@ pub fn try_side_jump(
                         follow_disp: found,
                         lead: 0.0,
                         end_free: false,
+                        end_wall: false,
                         end_stand: false,
                         hand_l: hl,
                         hand_r: hr,
@@ -357,6 +365,7 @@ pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHa
             follow_disp: false,
             lead: da,
             end_free: true,
+            end_wall: false,
             end_stand: false,
             hand_l: hl,
             hand_r: hr,
@@ -487,7 +496,44 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
         follow_disp: found,
         lead: 0.0,
         end_free,
+        end_wall: false,
         end_stand,
+        hand_l,
+        hand_r,
+        normal: n,
+    }
+}
+
+// ---------------------------------------------------------------- hang-type switch
+
+/// `HumanLedge__TrySwitchHangType` 0xDE1060 actions. Free → wall: [left, other] = `hangfree_tr_hangwall_{left,
+/// right}` (up / down use the right one). Wall → free: [left, right, up, down] = `hangwall_tr_hangfree_{left,
+/// right,up_left,down_left}`.
+pub const TO_WALL: [u32; 2] = [0x01C3_2562, 0x01C3_2563];
+pub const TO_FREE: [u32; 4] = [0x01C3_14BD, 0x01C3_14BE, 0x01C3_217A, 0x01C3_217C];
+
+/// Ledge stick direction as the exe numbers it (QuantizeStickDirection 0xDD1920): 0 up, 1 down, 2 left, 3 right.
+pub fn switch_move(dir: u8, to_wall: bool, from: Vec3, hand_l: Vec3, hand_r: Vec3, n: Vec3) -> LedgeMove {
+    let id = if to_wall { TO_WALL[(dir != 2) as usize] } else { TO_FREE[match dir { 2 => 0, 3 => 1, 0 => 2, _ => 3 }] };
+    let a = single(id, 0);
+    let d = a.map(|a| a.duration()).unwrap_or(0.0);
+    let facing = -Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    let hang = if to_wall { LedgeHangType::Wall } else { LedgeHangType::Free };
+    LedgeMove {
+        kind: MoveKind::SwitchHang { to_wall },
+        seq: [a, None, None, None],
+        durations: [if d > 0.0 { d } else { SHIMMY_OPEN_TIME }, 0.0, 0.0, 0.0],
+        t: 0.0,
+        from,
+        to: hang_root(hand_l, hand_r, n, hang),
+        facing_from: facing,
+        facing_to: facing,
+        // the root interpolator over the action (0xDE1060 → sub_711130)
+        follow_disp: false,
+        lead: 0.0,
+        end_free: !to_wall,
+        end_wall: to_wall,
+        end_stand: false,
         hand_l,
         hand_r,
         normal: n,

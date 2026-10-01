@@ -201,6 +201,8 @@ Limitations:
 - Side jumps play the `StartLedgeJump` table's start / loop / end actions.
 - The hop plays `swingback_up` `_a` + `_b` into a free hang.
 - `AC_AUTOPILOT=ledgemoves` shows a side jump and an outer corner.
+- Hang type (wall / free) changes only through moves. A step whose destination has (or lacks) foot support on the wall plays
+  the game's switch (`hangfree_tr_hangwall_*` / `hangwall_tr_hangfree_*`, 0xDE1060). `AC_AUTOPILOT=hangswitch` shows both.
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

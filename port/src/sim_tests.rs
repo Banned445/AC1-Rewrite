@@ -511,3 +511,38 @@ fn two_metre_wall_jumps_into_a_wall_hang() {
     assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
     assert!((s.body().feet.y - 1.1).abs() < 0.05, "wall-hang root 1.1 m below the hands: {:?}", s.body().feet);
 }
+
+
+#[test]
+fn shimmy_from_a_free_hang_switches_to_a_wall_hang() {
+    use crate::player::ledge_moves::{MoveKind, TO_WALL};
+    // the 2.6 m straight jump arrives in a free hang; the first step onto wall below plays hangfree_tr_hangwall
+    let mut s = hang_on_jump_up_wall();
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(1.0, |s| s.data().ledge.mv.is_some()));
+    let mv = s.data().ledge.mv.unwrap();
+    assert_eq!(mv.kind, MoveKind::SwitchHang { to_wall: true });
+    assert_eq!(mv.seq[0].map(|a| a.id), Some(TO_WALL[0]), "moving left: hangfree_tr_hangwall_left");
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(2.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    assert!((s.body().feet.y - 1.5).abs() < 0.05, "wall-hang root: {:?}", s.body().feet);
+}
+
+#[test]
+fn shimmy_onto_an_overhang_switches_to_a_free_hang() {
+    use crate::player::ledge_moves::{MoveKind, TO_FREE};
+    // wall F (x 60..63) continues as an overhang slab (x 63..66) without wall below
+    let mut s = hang_at(Vec3::new(62.3, 2.6, 49.7), Vec3::NEG_Z);
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Wall);
+    s.pad(Vec3::X, 1.0, false, false); // the player's left
+    let switched = s.run_until(6.0, |s| s.data().ledge.mv.is_some_and(|m| m.kind == MoveKind::SwitchHang { to_wall: false }));
+    assert!(switched, "no switch: {} hands {:?}", s.data().ledge.last_action, s.data().ledge.hand_l);
+    assert_eq!(s.data().ledge.mv.unwrap().seq[0].map(|a| a.id), Some(TO_FREE[0]), "hangwall_tr_hangfree_left");
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(2.0, |s| s.data().ledge.mv.is_none()));
+    assert_eq!(s.data().ledge.hang_type, ledge::LedgeHangType::Free);
+    assert!((s.body().feet.y - 0.2).abs() < 0.05, "free-hang root: {:?}", s.body().feet);
+}

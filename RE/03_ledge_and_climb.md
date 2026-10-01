@@ -509,6 +509,31 @@ So the pattern is: the lead hand reaches out, then the trailing hand closes in, 
 - **Second hand:** after a corner the hands are re-spread to the normal spacing (**hypothesis** for SecondHandGrab).
 - **Not ported yet:** the ladder and climb-hold side jumps (types 0/3), `TryJumpUpToClimb`, and the free→wall switch after a hop.
 
+### 7.6c Hang-type switching (`HumanLedge__TrySwitchHangType` 0xDE1060, verified 2026-10-01)
+The hang type (HumanLedgeData +104: 0 wall, 1 free) **changes only through moves**. The switch is itself a step that carries the hands to the step's target.
+
+**Decision layer** (0xDE29E0):
+- For up/down with a vertical candidate (+848 / +912) and for left/right with the lateral candidate (+528 / +592), `HumanLedge__QuickWallTestForStep` 0xDD1DC0 runs first. It places the picked step clip's foot with a sphere query (r 0.25, 0.75, 0.15, ±0.15 m random jitter).
+- `TrySwitchHangType(dir, 0)` is tried before the hand step when that test disagrees with the current type (free and wall found, or wall and none found).
+- After the corner searches it is also tried with the inner (1) or outer (2) corner candidate. That frame is rotated ±90°.
+
+**Preconditions:** no pending vertical step; lateral moves are refused when LedgeData +133 == 1; the target edges +1808 / +1812 exist.
+
+**Feet (`HumanLedge__ProbeFootSupport` 0xDE0A60):** two collision rays (layer 43) of **1.2 m toward the wall**. They start at the target − 1.0 m up − 0.5·facing ∓ 0.1·side, with the second ray 0.2 m further to the side. A hit on a non-ladder entity is a foot support.
+
+| Current | Rule | Actions | Root / checks |
+|---|---|---|---|
+| Free | **any** foot → wall | `0x01C32562` `hangfree_tr_hangwall_left` (left) / `0x01C32563` `…_right` (any other direction, including up/down) | Root with feet (`sub_B157B0`), check `sub_B2DC80`, clearance 1.1 m. +104 := 0, foot IK targets set |
+| Wall | **unless both** feet → free | `0x01C314BD` `hangwall_tr_hangfree_left`, `0x01C314BE` `…_right`, `0x01C3217A` `…_up_left`, `0x01C3217C` `…_down_left` | Root from hands only (`sub_B15AD0`), check `sub_B2DD50`, clearance 2.4 m. +104 := 1 |
+
+The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
+
+**Port** (`ledge.rs` `feet_on_wall` / `needs_switch`, `ledge_moves::switch_move`):
+- The hang type is state. It is evaluated on entry, then changed only by moves.
+- The foot rays are ported. A shimmy or vertical step whose destination needs the other type becomes the switch move.
+- The decision layer's quick test is replaced by the foot rays at the step's destination (**hypothesis**: same outcome on static geometry).
+- The corner-candidate variants are not used.
+
 ### 7.7 Pull-up / climbing onto the top
 - **Trigger**: event 0 in `HandleEvent_Movement` 0xDE36D0, sent from outside the module (decision layer). It is accepted when `CanPullup` 0xDE2270 returns 2:
   - **blockedUp** (+1862: the stick is up and no other vertical action exists);

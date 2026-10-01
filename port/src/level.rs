@@ -52,10 +52,15 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     // --- standing straight jump bands (0xB21DA0) ---
     (50.0, 50.3, 3.0, 1.0, 1.6),   // knee height: jump, hangknee, stand on top
     (56.0, 50.3, 3.0, 1.0, 2.2),   // 2.0–2.5 m with a wall below: jump into a wall hang
+    // --- hang-type switch (0xDE1060): wall F (x 60..63) continues as an overhang slab (SLABS) with no wall below
+    (61.5, 50.0, 3.0, 0.6, 2.6),
 ];
 
 /// Floating slabs (centre x, top y, centre z, size x, size z, thickness): free-hang ledges.
-const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[(2.0, 3.0, 36.0, 6.0, 1.2, 0.3)];
+const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[
+    (2.0, 3.0, 36.0, 6.0, 1.2, 0.3),
+    (64.5, 2.6, 50.0, 3.0, 0.6, 0.3), // overhang continuing wall F's ledge (hang-type switch test)
+];
 
 /// Extra ledges on wall faces (p0, p1, outward normal): stone ledges that are not roof edges.
 const WALL_LEDGES: &[(Vec3, Vec3, Vec3)] = &[

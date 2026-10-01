@@ -172,7 +172,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Exact jump-up rules** (`TryJumpUpToLedge` 0xDD5E10): edge probe and body sweep. **→ it is TryJumpUpToClimb (to climb holds,
       RE/03 §7.6b): decoded, not ported (needs a climbable wall above a ledge in the greybox).**
 - [x] **Vertical hand-step tables:** up 0x1A2C4C0…, down 0x1A2C4F0…, with the Wall/Free anim columns. Currently one clip each way. **→ done: the game's first/second-hand step actions (RE/13 §4)**
-- [ ] **Hang-type switching:**
+- [x] **Hang-type switching:** **→ done (RE/03 §7.6c): foot rays, free ↔ wall switch moves with the game's actions; the corner-candidate
+  variants and WallFree as a separate type are not ported**
   - Free → Wall (anims 29566306/7) and Wall → Free (29562045/6, 29565306/8) (`TrySwitchHangType` 0xDE1060);
   - **WallFree** hang type (2).
 - [ ] **Pull-up:**
