@@ -17,7 +17,7 @@ pub const TAKEOFF_RUN: [u32; 2] = [0x0A4C_8C0E, 0x0A4C_8C0F];
 pub const TAKEOFF_FREESTEP: [u32; 2] = [0x0112_B589, 0x0112_B5AC];
 /// Flights by target type, [footl, footr].
 pub const FLIGHT_FREESTEP: [u32; 2] = [0x010D_DAFA, 0x010D_F0D8]; // 1, 0x10000, 0x100, 0x200, 0x400, haystack
-pub const FLIGHT_PASSOVER: [u32; 2] = [0x09A0_A58D, 0x09A0_A58E]; // 2
+pub const FLIGHT_PASSOVER: [u32; 2] = super::passover::FLIGHT_PASSOVER; // 2
 pub const FLIGHT_ASSASSINATE: [u32; 2] = [0x21B4_DC3D, 0x21B4_DC3E]; // 0x8000
 pub const FLIGHT_SURFACE: [u32; 2] = [0x011E_555B, 0x011E_555C]; // 0x40, 0x1000, 0x2000, 0x4000
 pub const FLIGHT_SWING: [u32; 2] = [0x0121_A149, 0x0121_A151]; // every other type
@@ -166,9 +166,15 @@ pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale
     let n_flight = action_items(flight).and_then(|i| i.first().map(|c| c.len())).unwrap_or(16);
     let deep = has_deep(target_type);
     let mut fw = vec![0.0f32; n_flight.max(16)];
-    flight_weights(&mut fw, d, h, down, class, deep);
     let takeoff = if kind == 1 { TAKEOFF_FREESTEP } else { TAKEOFF_RUN }[(!foot_left) as usize];
     let mut tw = vec![0.0f32; 40];
+    if target_type == 2 {
+        passover_flight_weights(&mut fw, d, h, class);
+        passover_takeoff_weights(&mut tw, &fw, class);
+        fw.truncate(n_flight);
+        return JumpBlend { takeoff, flight, takeoff_w: tw, flight_w: fw, h, d, class, down };
+    }
+    flight_weights(&mut fw, d, h, down, class, deep);
     takeoff_weights(&mut tw, &fw, down, 0.0, class, deep);
     // > 3 m drop: move weight into the deep flight variants (0xB1EC40 tail, after the takeoff used them)
     if deep && dz < -3.0 {
@@ -183,6 +189,45 @@ pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale
     }
     fw.truncate(n_flight);
     JumpBlend { takeoff, flight, takeoff_w: tw, flight_w: fw, h, d, class, down }
+}
+
+/// `Human__ComputeJumpFlightWeightsPassOver` 0xB142A0: the 5-clip pass-over flight [front 050/300/550, up 050/300].
+pub fn passover_flight_weights(w: &mut [f32], d: f32, h: f32, class: u8) {
+    if class == 0 {
+        w[0] = (1.0 - d) * (1.0 - h);
+        w[1] = d * (1.0 - h);
+        w[3] = (1.0 - d) * h;
+        w[4] = d * h;
+    } else {
+        w[1] = (1.0 - d) * (1.0 - h);
+        w[2] = d * (1.0 - h);
+        w[4] = h;
+    }
+}
+
+/// 0xB13E20 for a pass-over target with the side angle 0 (jump kinds 0 / 4): the front takeoff group's slots
+/// (0xB1EC40 picks 0, 1, up 6 / 7 for the near class; 1, 2, up 7 for class 1; 1, 2, down 4 / 5 otherwise).
+pub fn passover_takeoff_weights(t: &mut [f32], f: &[f32], class: u8) {
+    t.iter_mut().for_each(|x| *x = 0.0);
+    match class {
+        0 => {
+            t[0] = f[0];
+            t[1] = f[1];
+            t[6] = f[3];
+            t[7] = f[4];
+        }
+        1 => {
+            t[1] = f[1];
+            t[2] = f[2];
+            t[7] = f[4];
+        }
+        _ => {
+            t[1] = f[1];
+            t[2] = f[2];
+            t[4] = f[4];
+            t[5] = f[4];
+        }
+    }
 }
 
 /// 0xB140B0: flight weights from distance blend `d`, height blend `h`, class and going-down flag.

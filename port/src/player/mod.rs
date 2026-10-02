@@ -19,6 +19,7 @@ pub mod ledge;
 pub mod ledge_moves;
 pub mod move_blend;
 pub mod narrow;
+pub mod passover;
 pub mod targets;
 pub mod walling;
 
@@ -136,6 +137,7 @@ pub enum TransitionSetup {
     ToWalling(walling::WallingEntry),
     ToBeam(narrow::BeamEntry),
     ToPilotis(narrow::PilotisEntry),
+    ToPassOver(passover::PassOverEntry),
 }
 
 /// Immediate context switch (0x55F7E0): exit old, apply setup to destination data, enter new.
@@ -169,6 +171,11 @@ pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: 
         TransitionSetup::ToBeam(entry) => {
             data.narrow.enter(entry);
             ActorContextId::NarrowObject
+        }
+        TransitionSetup::ToPassOver(entry) => {
+            let seq = data.ledge.pass_over.map(|p| p.seq).unwrap_or(0);
+            data.ledge.pass_over = passover::enter(entry, seq);
+            ActorContextId::Ledge
         }
         TransitionSetup::ToPilotis(entry) => {
             data.narrow.enter_pilotis(entry);

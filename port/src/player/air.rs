@@ -348,6 +348,7 @@ pub fn update_air(
         let mut hang_on: Option<LedgeEntry> = None;
         let mut hay_on: Option<super::hay::HayStackEntry> = None;
         let mut narrow_on: Option<TransitionSetup> = None;
+        let mut pass_on: Option<super::passover::PassOverEntry> = None;
         let foot = (!air.foot_left) as usize;
         match air.mode {
             AirMode::Jump { from, clip_end, aim, apex, duration, t, then_fall_to, real, t_takeoff, fwd } => {
@@ -387,6 +388,16 @@ pub fn update_air(
                         e.entry_move = Some(ledge_moves::arrival_move(arrival, body.feet, e.hand_l, e.hand_r, normal, &collision));
                         hang_on = Some(e);
                     }
+                    // pass-over target (type 2): 0xE07D00 case 2 → Ledge HandPassOver
+                    if let Some((edge, normal)) = air.target.and_then(|t| t.pass) {
+                        let mut fw = [0.0f32; 5];
+                        if let Some(f) = air.flight {
+                            for (k, x) in f.weights().iter().enumerate().take(5) {
+                                fw[k] = *x;
+                            }
+                        }
+                        pass_on = Some(super::passover::PassOverEntry { edge, normal, from: body.feet, flight_foot_left: air.foot_left, flight_w: fw });
+                    }
                     if air.target_flags == jump_blend::TARGET_HAYSTACK && then_fall_to.is_none() {
                         if let Some(stack) = guidance.haystacks.iter().find(|s| {
                             let p = body.feet;
@@ -402,7 +413,7 @@ pub fn update_air(
                         narrow_on = narrow_catch(body.feet, fwd, foot, &guidance, &collision);
                     }
                     match then_fall_to {
-                        _ if hang_on.is_some() || hay_on.is_some() || narrow_on.is_some() => {}
+                        _ if hang_on.is_some() || hay_on.is_some() || narrow_on.is_some() || pass_on.is_some() => {}
                         Some(p) if collision.ground_height(body.feet + Vec3::Y * 0.05, 0.1).is_none() => {
                             air.mode = AirMode::Fall { steer_to: if p == aim { None } else { Some(p) } };
                         }
@@ -483,6 +494,10 @@ pub fn update_air(
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;
             switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+        } else if let Some(e) = pass_on {
+            air.mode = AirMode::Idle;
+            body.velocity = Vec3::ZERO;
+            switch_context(&mut loco, &mut data, TransitionSetup::ToPassOver(e));
         } else if let Some(setup) = narrow_on {
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;

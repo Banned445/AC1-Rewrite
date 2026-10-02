@@ -98,6 +98,8 @@ enum After {
 /// Runtime data of the Ledge context (subset of reflected HumanLedgeData, RE/07 / RE/03 Â§2.3).
 #[derive(Debug, Default)]
 pub struct HumanLedgeData {
+    /// HandPassOver (SubState 12): the pass-over vault (`passover`).
+    pub pass_over: Option<super::passover::HandPassOver>,
     pub sub_state: LedgeSubState,
     pub hang_type: LedgeHangType,
     pub hand_l: Vec3,
@@ -132,6 +134,7 @@ impl HumanLedgeData {
         self.hand_r = e.hand_r;
         self.normal = e.normal;
         self.sub_state = e.sub_state;
+        self.pass_over = None;
         self.alt_flag = false; // EnterCommon 0xDE26D0 clears +0x85
         self.blocked_up = false;
         self.moves.clear();
@@ -284,6 +287,31 @@ pub fn update_ledge(
         if loco.just_switched {
             loco.just_switched = false;
             limbs.feet = None;
+            continue;
+        }
+        // ---------------------------------------------------------------- HandPassOver (SubState 12)
+        if let Some(mut p) = data.ledge.pass_over {
+            limbs.hands = None;
+            limbs.feet = None;
+            body.velocity = Vec3::ZERO;
+            body.heading = heading_of(p.fwd);
+            let mut feet = body.feet;
+            let out = super::passover::update(&mut p, dt, &mut feet, &guidance, &collision);
+            body.feet = feet;
+            match out {
+                super::passover::PassOverOut::Stay => data.ledge.pass_over = Some(p),
+                super::passover::PassOverOut::Ground => {
+                    data.ledge.pass_over = None;
+                    body.grounded = true;
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToMovement { landing: None });
+                }
+                super::passover::PassOverOut::Fall(action) => {
+                    data.ledge.pass_over = None;
+                    let entry = super::air::InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: super::air::FallOrigin::Ground, speed_param: 0.0 };
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
+                    data.air.fall_action = Some(action);
+                }
+            }
             continue;
         }
         let d = &mut data.ledge;

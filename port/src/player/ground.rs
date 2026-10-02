@@ -562,7 +562,7 @@ pub fn straight_hand_target(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld,
     let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
     let dz = hand.point.y - feet.y;
     let j = if beam { super::ledge_moves::hang_jump_in_beam(dz, wall)? } else { super::ledge_moves::hang_jump_in(dz, wall)? };
-    Some(JumpTarget { position: hand.point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((hand.point, n)), straight: Some(j) })
+    Some(JumpTarget { position: hand.point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((hand.point, n)), straight: Some(j), pass: None })
 }
 
 /// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a

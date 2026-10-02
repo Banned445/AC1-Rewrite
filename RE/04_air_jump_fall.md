@@ -121,7 +121,7 @@ Target-type flags (Data+0x290), from the switch in 0xE07D00:
 | flag | meaning |
 |---|---|
 | 1, 0x10000 | free step / narrow object / pilotis — roof-edge jumps land here (§4.1.7) |
-| 2 | pass-over vault (flight `…_to_passover`; arrival still uses the ledge path) — see §4.1.2 |
+| 2 | pass-over vault (flight `…_to_passover`, arrival → Ledge HandPassOver) — §4.1.13 |
 | 0x40, 0x80, 4…0x20 | ledge / hang variants |
 | 0x100 | step-on target (arrival SubState 8 → NarrowObject state 2, `StateCrowdRun_Update` 0xE4E610, back to InAir when the reception ends). **Not a beam** (RE/05 §2.8 correction) |
 | 0x200 | horse |
@@ -394,6 +394,53 @@ The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget
   - the swing plays once, with no SwingStrength;
   - knee / waist pull-ups end in Ground instead of NarrowObject;
   - the trigger (high profile + Legs into a wall) is the port's: the game's straight jump comes from the static-jump path, and running into a wall is Walling (RE/12 §3.1).
+
+### 4.1.13 Pass-over vault (verified 2026-10-02)
+A running jump at a **type 2** target vaults a thin wall with one hand.
+
+**Jump** (`Human__ComputeJumpAnimBlend` 0xB1EC40):
+- The bands are the free-step ones: up 1.3, down −3, near / mid / far 2.5 / 5.0 / 7.0 m. "Going down" is never set for type 2.
+- **Flight** `0x09A0A58D` / `0x09A0A58E` (`xx_h_air_{front_050,300,550, up_050,300}cm_foot{l,r}_to_passover`). Weights from `Human__ComputeJumpFlightWeightsPassOver` 0xB142A0:
+  - near class: [(1−d)(1−h), d(1−h), 0, (1−d)h, dh];
+  - other classes: [0, (1−d)(1−h), d(1−h), 0, h].
+- **Takeoff** (`Human__ComputeJumpTakeoffWeightsPassOver` 0xB13E20; side angle 0 for kind 0). Weights go into the front group:
+  - near: slots 0, 1, 6, 7 = f0, f1, f3, f4;
+  - class 1: slots 1, 2, 7 = f1, f2, f4;
+  - classes 2 / 3: slots 1, 2, 4, 5 = f1, f2, f4, f4.
+
+**Arrival** (`CheckJumpTargetArrival` 0xE07D00 case 2):
+- **Reception:** `0x0A4C9776` after the footl flight (`…_to_passover_tr_passover_handr`), else `0x0B5640DB` (`…_handl`).
+- **Root:** interpolated to target + 0.5·forward over 0.067 s. The reception clips also move 0.5 m forward: the target sits 0.5 m before the edge.
+- **Ledge data:** +304 = 1 − (w_front050 + w_up050); the target is copied to LedgeData.
+- **Hand-off:** Ledge SubState **12** HandPassOver.
+
+**HandPassOver** (`HumanLedge__HandPassOver_Update` 0xDDB800, `HumanLedge__StateHandPassOver_Update` 0xDE0720):
+- **SubState 0:** the reception's interpolation runs. When it completes, the vault starts.
+- **The vault:**
+  - Action `0x09A0A7E1` (`xx_h_passover_handl_{030,100}cm`) when the reception's item ends left foot ahead (flags & 0xC == 4), else `0x09A0A7E2` (hand r).
+  - Weights [1 − w, w], w = min(thickness, 1). `Human__ProbeWallTopThickness` 0xB18FB0 measures the thickness: guidance edges crossed by the forward line from the edge − 0.3·fwd − 0.25 up; near and far edge; midpoint, direction and distance.
+  - Clip root motion: 030cm moves 0.3 m flat in 0.067 s; 100cm moves 1.0 m in 0.2 s.
+  - The root is interpolated over the vault to the probe's point + 0.3·(1 − w)·fwd. With no wall top found: edge + 0.3·fwd, w = 0.
+  - Then SubState 1, and +308 = w.
+- **At the vault's release point (sub_5017B0):**
+  - +328 == 0 → **Ground** (`SetupPassOverToGround` 0xDCFA40: move mode from the stick, entry 12);
+  - otherwise, with a drop ≥ 3 m beyond (`PassOverWantsPullDown` 0xDD2BD0 → `PassOverToPullDown` 0xDE0220) → pull-down type 4. Clips `0x09A0B647` / `49` orientation, then `0x09A0B648` / `4A`, blended by +308.
+  - otherwise (`PassOverWantsInAir` 0xDCC0E0 → `PassOverToInAir` 0xDE0280) → **InAir**: `SetupPassOverToInAir` 0xDDBC60 plays `0x0109B7C8` / `0x0109BB53` `passover_hand{l,r}_{030,100}cm_tr_fall` [1 − w, w].
+  - The meaning of +328 is unknown (hypothesis: a chained-jump request; jump kind 4 takes off from the pass-over with `0x0A4C8B07` / `06`, its weights from +308).
+
+**Port** (`player/passover.rs`):
+- The flight and takeoff weights.
+- The reception and its interpolation.
+- The thickness probe (the far LedgeGrab edge along the facing) and the vault blend and root.
+- Then Ground when there is support under the root, else InAir with the `tr_fall` action.
+
+**PORT:**
+- **Targets:** type 2 targets are wall tops ≤ 1 m thick within the free-step up band. The target is 0.5 m before the edge at the top's height. The game's type 2 guidance candidates are not traced.
+- **Probe point:** the far edge is taken as the probe's point (hypothesis for sub_B0FC50).
+- **Release:** the release point is the vault's end.
+- **Not ported:** the pass-over pull-down (≥ 3 m drop), chained jumps from the pass-over (kind 4), and `passover_*_to_roll_ending`.
+
+**Test geometry:** a 1 m railing, 0.3 m thick, at (40, 4). `AC_AUTOPILOT=passover`.
 
 ### 4.1.10 Port (`port/src/player/jump_blend.rs`, `air.rs`, `ground.rs`)
 - §4.1.2–4.1.8 are ported exactly for running jumps to roof edges (type 1) and for ground landings.

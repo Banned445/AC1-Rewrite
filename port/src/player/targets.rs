@@ -25,6 +25,8 @@ pub struct JumpTarget {
     pub hang: Option<(Vec3, Vec3)>,
     /// Standing straight jump at a hand target (0xB21DA0): its band (flight, weights, arrival).
     pub straight: Option<super::ledge_moves::HangJumpIn>,
+    /// Pass-over target (type 2): the near edge point on the wall top and its outward normal.
+    pub pass: Option<(Vec3, Vec3)>,
 }
 
 /// Roof-edge landing spot: the game's free-step target type 1 (narrow object / edge; its flight is
@@ -34,6 +36,8 @@ pub const TARGET_GROUND: u32 = super::jump_blend::TARGET_FREESTEP;
 /// Ledge hang targets: 0x40 = wall hang (flight `…_to_surface`, wall reception), 0x80 = free hang (flight
 /// `…_to_swing`, swing reception) (0xB1EC40 / 0xE07D00).
 pub const TARGET_LEDGE: u32 = 0x40;
+/// PORT: thickest wall top offered as a pass-over target (type 2).
+pub const PASSOVER_MAX_THICKNESS: f32 = 1.0;
 pub const TARGET_LEDGE_FREE: u32 = 0x80;
 
 pub fn find_jump_target(
@@ -78,7 +82,7 @@ pub fn find_jump_target(
         narrow.push(e.p0.lerp(e.p1, u));
     }
     for pos in narrow {
-        let target = JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None };
+        let target = JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None, pass: None };
         let flat = Vec3::new(pos.x - feet.x, 0.0, pos.z - feet.z);
         let dist = flat.length();
         let dz = pos.y - feet.y;
@@ -122,12 +126,19 @@ pub fn find_jump_target(
         let on_edge = e.closest_point(Vec3::new(ahead.x, e.p0.y, ahead.z));
         let edge_dz = on_edge.y - feet.y;
 
-        let candidate = if edge_dz <= GROUND_MAX_UP {
+        let thin = super::passover::far_edge(on_edge, -Vec3::new(e.n1.x, 0.0, e.n1.z).normalize_or_zero(), guidance).filter(|(_, t)| *t <= PASSOVER_MAX_THICKNESS);
+        let candidate = if edge_dz <= GROUND_MAX_UP && thin.is_some() {
+            // pass-over target (type 2) on a thin wall top. PORT: the game's type-2 guidance candidates are not traced;
+            // the port offers wall tops ≤ 1 m thick (the vault's 30 ↔ 100 cm blend range, 0xDDB800). The target sits
+            // 0.5 m before the edge (0xB1EC40 pulls targets back 0.5·h), the reception carries the root onto it.
+            let n = Vec3::new(e.n1.x, 0.0, e.n1.z).normalize_or_zero();
+            Some(JumpTarget { position: on_edge + n * 0.5, type_flags: 2, hang: None, straight: None, pass: Some((on_edge, n)) })
+        } else if edge_dz <= GROUND_MAX_UP {
             // ground target: land on top of the roof
             let landing = on_edge - e.n1 * LAND_INSET;
             let Some(h) = collision.ground_height(landing + Vec3::Y * 0.05, 0.2) else { continue };
             let pos = Vec3::new(landing.x, h, landing.z);
-            Some(JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None })
+            Some(JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None, pass: None })
         } else if edge_dz <= LEDGE_MAX_UP + WALL_HANG_DROP {
             // ledge target: hang from the edge (wall hang if there is wall below)
             let hang = if collision.point_inside(on_edge - e.n1 * 0.15 - Vec3::Y * 0.9) {
@@ -140,7 +151,7 @@ pub fn find_jump_target(
                 continue;
             }
             let flags = if hang == LedgeHangType::Wall { TARGET_LEDGE } else { TARGET_LEDGE_FREE };
-            Some(JumpTarget { position: pos, type_flags: flags, hang: Some((on_edge, e.n1)), straight: None })
+            Some(JumpTarget { position: pos, type_flags: flags, hang: Some((on_edge, e.n1)), straight: None, pass: None })
         } else {
             None
         };
@@ -194,7 +205,7 @@ pub fn find_jump_target(
         if flat.normalize().dot(want).clamp(-1.0, 1.0).acos() > TARGET_CONE {
             continue;
         }
-        return Some(JumpTarget { position: top, type_flags: super::jump_blend::TARGET_HAYSTACK, hang: None, straight: None });
+        return Some(JumpTarget { position: top, type_flags: super::jump_blend::TARGET_HAYSTACK, hang: None, straight: None, pass: None });
     }
     best.map(|b| b.0)
 }

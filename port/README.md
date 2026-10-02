@@ -223,7 +223,10 @@ Limitations:
   and leans while you keep pushing; release to stand up, or push sideways / back to step away through the game's exits.
   Knee-high obstacles (0.5–0.7 m) give the foot bump. `AC_AUTOPILOT=lean`.
 - **Look-down** (RE/03 §7.8a): standing still at a roof edge, he looks down over it (front / left / right).
-  `AC_AUTOPILOT=lookdown`. NarrowObject's own Edge and Lean states are unused in this game build (RE/05 §2.9).
+  `AC_AUTOPILOT=lookdown`.
+- **Pass-over vault** (RE/04 §4.1.13): a running jump (high profile + Legs) at a thin wall top (≤ 1 m thick) plays the game's
+  pass-over flight, plants a hand and vaults across (30 / 100 cm clips by thickness), then runs on or drops down.
+  `AC_AUTOPILOT=passover`. NarrowObject's own Edge and Lean states are unused in this game build (RE/05 §2.9).
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

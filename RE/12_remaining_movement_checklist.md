@@ -83,7 +83,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - ObstacleCollision (5) with **ObstacleLeanType** Hands/Feet.
 - [ ] **Free-run steps:** `xx_h_freestep_*` (up / down / front / left / right at 50 / 300 / 550 cm) and
       `freerunfront_entry_*` low-fall entries.
-- [ ] **Vault / pass-over** (vt1592/1596, `air_up_*_to_passover`, HandPassOver).
+- [x] **Vault / pass-over** (RE/04 §4.1.13): type 2 jumps, reception, HandPassOver vault, Ground / InAir. Open: pass-over pull-down, kind 4 chained jumps, roll ending, vt1592/1596.
 - [ ] **High obstacle** request (vt744/748, minimum height 5.0).
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).
 - [ ] **Ground loss → InAir:** fall-type table, plus `Human__ShouldFallOffSupport` 0xB23CB0 (no floor within 0.8 m).
@@ -199,7 +199,7 @@ free-step jumps (kind 1) from beams and pilotis.**
       `air_surface_tr_hangwall_reception_*`.
 - [ ] **One-hand catch** (`hangfree_onehand`, `hangwall_onehand`) → SecondHandGrab.
 - [ ] **Impacts:** `hangfree_impact_*` (catching at elbow/shoulder height, 50 cm, 150 cm).
-- [ ] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground).
+- [x] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground), RE/04 §4.1.13.
 - [~] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
       **→ decoded (RE/03 §7.8b); type Wait / front ported with the game's actions and roots. Open: EdgeStop (needs the ledge stop),
       side and beam variants, HandPassOver, ReleaseToInAir, the decision layer's event 70 input**

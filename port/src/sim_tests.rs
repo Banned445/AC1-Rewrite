@@ -1010,3 +1010,41 @@ fn standing_at_a_roof_edge_looks_down_toward_it() {
     s.run(0.1);
     assert!(s.ground().look_down.is_none(), "the stick ends it");
 }
+
+// ---------------------------------------------------------------- pass-over (RE/04 §4.1.13)
+
+#[test]
+fn passover_weights_follow_the_game() {
+    use crate::player::jump_blend::{passover_flight_weights, passover_takeoff_weights};
+    let mut f = [0.0f32; 5];
+    passover_flight_weights(&mut f, 0.4, 0.5, 0);
+    assert_eq!(f, [0.3, 0.2, 0.0, 0.3, 0.2]);
+    let mut t = [0.0f32; 40];
+    passover_takeoff_weights(&mut t, &f, 0);
+    assert_eq!((t[0], t[1], t[6], t[7]), (0.3, 0.2, 0.3, 0.2));
+    let mut f = [0.0f32; 5];
+    passover_flight_weights(&mut f, 0.5, 0.2, 1);
+    assert!((f[1] - 0.4).abs() < 1e-6 && (f[2] - 0.4).abs() < 1e-6 && (f[4] - 0.2).abs() < 1e-6);
+}
+
+#[test]
+fn running_jump_at_a_railing_vaults_it() {
+    use crate::player::passover::{PassOverPhase, FLIGHT_PASSOVER, VAULT};
+    // the 1 m railing at z 4 (x 38..42, z 3.85..4.15): run along -Z, jump
+    let mut s = Sim::new(Vec3::new(40.0, 0.0, 8.5), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(0.4);
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::InAir), "no jump");
+    let t = s.data().air.target.expect("a target");
+    assert_eq!(t.type_flags, 2, "pass-over target");
+    assert!(FLIGHT_PASSOVER.contains(&s.data().air.flight.unwrap().id));
+    assert!(s.run_until(2.0, |s| s.data().ledge.pass_over.is_some_and(|p| p.phase == PassOverPhase::Vault)), "no vault: {:?} {:?}", s.loco().current, s.body().feet);
+    let p = s.data().ledge.pass_over.unwrap();
+    assert!(VAULT.contains(&p.action.id));
+    assert!((p.w - 0.3).abs() < 0.02, "0.3 m thick → w 0.3: {}", p.w);
+    assert!((s.body().feet.y - 1.0).abs() < 0.01, "on the top: {:?}", s.body().feet);
+    // over and down on the far side
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::Ground && s.body().feet.y < 0.01), "never landed beyond: {:?} {:?}", s.loco().current, s.body().feet);
+    assert!(s.body().feet.z < 3.85, "on the far side: {:?}", s.body().feet);
+}

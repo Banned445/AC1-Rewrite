@@ -368,7 +368,7 @@ pub fn update_walling(
         // the wall (the game's stick vector +0x20 comes from the untraced pad controller).
         if sub != WallingSubState::EntryA && pad.speed01 > 0.0 && pad.dir.dot(normal) > 0.5 {
             let dir = Vec3::new(pad.dir.x, 0.0, pad.dir.z).normalize_or(normal);
-            let target = JumpTarget { position: body.feet + dir * 7.0 - Vec3::Y * 3.0, type_flags: jump_blend::TARGET_FREESTEP, hang: None, straight: None };
+            let target = JumpTarget { position: body.feet + dir * 7.0 - Vec3::Y * 3.0, type_flags: jump_blend::TARGET_FREESTEP, hang: None, straight: None, pass: None };
             body.heading = super::heading_of(dir);
             let from = body.feet;
             switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from, target, speed_param: 0.5, foot_left: true }));

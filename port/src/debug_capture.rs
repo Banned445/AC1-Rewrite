@@ -49,6 +49,8 @@ enum Scenario {
     Lean,
     /// Stand at roof A's +X edge facing along it: the look-down to the side.
     LookDown,
+    /// Run at the 1 m railing and jump: pass-over vault.
+    PassOver,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -76,6 +78,7 @@ impl Plugin for DebugCapturePlugin {
                 "beam" => Scenario::Beam,
                 "pilotis" => Scenario::Pilotis,
                 "lean" => Scenario::Lean,
+                "passover" => Scenario::PassOver,
                 "lookdown" => Scenario::LookDown,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
@@ -137,6 +140,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.feet = Vec3::new(71.0, 4.0, 70.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
                 rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::PassOver => {
+                b.feet = Vec3::new(40.0, 0.0, 9.5);
+                b.heading = 0.0;
+                rig.yaw = -1.2;
                 rig.distance = 6.0;
             }
             Scenario::Lean => {
@@ -274,6 +283,15 @@ fn autopilot(
             if t < 1.0 {
                 pad.magnitude = 0.0;
                 pad.speed01 = 0.0;
+            }
+        }
+        Scenario::PassOver => {
+            pad.dir = Vec3::NEG_Z;
+            pad.high_profile = true;
+            pad.magnitude = if t > 1.0 && t < 3.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if (1.6..1.62).contains(&t) {
+                pad.legs_pressed_ago = 0.0;
             }
         }
         Scenario::Lean => {

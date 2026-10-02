@@ -546,6 +546,12 @@ fn choose_clip(
                 sim_request(&mut p, &lib, &b, 5_000_000 + data.hay.seq as u64, 0.2)
             }
             // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            // pass-over (0xE07D00 case 2 / 0xDDB800): the reception, then the vault, at the sim's phase
+            ActorContextId::Ledge if data.ledge.pass_over.is_some_and(|p| sim_item(&lib, &p.action).is_some()) => {
+                let po = data.ledge.pass_over.unwrap();
+                p.sim_phase = Some((po.t / po.action.duration().max(1e-4)).min(1.0));
+                sim_request(&mut p, &lib, &po.action, 7_500_000 + po.seq as u64, 0.06)
+            }
             ActorContextId::Ledge if data.ledge.mv.and_then(|m| m.current()).is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
                 let (b, ph) = data.ledge.mv.unwrap().current().unwrap();
                 p.sim_phase = Some(ph);
