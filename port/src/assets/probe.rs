@@ -257,3 +257,71 @@ fn probe_dump_textures() {
         println!("{id}: {w}x{h}, {transparent} transparent px");
     }
 }
+
+/// Which joints the top of the head / hood is skinned to, per part (vertices above `PROBE_Y`, default 1.65 m).
+#[test]
+#[ignore]
+fn probe_hood_skin() {
+    let m = load_altair(&game_dir()).unwrap();
+    let names = serde_free_names();
+    let y: f32 = std::env::var("PROBE_Y").ok().and_then(|v| v.parse().ok()).unwrap_or(1.65);
+    for p in &m.parts {
+        let mut count: HashMap<u16, f32> = HashMap::new();
+        let mut n = 0;
+        for (i, pos) in p.positions.iter().enumerate() {
+            if pos[1] < y {
+                continue;
+            }
+            n += 1;
+            for k in 0..4 {
+                *count.entry(p.joints[i][k]).or_default() += p.weights[i][k];
+            }
+        }
+        if n == 0 {
+            continue;
+        }
+        let mut v: Vec<_> = count.into_iter().filter(|c| c.1 > 0.01).collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let s: Vec<String> = v.iter().take(8).map(|(j, w)| {
+            let id = m.skeleton[*j as usize].bone_id;
+            format!("{}({:08x})={:.1}", names.get(&id).cloned().unwrap_or("?".into()), id, w)
+        }).collect();
+        println!("{}: {} verts above {y}: {}", p.name, n, s.join(", "));
+    }
+}
+
+/// Mesh bones missing from Altaïr's 90-bone skeleton, per part, with their skin weight and bind position.
+#[test]
+#[ignore]
+fn probe_missing_bones() {
+    use super::ac_formats::{parse_mesh, parse_skeleton};
+    use super::forge::{crc32, Forge};
+    let names = serde_free_names();
+    let path = game_dir().join("DataPC.forge");
+    let mut forge = Forge::open(&path).unwrap();
+    let entry = forge.find("Rank 9").cloned().unwrap();
+    let res = forge.resources(&entry).unwrap();
+    let skel = res.iter().find(|r| r.name == "UCMA_Altair" && r.class_hash == crc32("Skeleton")).map(|r| parse_skeleton(&r.payload)).unwrap();
+    let have: std::collections::HashSet<u32> = skel.iter().map(|b| b.bone_id).collect();
+    for &name in super::altair::PARTS {
+        let Some(r) = res.iter().find(|r| r.name == name && r.class_hash == crc32("Mesh")) else { continue };
+        let Some(m) = parse_mesh(&r.payload) else { continue };
+        let mut w: HashMap<u32, f32> = HashMap::new();
+        for s in &m.submeshes {
+            for v in s.vstart as usize..(s.vstart + s.vcount) as usize {
+                for k in 0..4 {
+                    let local = m.bone_idx[v][k] as usize;
+                    if let Some(b) = s.palette.get(local).and_then(|&mb| m.bones.get(mb as usize)) {
+                        if !have.contains(&b.bone_id) {
+                            *w.entry(b.bone_id).or_default() += m.bone_w[v][k] as f32 / 255.0;
+                        }
+                    }
+                }
+            }
+        }
+        let mut v: Vec<_> = w.into_iter().collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let s: Vec<String> = v.iter().map(|(id, x)| format!("{}({id:08x})={x:.0}", names.get(id).cloned().unwrap_or("?".into()))).collect();
+        println!("{name}: {} mesh bones, missing: {}", m.bones.len(), s.join(", "));
+    }
+}

@@ -315,6 +315,7 @@ pub fn fall_grasp_weights(smoothed: Vec3, facing: Vec3) -> [f32; 6] {
 // Action ids used by the exe (RE/13 §4). Ledge tables 0x1A2C490.. (shimmy), 0x1A2C4C0.. (vertical steps).
 const ACT_HANG_WALL: u32 = 0x0106_F2E8;
 const ACT_HANG_FREE: u32 = 0x0127_19F1;
+const ACT_HANG_WALLFREE: u32 = 0x0106_F2E9;
 const ACT_PULLUP_WALL: u32 = 0x0106_D2C5;
 const ACT_PULLUP_FREE: u32 = 0x0127_19F2;
 /// Pull-up outcome "stand": hangknee → wait (transition target of the pull-up's last item).
@@ -576,6 +577,12 @@ fn choose_clip(
                             [Some(ACT_PULLUP_FREE), waist, Some(ACT_HANGKNEE_TO_WAIT)].into_iter().flatten().collect()
                         };
                         action(&lib, &ids, false, token, Some(0.1), None)
+                    }
+                    // free hang with a wall under it = LedgeHangType WallFree: `xx_h_hangwallfree_wait` (0x0106F2E9,
+                    // played after the straight jump's wall-free reception, 0xE07D00 → 0xE09055; the wait update
+                    // 0xDE1FE0 plays it for type 2), legs held clear of the wall
+                    _ if !wall && crate::player::ledge::wall_below_hands((l.hand_l + l.hand_r) * 0.5, l.normal, &collision) => {
+                        action(&lib, &[ACT_HANG_WALLFREE], true, 0, Some(0.15), Some("hang_free"))
                     }
                     _ => action(&lib, &[if wall { ACT_HANG_WALL } else { ACT_HANG_FREE }], true, 0, Some(0.15), Some(if wall { "hang_wall" } else { "hang_free" })),
                 }

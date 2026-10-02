@@ -13,7 +13,7 @@
 use bevy::prelude::*;
 
 use super::jump_blend::{self, ActionBlend};
-use super::ledge::{hang_root, hang_type_at, LedgeHangType};
+use super::ledge::{hang_root_at, hang_root, hang_type_at, LedgeHangType};
 use super::right_of;
 use crate::collision::CollisionWorld;
 use crate::guidance::GuidanceWorld;
@@ -252,7 +252,7 @@ pub fn try_corner(
     // (hypothesis: to the normal hand spacing around the point)
     let r = right_of(-nn);
     let (hl, hr) = (hit.point - r * HAND_SPACING * 0.5, hit.point + r * HAND_SPACING * 0.5);
-    let to = hang_root(hl, hr, nn, new_hang);
+    let to = hang_root_at(hl, hr, nn, new_hang, collision);
     if !collision.capsule_fits(to + Vec3::Y * 0.05) {
         return None;
     }
@@ -314,7 +314,7 @@ pub fn try_side_jump(
                     let c = hit.point + side * HAND_SPACING * 0.5;
                     let (hl, hr) = (c - r * HAND_SPACING * 0.5, c + r * HAND_SPACING * 0.5);
                     let new_hang = hang_type_at(c, nn, collision);
-                    let to = hang_root(hl, hr, nn, new_hang);
+                    let to = hang_root_at(hl, hr, nn, new_hang, collision);
                     if !collision.capsule_fits(to + Vec3::Y * 0.05) {
                         return None;
                     }
@@ -370,7 +370,7 @@ pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHa
         let nn = hit.wall_normal;
         let r = right_of(-nn);
         let (hl, hr) = (hit.point - r * HAND_SPACING * 0.5, hit.point + r * HAND_SPACING * 0.5);
-        let to = hang_root(hl, hr, nn, LedgeHangType::Free);
+        let to = hang_root_at(hl, hr, nn, LedgeHangType::Free, _collision);
         let v = (hit.point.y - root.y - 2.0).clamp(0.0, 1.0);
         let h = Vec2::new(hit.point.x - mid.x, hit.point.z - mid.z).length().clamp(0.0, 1.0);
         let w = [(1.0 - h) * (1.0 - v), (1.0 - h) * v, h * (1.0 - v), h * v];
@@ -483,7 +483,7 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
             let w = [1.0 - j.b, j.b];
             match j.end {
                 HangEnd::Hang(h) => {
-                    let to = hang_root(hand_l, hand_r, n, if h == LedgeHangType::Free || hang_type_at(mid, n, collision) == LedgeHangType::Free { LedgeHangType::Free } else { LedgeHangType::Wall });
+                    let to = hang_root_at(hand_l, hand_r, n, if h == LedgeHangType::Free || hang_type_at(mid, n, collision) == LedgeHangType::Free { LedgeHangType::Free } else { LedgeHangType::Wall }, collision);
                     ([item(j.reception, 0, &w), item(j.reception, 1, &w), None, None], to, h == LedgeHangType::Free, false)
                 }
                 HangEnd::StandFromKnee => ([item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_KNEE_TO_WAIT, 0, &[1.0]), None], top, false, true),
@@ -504,7 +504,7 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
         }
         LedgeArrival::Surface { free: true } => {
             // the swing: front up, front down (PORT: one swing, no SwingStrength decay)
-            let to = hang_root(hand_l, hand_r, n, LedgeHangType::Free);
+            let to = hang_root_at(hand_l, hand_r, n, LedgeHangType::Free, collision);
             ([item(SWING_RECEPTION, 0, &[1.0]), item(SWING_RECEPTION, 1, &[1.0]), None, None], to, true, false)
         }
     };
@@ -598,7 +598,7 @@ pub const TO_WALL: [u32; 2] = [0x01C3_2562, 0x01C3_2563];
 pub const TO_FREE: [u32; 4] = [0x01C3_14BD, 0x01C3_14BE, 0x01C3_217A, 0x01C3_217C];
 
 /// Ledge stick direction as the exe numbers it (QuantizeStickDirection 0xDD1920): 0 up, 1 down, 2 left, 3 right.
-pub fn switch_move(dir: u8, to_wall: bool, from: Vec3, hand_l: Vec3, hand_r: Vec3, n: Vec3) -> LedgeMove {
+pub fn switch_move(dir: u8, to_wall: bool, from: Vec3, hand_l: Vec3, hand_r: Vec3, n: Vec3, collision: &CollisionWorld) -> LedgeMove {
     let id = if to_wall { TO_WALL[(dir != 2) as usize] } else { TO_FREE[match dir { 2 => 0, 3 => 1, 0 => 2, _ => 3 }] };
     let a = single(id, 0);
     let d = a.map(|a| a.duration()).unwrap_or(0.0);
@@ -610,7 +610,7 @@ pub fn switch_move(dir: u8, to_wall: bool, from: Vec3, hand_l: Vec3, hand_r: Vec
         durations: [if d > 0.0 { d } else { SHIMMY_OPEN_TIME }, 0.0, 0.0, 0.0],
         t: 0.0,
         from,
-        to: hang_root(hand_l, hand_r, n, hang),
+        to: hang_root_at(hand_l, hand_r, n, hang, collision),
         facing_from: facing,
         facing_to: facing,
         // the root interpolator over the action (0xDE1060 → sub_711130)
@@ -700,7 +700,7 @@ pub fn pulldown(p: Vec3, n: Vec3, from: Vec3, wait: bool, guidance: &GuidanceWor
             3,
             [single(PULLDOWN_FREE[0], 0), single(PULLDOWN_FREE[1], 0), single(PULLDOWN_FREE[1], 1), None],
             p2,
-            hang_root(hl, hr, n, LedgeHangType::Free),
+            hang_root_at(hl, hr, n, LedgeHangType::Free, collision),
             facing_in,
             facing_in,
             false,

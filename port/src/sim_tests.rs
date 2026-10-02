@@ -691,3 +691,19 @@ fn pull_up_does_not_cut_through_the_wall() {
     assert_eq!(s.loco().current, ActorContextId::Ground);
     assert!((s.body().feet.y - 2.6).abs() < 0.05);
 }
+
+#[test]
+fn free_hang_against_a_wall_keeps_the_body_out_of_it() {
+    // the 2.6 m jump-up wall: free hang with wall under it = WallFree, root 0.5 m out (hangwallfree_wait)
+    let mut s = hang_on_jump_up_wall();
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let l = &s.data().ledge;
+    let f = s.body().feet;
+    let out = (f - (l.hand_l + l.hand_r) * 0.5).dot(l.normal);
+    assert!((out - 0.5).abs() < 0.05, "root 0.5 m out from the edge: {out}");
+    let c = crate::level::geometry().0;
+    // body in the clip: feet 0.30-0.39 m and hips 0.36 m in front of the root, i.e. 0.11-0.20 m off the wall
+    for h in [0.3f32, 1.2, 1.8] {
+        assert!(!c.point_inside(f + Vec3::Y * h - l.normal * 0.3), "body point {h} m up inside the wall");
+    }
+}
