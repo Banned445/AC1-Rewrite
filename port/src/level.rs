@@ -61,7 +61,13 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (70.0, 60.0, 3.0, 1.5, 1.8), // probe A: pull-up onto the top from the entry
     (76.0, 60.0, 3.0, 1.5, 3.8), // the vertical step, then probe C: hang from the top edge
     (82.0, 60.0, 3.0, 1.5, 6.0), // no ledge in reach: vertical end, drop back
+    // --- beam (NarrowObject, RE/05 §2): two 4 m platforms joined by a 6 m beam at 4 m (BEAMS) ---
+    (70.0, 70.0, 4.0, 4.0, 4.0),
+    (80.0, 70.0, 4.0, 4.0, 4.0),
 ];
+
+/// Beams (p0, p1 on the top centre line; 0.2 m wide, 0.2 m thick): solid, and guidance edges of sub-type Beam.
+pub const BEAMS: &[(Vec3, Vec3)] = &[(Vec3::new(72.0, 4.0, 70.0), Vec3::new(78.0, 4.0, 70.0))];
 
 /// Haystacks (centre x, centre z, size x, size z, height): not solid, jump targets of type 0x800. The first
 /// one sits 4.5 m off the high block's +X face (roof 9.5 m): the Leap of Faith test.
@@ -105,6 +111,11 @@ pub fn geometry() -> (CollisionWorld, GuidanceWorld) {
         let max = Vec3::new(x + sx * 0.5, top, z + sz * 0.5);
         collision.boxes.push(Aabb3 { min, max });
         add_roof_edges(&mut guidance, min, max);
+    }
+    for &(p0, p1) in BEAMS {
+        let (lo, hi) = (p0.min(p1), p0.max(p1));
+        collision.boxes.push(Aabb3 { min: Vec3::new(lo.x - 0.1, lo.y - 0.2, lo.z - 0.1), max: Vec3::new(hi.x + 0.1, hi.y, hi.z + 0.1) });
+        guidance.edges.push(GuidanceEdge { p0, p1, n0: Vec3::Y, n1: Vec3::Y, subtype: GuidanceSubType::Beam });
     }
     for &(x, z, sx, sz, h) in HAYSTACKS {
         guidance.haystacks.push(Aabb3 { min: Vec3::new(x - sx * 0.5, 0.0, z - sz * 0.5), max: Vec3::new(x + sx * 0.5, h, z + sz * 0.5) });
@@ -175,6 +186,12 @@ fn build_level(
     let hay_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.85, 0.72, 0.30), perceptual_roughness: 1.0, ..default() });
     for &(x, z, sx, sz, h) in HAYSTACKS {
         commands.spawn((Mesh3d(meshes.add(Cuboid::new(sx, h, sz))), MeshMaterial3d(hay_mat.clone()), Transform::from_xyz(x, h * 0.5, z)));
+    }
+    let beam_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.45, 0.32, 0.2), perceptual_roughness: 0.9, ..default() });
+    for &(p0, p1) in BEAMS {
+        let (lo, hi) = (p0.min(p1), p0.max(p1));
+        let size = Vec3::new(hi.x - lo.x + 0.2, 0.2, hi.z - lo.z + 0.2);
+        commands.spawn((Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))), MeshMaterial3d(beam_mat.clone()), Transform::from_translation((lo + hi) * 0.5 - Vec3::Y * 0.1)));
     }
     // visual stone bands on the climb tower
     let band_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.62, 0.55, 0.45), ..default() });

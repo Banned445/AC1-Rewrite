@@ -258,6 +258,16 @@ pub fn update_ground(
             }
         }
 
+        // ---------------------------------------------------------------- beam (NarrowObject, event 72)
+        // Guard 0xD9F4C0: a beam in the box ahead (±0.75 m, 0–1 m, ±0.53 m). PORT trigger: walking at it (the
+        // decision layer's event 72 sender is not traced).
+        if moving && !busy {
+            if let Some(entry) = super::narrow::try_mount_beam(body.feet, body.forward(), &guidance) {
+                switch_context(&mut loco, &mut data, TransitionSetup::ToBeam(entry));
+                continue;
+            }
+        }
+
         // ---------------------------------------------------------------- climb / grab requests
         // interpreter vt736/740 (grab wall) and vt764/768 (climb start): high profile + Legs into a wall
         let forward = body.forward();

@@ -35,6 +35,8 @@ enum Scenario {
     PullDown,
     /// Walk (low profile) into roof A's edge: ledge stop, step back.
     LedgeStop,
+    /// Walk across the beam between the two 4 m platforms.
+    Beam,
     /// Wall run at the 3.8 m wall: entry, vertical step, hang from the top edge.
     WallRun,
     /// Run off the high block's +X edge into the haystack (Leap of Faith), wait, hop out.
@@ -63,6 +65,7 @@ impl Plugin for DebugCapturePlugin {
                 "ledgestop" => Scenario::LedgeStop,
                 "faith" => Scenario::Faith,
                 "wallrun" => Scenario::WallRun,
+                "beam" => Scenario::Beam,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -115,6 +118,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
             Scenario::PullDown => {
                 b.feet = Vec3::new(10.6, 3.5, 12.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, over the drop
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::Beam => {
+                b.feet = Vec3::new(71.0, 4.0, 70.0);
+                b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
             }
@@ -204,6 +213,14 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             pad.high_profile = false;
             if (0.5..0.52).contains(&t) {
                 pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::Beam => {
+            pad.dir = Vec3::X;
+            pad.high_profile = false;
+            if t < 1.0 {
+                pad.magnitude = 0.0;
+                pad.speed01 = 0.0;
             }
         }
         Scenario::WallRun => {

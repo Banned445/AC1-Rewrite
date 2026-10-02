@@ -114,6 +114,8 @@ post-run state 4, the command source, the rebound landing query.**
 - [ ] **Rebound jump** (0xE365C0): within ±89° of the wall normal; fallback 7 m out, 3 m down.
 - [ ] **Walling commands 0–4** from the pad controller (+0x38; meaning still open).
 ### 3.2 NarrowObject (context 12) — RE/05 §2
+**→ beams ported 2026-10-02 (RE/05 §2.7): straight mount from Ground, walk / jog / stop / turn on the beam line, step-off. Free-step
+arrival decoded as a transient (back to Ground on wide support).**
 - [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
       The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.

@@ -175,6 +175,45 @@ Movement-state tick (`0xE534B0`):
 ### 2.6 Beam constants (from scan of 0xF6E000–0xF81000)
 0.16, 0.25, 0.3, 0.31, 0.4, 0.5, 0.6, 0.8, 1.2, 1.5, 2.5, 7, −7, −12, 15, angles 30°/45°/60°/75°/90°/120°/135°/58° (1.0123), cos 80° (0.17365).
 
+### 2.7 Movement exits, beam mount from Ground, beam actions and the port (verified 2026-10-02)
+**Movement state** (`StateMovement_Update` 0xE534B0) runs `CheckSupportAndFall` 0xE51190 every tick. From half of the playing action onward it reads the support classification (Human+0xFC vt276):
+- bit 1 → flag 2;
+- bit 2 → flag 8.
+
+Then:
+- **flags 0xC** → `ToGround` 0xE51DD0 (context 4);
+- **flags 3** → `ToInAir` 0xE4DFE0 (context 8);
+- **flag 0x10** → `ToHayStack` 0xE4E010.
+
+With no support it builds a fall/jump setup (0xB0FB70, types 0/1/3/4/6 by stick, move mode and a 120° check), or plays the recover clips 250441553/4.
+
+So a roof-edge free-step arrival is a **transient** NarrowObject stay that returns to Ground once the support under the feet is wide. The port keeps such landings in Ground, the same end state.
+
+**Beam mount from Ground:** Movement event **72**.
+- **Guard** `Guard_Event72_MountBeam` 0xD9F4C0: a guidance query (`sub_116E1A0`, cone 90°) in the box x ±0.75 (sideways), y 0…1.0 (ahead), z ±0.53, then a clearance capsule. The height blend is (beam z − feet z)/0.53, and the beam must lie within radius + 0.5·(1 − blend).
+- **Action** 0xD898A0 → fill 0xD84A40 → context 12.
+
+**Beam actions** (HumanNarrowObject block, by clip name):
+
+| Purpose | Ids | Clips |
+|---|---|---|
+| Waits | `0x28A3A8E2` / `0x28A3A8E3` | `xx_l_beam_crouchwait_foot{l,r}` (2 s) |
+| Walk | `0x28A3A8E4` | items foot l / foot r, each [`crouchwalk`, `crouchjog`]; walk 1.01 m per 0.733 s, jog 1.74 m / 0.467 s |
+| Starts | `0x34662CB4` / `0x34662CB5` | |
+| Jog stops | `0x3466339D` / `0x3466339E` | |
+| Turn 180° | `0x28A3A8EE` / `0x28A3A8EF` | `crouchwait_foot{l,r}_turn180` (0.33 s) |
+| 90° waits / turns, air landings, pilotis | `0x02E4A9DF`, `0x048185EB`, … | |
+
+**Port** (`player/narrow.rs`):
+- Straight beam entry (|facing · axis| ≥ 0.866) from the event-72 box.
+- **Main:** wait → start → walk (feet alternating), stop, turn 180°. The root is the actions' forward root motion projected onto the beam line (0xF7C3A0); it stops 0.3 m before an end, or steps off within 0.16 m when there is floor and room beyond (0xF77C00) → Ground.
+- **PORT:**
+  - The event-72 trigger is walking at the beam.
+  - Walk vs jog is set by the profile.
+  - The entry alignment takes 0.25 s.
+- **Not ported:** side entries (modes 3–5), 90° waits, beam landings from the air (0xE0B890), jumps off the beam, corner hops, pilotis, edges and leans.
+- `AC_AUTOPILOT=beam`.
+
 ## 3. HumanPole (lighter)
 
 ### 3.1 Summary

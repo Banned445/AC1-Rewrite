@@ -29,7 +29,7 @@ impl Sim {
             .insert_resource(PadInput { legs_pressed_ago: f32::INFINITY, ..default() })
             .insert_resource(SpawnPoint(SPAWN))
             .init_resource::<CameraRig>()
-            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling).chain());
+            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling, crate::player::narrow::update_narrow).chain());
         let (c, g) = level::geometry();
         app.insert_resource(c).insert_resource(g);
         let player = app.world_mut().spawn(player_components(feet, heading)).id();
@@ -771,4 +771,38 @@ fn pushing_away_from_the_wall_rebounds() {
     let z0 = s.body().feet.z;
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground));
     assert!(s.body().feet.z < z0 - 2.0, "pushed off away from the wall: {:?}", s.body().feet);
+}
+
+#[test]
+fn walk_across_a_beam_onto_the_far_platform() {
+    use crate::player::narrow::{BeamState, BEAM_WALK};
+    // platform A x 68..72 (top 4 m), beam x 72..78 at 4 m, platform B x 78..82
+    let mut s = Sim::new(Vec3::new(71.0, 4.0, 70.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::NarrowObject), "never mounted: {:?} {:?}", s.loco().current, s.body().feet);
+    assert!(s.run_until(2.0, |s| s.data().narrow.action.is_some_and(|a| a.id == BEAM_WALK)), "never walked: {:?}", s.data().narrow.state);
+    // on the line, at the beam's height
+    let f = s.body().feet;
+    assert!((f.z - 70.0).abs() < 0.01 && (f.y - 4.0).abs() < 0.01, "on the beam: {f:?}");
+    assert!(s.run_until(8.0, |s| s.loco().current == ActorContextId::Ground), "never stepped off: {:?} {:?} {:?}", s.loco().current, s.data().narrow.state, s.body().feet);
+    s.run(0.5);
+    let f = s.body().feet;
+    assert!(f.x > 78.0 && (f.y - 4.0).abs() < 0.05, "on platform B: {f:?}");
+    let _ = BeamState::Walk;
+}
+
+#[test]
+fn turn_around_on_a_beam() {
+    use crate::player::narrow::BeamState;
+    let mut s = Sim::new(Vec3::new(71.0, 4.0, 70.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::NarrowObject));
+    s.run(1.5);
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(1.0, |s| s.data().narrow.state == BeamState::Wait));
+    s.pad(Vec3::NEG_X, 1.0, false, false);
+    assert!(s.run_until(0.5, |s| s.data().narrow.state == BeamState::Turn), "no turn: {:?}", s.data().narrow.state);
+    assert!(s.run_until(1.0, |s| s.data().narrow.state != BeamState::Turn));
+    assert!(!s.data().narrow.toward_p1, "now facing back toward p0");
+    assert!(s.body().forward().dot(Vec3::NEG_X) > 0.99);
 }
