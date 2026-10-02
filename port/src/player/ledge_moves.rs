@@ -460,6 +460,22 @@ pub fn hang_jump_in(dz: f32, wall: bool) -> Option<HangJumpIn> {
     })
 }
 
+/// 0xB21DA0 when the playing action is not the ground's straight-jump impulse (89 / 0x1099C96), e.g. from the
+/// beam's impulsion (`HumanNarrowObjectBeam` 0xF73B80): the ≥ 1.5 m bands fly the `beam_jumpstraight_*`
+/// flights 0x516D52DB…DF (same weights, offsets, flags; the receptions stay the ground ones, 0xE07D00).
+pub fn hang_jump_in_beam(dz: f32, wall: bool) -> Option<HangJumpIn> {
+    let mut j = hang_jump_in(dz, wall)?;
+    j.flight = match j.flight {
+        0x0127_2A69 => 0x516D_52DF, // → hangknee 150/200
+        0x0127_1631 => 0x516D_52DD, // → hangwall 200/250
+        0x0127_1639 => 0x516D_52DE, // → hangwaist 200/250
+        0x0121_A8B1 => 0x516D_52DC, // → hangwallfree 250/300
+        0x0121_A598 => 0x516D_52DB, // → hangfree 250/300
+        f => f,                     // < 1.5 m: no beam variant
+    };
+    Some(j)
+}
+
 /// How a jump at a ledge is received when it arrives (CheckJumpTargetArrival 0xE07D00).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LedgeArrival {

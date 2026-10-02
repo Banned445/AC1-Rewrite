@@ -64,6 +64,12 @@ pub enum InAirEntry {
     /// `foot_left` = the leading foot (byte+60 bits 2–3 of the playing item, or sub_B18850).
     JumpToTarget { from: Vec3, target: JumpTarget, speed_param: f32, foot_left: bool },
     FreeJump { from: Vec3, dir: Vec3, speed_param: f32 },
+    /// A free-step jump (jump kind 1: the `freestep_*_to_air` takeoff) from a beam or a pilotis to a target
+    /// (NarrowObject event 4 → `Human__SetupJumpToTarget` 0xB20200 with kind 1, 0xE4D950).
+    FreeStepJump { from: Vec3, target: JumpTarget, foot_left: bool },
+    /// A jump without a target that plays one action's root motion, then falls (the beam's jump on the spot,
+    /// 0xF73B80: `beam_jumpstraight_clear`, then InAir +416 = `…_clear_tr_fall`).
+    OnPlace { from: Vec3, fwd: Vec3, action: ActionBlend, fall: Option<ActionBlend> },
     Fall { from: Vec3, velocity: Vec3, origin: FallOrigin, speed_param: f32 },
 }
 
@@ -124,6 +130,9 @@ pub struct HumanInAirData {
     pub foot_left: bool,
     /// Jump / fall start (JumpOrigin +0x10 translation).
     pub start: Vec3,
+    /// The action played once the jump turns into a fall (HumanInAirData+416), and the time since.
+    pub fall_action: Option<ActionBlend>,
+    pub fall_t: f32,
 }
 
 impl HumanInAirData {
@@ -134,6 +143,8 @@ impl HumanInAirData {
         self.target_flags = 0;
         self.target = None;
         self.time_in_air = 0.0;
+        self.fall_action = None;
+        self.fall_t = 0.0;
         match entry {
             InAirEntry::JumpToTarget { from, target, speed_param, foot_left } => {
                 self.speed_ratio = speed_param;
@@ -159,8 +170,39 @@ impl HumanInAirData {
                 }
                 self.mode = match (target.straight, target.hang) {
                     (Some(j), Some((_, n))) => self.straight_jump(from, aim, j, n),
-                    _ => self.real_jump(from, aim, target.type_flags, then_fall_to),
+                    _ => self.real_jump(from, aim, target.type_flags, then_fall_to, 0),
                 };
+            }
+            InAirEntry::FreeStepJump { from, target, foot_left } => {
+                self.speed_ratio = 0.0;
+                self.foot_left = foot_left;
+                self.start_y = from.y;
+                self.start = from;
+                self.apex_y = from.y;
+                self.prev_y = from.y;
+                self.target_flags = target.type_flags;
+                self.target = Some(target);
+                let mut aim = target.position;
+                let mut then_fall_to = None;
+                if target.position.y < from.y - OVERDROP {
+                    aim.y = from.y - OVERDROP;
+                    then_fall_to = Some(target.position);
+                }
+                self.mode = self.real_jump(from, aim, target.type_flags, then_fall_to, 1);
+            }
+            InAirEntry::OnPlace { from, fwd, action, fall } => {
+                self.speed_ratio = 0.0;
+                self.start_y = from.y;
+                self.start = from;
+                self.apex_y = from.y;
+                self.prev_y = from.y;
+                self.takeoff = None;
+                self.flight = Some(action);
+                self.fall_action = fall;
+                let fwd = Vec3::new(fwd.x, 0.0, fwd.z).normalize_or(Vec3::NEG_Z);
+                let clip_end = from + to_world(action.disp(1.0), fwd);
+                let d = action.duration().max(0.1);
+                self.mode = AirMode::Jump { from, clip_end, aim: clip_end, apex: 0.0, duration: d, t: 0.0, then_fall_to: Some(clip_end), real: true, t_takeoff: 0.0, fwd };
             }
             InAirEntry::FreeJump { from, dir, speed_param } => {
                 self.start_y = from.y;
@@ -172,7 +214,7 @@ impl HumanInAirData {
                 // PORT: the game always jumps to a target (vt28 resolves one, 0xD832F0); with none in
                 // range the port jumps FREE_JUMP_DISTANCE ahead with the free-step blend, then falls.
                 let aim = from + dir * FREE_JUMP_DISTANCE;
-                self.mode = self.real_jump(from, aim, TARGET_FREESTEP, Some(aim));
+                self.mode = self.real_jump(from, aim, TARGET_FREESTEP, Some(aim), 0);
             }
             InAirEntry::Fall { from, origin, speed_param, .. } => {
                 self.speed_ratio = speed_param;
@@ -190,10 +232,10 @@ impl HumanInAirData {
 impl HumanInAirData {
     /// Human__SetupJumpToTarget 0xB20200 for a ground running jump (kind 0): pick and weight the takeoff and
     /// flight items (0xB1EC40), T₁/T₂ = their Σw·T durations, anim end = their summed displacement.
-    fn real_jump(&mut self, from: Vec3, aim: Vec3, target_type: u32, then_fall_to: Option<Vec3>) -> AirMode {
+    fn real_jump(&mut self, from: Vec3, aim: Vec3, target_type: u32, then_fall_to: Option<Vec3>, kind: u8) -> AirMode {
         let flat = Vec3::new(aim.x - from.x, 0.0, aim.z - from.z);
         let fwd = flat.normalize_or(Vec3::NEG_Z);
-        let b = jump_blend::compute(aim.y - from.y, flat.length(), target_type, self.foot_left, 1.0);
+        let b = jump_blend::compute_kind(aim.y - from.y, flat.length(), target_type, self.foot_left, 1.0, kind);
         let takeoff = ActionBlend::new(b.takeoff, 0, &b.takeoff_w);
         let flight = ActionBlend::new(b.flight, 0, &b.flight_w);
         let (t1, t2) = (takeoff.duration(), flight.duration());
@@ -264,6 +306,23 @@ fn find_air_catch(feet: Vec3, facing: Vec3, guidance: &GuidanceWorld) -> Option<
     None
 }
 
+/// The narrow-object part of `CheckAirCatch` 0xE0BB70 (fall height < 9 m, not while a target is still ahead):
+/// first a pilotis under the feet (a support within 0.5 m, then 0xB2B600 from the air → soft landing,
+/// PilotisReception), then a beam in the 0xE0B890 box (→ landing, BeamReception mode 7).
+fn narrow_catch(feet: Vec3, facing: Vec3, foot: usize, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<TransitionSetup> {
+    use super::narrow::*;
+    if let Some(h) = collision.ground_height(feet + Vec3::Y * 0.01, 0.5) {
+        let support = Vec3::new(feet.x, h, feet.z);
+        if let Some(top) = find_pilotis(feet, support, facing, true, guidance, collision) {
+            return Some(TransitionSetup::ToPilotis(PilotisEntry { top, from: feet, facing, kind: PilotisEntryType::FromInAir, foot }));
+        }
+    }
+    let (p0, p1, point) = beam_at(feet, facing, guidance, collision)?;
+    let axis = Vec3::new(p1.x - p0.x, 0.0, p1.z - p0.z).normalize_or_zero();
+    let f = Vec3::new(facing.x, 0.0, facing.z).normalize_or(Vec3::NEG_Z);
+    Some(TransitionSetup::ToBeam(BeamEntry { p0, p1, point, from: feet, toward_p1: axis.dot(f) >= 0.0, mode: BeamEntryMode::Reception, foot, action: None, facing: f }))
+}
+
 pub fn update_air(
     time: Res<Time>,
     pad: Res<PadInput>,
@@ -288,6 +347,8 @@ pub fn update_air(
         let mut on_target = false;
         let mut hang_on: Option<LedgeEntry> = None;
         let mut hay_on: Option<super::hay::HayStackEntry> = None;
+        let mut narrow_on: Option<TransitionSetup> = None;
+        let foot = (!air.foot_left) as usize;
         match air.mode {
             AirMode::Jump { from, clip_end, aim, apex, duration, t, then_fall_to, real, t_takeoff, fwd } => {
                 let t1 = (t + dt).min(duration);
@@ -336,8 +397,12 @@ pub fn update_air(
                             hay_on = Some(super::hay::HayStackEntry { stack: *stack, faith, from: body.feet, speed: body.velocity.length() });
                         }
                     }
+                    // a jump without a real target (on the spot / free jump) can come down on a beam or a pilotis
+                    if air.target.is_none() && hang_on.is_none() {
+                        narrow_on = narrow_catch(body.feet, fwd, foot, &guidance, &collision);
+                    }
                     match then_fall_to {
-                        _ if hang_on.is_some() || hay_on.is_some() => {}
+                        _ if hang_on.is_some() || hay_on.is_some() || narrow_on.is_some() => {}
                         Some(p) if collision.ground_height(body.feet + Vec3::Y * 0.05, 0.1).is_none() => {
                             air.mode = AirMode::Fall { steer_to: if p == aim { None } else { Some(p) } };
                         }
@@ -371,16 +436,24 @@ pub fn update_air(
                 }
                 body.velocity.x = h.x;
                 body.velocity.z = h.z;
+                air.fall_t += dt;
+                // narrow objects are caught before the ground contact (0xE0BB70 runs before 0xE05200)
+                if body.velocity.y <= 0.0 && air.apex_y - body.feet.y < 9.0 && air.time_in_air > 0.1 {
+                    narrow_on = narrow_catch(body.feet + body.velocity * dt, body.forward(), foot, &guidance, &collision);
+                }
                 let r = collision.move_capsule(body.feet, body.velocity * dt, false);
                 body.feet = r.position;
-                if r.hit_wall {
+                if narrow_on.is_some() {
+                    // caught: the entry warps the root onto the beam / top
+                } else if r.hit_wall {
                     body.velocity.x = 0.0;
                     body.velocity.z = 0.0;
                 }
                 if r.hit_ceiling && body.velocity.y > 0.0 {
                     body.velocity.y = 0.0;
                 }
-                if r.landed && body.velocity.y <= 0.0 {
+                if narrow_on.is_some() {
+                } else if r.landed && body.velocity.y <= 0.0 {
                     landed_at = Some(body.feet.y);
                 } else if pad.legs_held && body.velocity.y <= 0.5 && air.time_in_air > 0.3 {
                     // grab requested (SetGrabRequested 0xE102D0) → catch a ledge in reach
@@ -410,6 +483,10 @@ pub fn update_air(
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;
             switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+        } else if let Some(setup) = narrow_on {
+            air.mode = AirMode::Idle;
+            body.velocity = Vec3::ZERO;
+            switch_context(&mut loco, &mut data, setup);
         } else if let Some(e) = hay_on {
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;
@@ -433,6 +510,23 @@ pub fn update_air(
                 ActionBlend::new(id, 0, &w)
             });
             air.mode = AirMode::Idle;
+            // A free-step arrival continues in NarrowObject (0xE07D00: SubState 6 → Movement); its Movement state
+            // tries a pilotis first (`TryPilotisFreeStep` 0xE50190), then a beam (`TryMountBeam` 0xE52AD0), and
+            // returns to Ground on wide support (0xE51190, the port's default).
+            if on_target && matches!(air.target_flags, 1 | 0x10000) {
+                let fwd = body.forward();
+                let foot = (!air.foot_left) as usize;
+                let stick = (pad.speed01 > 0.0).then_some(pad.dir);
+                if let Some(top) = super::narrow::find_pilotis(body.feet, body.feet, fwd, false, &guidance, &collision) {
+                    let e = super::narrow::PilotisEntry { top, from: body.feet, facing: fwd, kind: super::narrow::PilotisEntryType::FromFreeStep, foot };
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToPilotis(e));
+                    continue;
+                }
+                if let Some(e) = super::narrow::free_step_beam_entry(body.feet, fwd, stick, foot, landing.action, pad.high_profile, &guidance, &collision) {
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToBeam(e));
+                    continue;
+                }
+            }
             switch_context(&mut loco, &mut data, TransitionSetup::ToMovement { landing: Some(landing) });
         }
     }

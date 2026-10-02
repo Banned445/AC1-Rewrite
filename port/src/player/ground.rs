@@ -452,23 +452,27 @@ fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision:
     }
     // 2. a ledge whose hands are 0.53–3.0 m above the feet (guard 0xD84190): the standing straight jump at it
     //    (HumanGround 0xD85550 → Human__SetupJumpToHandTarget 0xB21DA0), band by the hand height
+    let target = straight_hand_target(feet, forward, guidance, collision, false)?;
+    Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }))
+}
+
+/// The hand target of a standing straight jump (0xB21DA0): a ledge in the 0.75 m grab probe whose hands are
+/// 0.53–3.0 m above the feet; `beam` selects the `beam_jumpstraight_*` flights (jump from the beam impulsion).
+pub fn straight_hand_target(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld, beam: bool) -> Option<JumpTarget> {
+    let reach = |h: f32| {
+        guidance
+            .probe(feet + Vec3::Y * h, GRAB_PROBE_RADIUS, 0.225, Some(forward), std::f32::consts::FRAC_PI_2)
+            .filter(|hit| (hit.point - feet).dot(forward) > 0.0)
+    };
     let hand = [0.6f32, 0.9, 1.3, 1.7, 2.1, 2.5, 2.9]
         .into_iter()
         .filter_map(reach)
-        .find(|h| (GRAB_MIN_HEIGHT..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)));
-    if let Some(hand) = hand {
-        let n = hand.wall_normal;
-        let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
-        let j = super::ledge_moves::hang_jump_in(hand.point.y - feet.y, wall)?;
-        let target = JumpTarget {
-            position: hand.point + n * j.out - Vec3::Y * j.down,
-            type_flags: j.flags,
-            hang: Some((hand.point, n)),
-            straight: Some(j),
-        };
-        return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }));
-    }
-    None
+        .find(|h| (GRAB_MIN_HEIGHT..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)))?;
+    let n = hand.wall_normal;
+    let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
+    let dz = hand.point.y - feet.y;
+    let j = if beam { super::ledge_moves::hang_jump_in_beam(dz, wall)? } else { super::ledge_moves::hang_jump_in(dz, wall)? };
+    Some(JumpTarget { position: hand.point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((hand.point, n)), straight: Some(j) })
 }
 
 /// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a

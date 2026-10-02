@@ -806,3 +806,137 @@ fn turn_around_on_a_beam() {
     assert!(!s.data().narrow.toward_p1, "now facing back toward p0");
     assert!(s.body().forward().dot(Vec3::NEG_X) > 0.99);
 }
+
+// ---------------------------------------------------------------- beams from the air, beam jumps, pilotis (RE/05 §2.8)
+
+/// Free-run off platform P (x 68..72, top 3 m) toward the posts at x 74.5 / 77 / 79.5 (z 80).
+fn on_pilotis_row() -> Sim {
+    let mut s = Sim::new(Vec3::new(69.0, 3.0, 80.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    s
+}
+
+/// Switch the player straight into a context (test setup).
+fn force(s: &mut Sim, setup: crate::player::TransitionSetup) {
+    let w = s.app.world_mut();
+    let mut e = w.entity_mut(s.player);
+    let (mut loco, mut data) = (e.take::<Locomotion>().unwrap(), e.take::<HumanDataBundle>().unwrap());
+    crate::player::switch_context(&mut loco, &mut data, setup);
+    e.insert((loco, data));
+}
+
+#[test]
+fn free_run_onto_a_pilotis_and_hop_along_the_posts() {
+    use crate::player::narrow::{BeamState, NarrowKind};
+    let mut s = on_pilotis_row();
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::NarrowObject), "never reached a post: {:?} {:?}", s.loco().current, s.body().feet);
+    assert_eq!(s.data().narrow.kind, NarrowKind::Pilotis);
+    s.pad(Vec3::X, 0.0, true, false);
+    assert!(s.run_until(2.0, |s| s.data().narrow.state == BeamState::PilotisWait), "no wait: {:?}", s.data().narrow.state);
+    let f = s.body().feet;
+    assert!((f - Vec3::new(74.5, 3.0, 80.0)).length() < 0.05, "on the first post top: {f:?}");
+    // hop to the next posts with high profile + Legs + the stick
+    for x in [77.0f32, 79.5] {
+        s.pad(Vec3::X, 1.0, true, false);
+        s.press_legs();
+        assert!(s.run_until(0.3, |s| s.loco().current == ActorContextId::InAir), "no jump from the post");
+        s.pad(Vec3::X, 0.0, true, false);
+        assert!(
+            s.run_until(3.0, |s| s.data().narrow.state == BeamState::PilotisWait && s.loco().current == ActorContextId::NarrowObject),
+            "no arrival at {x}: {:?} {:?}",
+            s.loco().current,
+            s.body().feet
+        );
+        let f = s.body().feet;
+        assert!((f - Vec3::new(x, 3.0, 80.0)).length() < 0.05, "on the post at {x}: {f:?}");
+    }
+    // and off onto platform Q
+    s.pad(Vec3::X, 1.0, true, false);
+    s.press_legs();
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground), "never landed on Q: {:?}", s.loco().current);
+    let f = s.body().feet;
+    assert!(f.x > 82.0 && (f.y - 3.0).abs() < 0.05, "on platform Q: {f:?}");
+}
+
+#[test]
+fn pilotis_impulsion_and_jump_on_the_spot() {
+    use crate::player::narrow::{BeamState, PilotisEntry, PilotisEntryType};
+    let top = Vec3::new(74.5, 3.0, 80.0);
+    let mut s = Sim::new(top, -std::f32::consts::FRAC_PI_2);
+    force(&mut s, crate::player::TransitionSetup::ToPilotis(PilotisEntry { top, from: top, facing: Vec3::X, kind: PilotisEntryType::FromInAir, foot: 0 }));
+    assert!(s.run_until(1.5, |s| s.data().narrow.state == BeamState::PilotisWait));
+    s.pad(Vec3::ZERO, 0.0, true, false);
+    s.press_legs();
+    assert!(s.run_until(0.3, |s| s.data().narrow.state == BeamState::ImpulseIn), "no impulsion: {:?}", s.data().narrow.state);
+    assert!(s.run_until(1.0, |s| s.data().narrow.state == BeamState::ImpulseWait));
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::InAir), "no jump on the spot: {:?}", s.data().narrow.state);
+    let mut top_y: f32 = 0.0;
+    for _ in 0..120 {
+        s.run(1.0 / 60.0 + 1e-4);
+        top_y = top_y.max(s.body().feet.y);
+        if s.loco().current == ActorContextId::NarrowObject {
+            break;
+        }
+    }
+    assert!((top_y - 4.0).abs() < 0.05, "rose 1.0 m (beam_jumpstraight_clear): {top_y}");
+    assert_eq!(s.loco().current, ActorContextId::NarrowObject, "caught back on the post");
+    assert!(s.run_until(1.5, |s| s.data().narrow.state == BeamState::PilotisWait));
+    assert!((s.body().feet - top).length() < 0.05);
+}
+
+#[test]
+fn running_jump_onto_a_beam_mounts_it_straight() {
+    use crate::player::narrow::{BeamEntryMode, BeamState, NarrowKind};
+    // platform B (x 78..82, top 4) → the free beam x 84.5..90.5 at z 70
+    let mut s = Sim::new(Vec3::new(79.0, 4.0, 70.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::NarrowObject), "never reached the beam: {:?} {:?}", s.loco().current, s.body().feet);
+    let n = &s.data().narrow;
+    assert_eq!(n.kind, NarrowKind::Beam);
+    assert_eq!(n.entry_mode, BeamEntryMode::Straight);
+    assert!(n.toward_p1);
+    let f = s.body().feet;
+    assert!((f.z - 70.0).abs() < 0.01 && (f.y - 4.0).abs() < 0.01 && f.x > 84.5, "on the beam line: {f:?}");
+    // keeps walking along it while the stick is held
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(2.0, |s| s.data().narrow.state == BeamState::Walk));
+}
+
+#[test]
+fn falling_onto_a_beam_is_caught() {
+    use crate::player::narrow::{BeamEntryMode, BeamState};
+    // drop from 1.5 m above the free beam (5 cm off its line)
+    let from = Vec3::new(86.0, 5.5, 70.05);
+    let mut s = Sim::new(from, -std::f32::consts::FRAC_PI_2);
+    force(&mut s, crate::player::TransitionSetup::ToInAir(air::InAirEntry::Fall { from, velocity: Vec3::ZERO, origin: air::FallOrigin::Ground, speed_param: 0.0 }));
+    assert!(s.run_until(2.0, |s| s.loco().current != ActorContextId::InAir));
+    assert_eq!(s.loco().current, ActorContextId::NarrowObject, "caught on the beam, not a ground landing");
+    assert_eq!(s.data().narrow.entry_mode, BeamEntryMode::Reception);
+    assert!(s.run_until(2.0, |s| s.data().narrow.state == BeamState::Wait));
+    let f = s.body().feet;
+    assert!((f.z - 70.0).abs() < 0.01 && (f.y - 4.0).abs() < 0.01, "on the line: {f:?}");
+}
+
+#[test]
+fn beam_jump_at_a_ledge_above() {
+    use crate::player::narrow::{BeamEntry, BeamEntryMode, BeamState, BEAM_IMPULSE_TO_JUMP};
+    // on the free beam at x 87.4 facing +X; the slab edge (x 88, top 6.3) is 2.3 m above
+    let point = Vec3::new(87.4, 4.0, 70.0);
+    let mut s = Sim::new(point, -std::f32::consts::FRAC_PI_2);
+    let (p0, p1) = (Vec3::new(84.5, 4.0, 70.0), Vec3::new(90.5, 4.0, 70.0));
+    force(&mut s, crate::player::TransitionSetup::ToBeam(BeamEntry { p0, p1, point, from: point, toward_p1: true, mode: BeamEntryMode::Straight, foot: 0, action: None, facing: Vec3::X }));
+    s.run(0.2);
+    s.pad(Vec3::ZERO, 0.0, true, false);
+    s.press_legs();
+    assert!(s.run_until(1.0, |s| s.data().narrow.state == BeamState::ImpulseWait), "no impulsion: {:?}", s.data().narrow.state);
+    s.press_legs();
+    assert!(s.run_until(0.3, |s| s.data().narrow.state == BeamState::JumpOnPlace));
+    assert!(s.data().narrow.action.is_some_and(|a| a.id == BEAM_IMPULSE_TO_JUMP), "hand target found");
+    assert!(s.run_until(1.0, |s| s.loco().current == ActorContextId::InAir));
+    let flight = s.data().air.flight.unwrap().id;
+    assert_eq!(flight, 0x516D_52DE, "beam_jumpstraight_to_hangwaist");
+    assert!(s.run_until(5.0, |s| s.loco().current == ActorContextId::Ground), "never stood on the slab: {:?} {:?}", s.loco().current, s.body().feet);
+    let f = s.body().feet;
+    assert!(f.x > 88.0 && (f.y - 6.3).abs() < 0.05, "on top of the slab: {f:?}");
+}

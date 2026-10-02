@@ -134,6 +134,7 @@ pub enum TransitionSetup {
     ToHayStack(hay::HayStackEntry),
     ToWalling(walling::WallingEntry),
     ToBeam(narrow::BeamEntry),
+    ToPilotis(narrow::PilotisEntry),
 }
 
 /// Immediate context switch (0x55F7E0): exit old, apply setup to destination data, enter new.
@@ -166,6 +167,10 @@ pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: 
         }
         TransitionSetup::ToBeam(entry) => {
             data.narrow.enter(entry);
+            ActorContextId::NarrowObject
+        }
+        TransitionSetup::ToPilotis(entry) => {
+            data.narrow.enter_pilotis(entry);
             ActorContextId::NarrowObject
         }
     };

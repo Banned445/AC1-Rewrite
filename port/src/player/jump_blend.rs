@@ -12,6 +12,9 @@ use super::jump_clips::{ClipRoot, ACTIONS, CLIPS};
 // ---------------------------------------------------------------- action ids (verified in the graph dump)
 /// Ground running takeoff (jump kind 0), [footl, footr] (0xB1EC40: 172788750 + (foot != 1)).
 pub const TAKEOFF_RUN: [u32; 2] = [0x0A4C_8C0E, 0x0A4C_8C0F];
+/// Free-step takeoff (jump kind 1: from a beam / pilotis / roof edge), [footl, footr]: same 40-clip layout,
+/// `xx_h_freestep_front_*_foot{l,r}_to_air` (0xB1EC40; pilotis jumps pass kind 1 to 0xB20200, 0xE4D950).
+pub const TAKEOFF_FREESTEP: [u32; 2] = [0x0112_B589, 0x0112_B5AC];
 /// Flights by target type, [footl, footr].
 pub const FLIGHT_FREESTEP: [u32; 2] = [0x010D_DAFA, 0x010D_F0D8]; // 1, 0x10000, 0x100, 0x200, 0x400, haystack
 pub const FLIGHT_PASSOVER: [u32; 2] = [0x09A0_A58D, 0x09A0_A58E]; // 2
@@ -34,7 +37,7 @@ pub const LAND_DAMAGE: u32 = 0x010D_D707;
 pub const LAND_DAMAGE_ROLL: u32 = 0x010D_D70B;
 
 pub const DUMPED_ACTIONS: &[u32] = &[
-    TAKEOFF_RUN[0], TAKEOFF_RUN[1],
+    TAKEOFF_RUN[0], TAKEOFF_RUN[1], TAKEOFF_FREESTEP[0], TAKEOFF_FREESTEP[1],
     FLIGHT_FREESTEP[0], FLIGHT_FREESTEP[1],
     RECEPTION_FREESTEP[0], RECEPTION_FREESTEP[1],
     LAND_FORWARD_MOVE[0], LAND_FORWARD_MOVE[1], LAND_FORWARD_STOP[0], LAND_FORWARD_STOP[1],
@@ -129,7 +132,14 @@ pub struct JumpBlend {
 
 /// `dz` = target − start height, `dist` = horizontal distance (m). `scale` = entity+0x7C
 /// (hypothesis: character scale, 1 for Altaïr).
+#[allow(dead_code)]
 pub fn compute(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32) -> JumpBlend {
+    compute_kind(dz, dist, target_type, foot_left, scale, 0)
+}
+
+/// `compute` for a jump kind (0 run, 1 free step): only the takeoff action differs for kinds 0 / 1 (both
+/// force the side angle to 0 and use the same band offset `o`, 0xB1EC40).
+pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32, kind: u8) -> JumpBlend {
     if target_type == TARGET_HAYSTACK && dz <= -FAITH_MIN_DROP {
         return faith(dz, dist, foot_left);
     }
@@ -157,7 +167,7 @@ pub fn compute(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32
     let deep = has_deep(target_type);
     let mut fw = vec![0.0f32; n_flight.max(16)];
     flight_weights(&mut fw, d, h, down, class, deep);
-    let takeoff = TAKEOFF_RUN[(!foot_left) as usize];
+    let takeoff = if kind == 1 { TAKEOFF_FREESTEP } else { TAKEOFF_RUN }[(!foot_left) as usize];
     let mut tw = vec![0.0f32; 40];
     takeoff_weights(&mut tw, &fw, down, 0.0, class, deep);
     // > 3 m drop: move weight into the deep flight variants (0xB1EC40 tail, after the takeoff used them)

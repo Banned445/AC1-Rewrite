@@ -461,6 +461,12 @@ fn choose_clip(
                     p.sim_phase = Some(0.5);
                     sim_request(&mut p, &lib, &b, 2_500_000 + data.air.seq as u64, 0.2)
                 }
+                // the jump's own fall action (InAir +416, e.g. `beam_jumpstraight_clear_tr_fall`)
+                AirMode::Fall { .. } if data.air.fall_action.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                    let b = data.air.fall_action.unwrap();
+                    p.sim_phase = Some((data.air.fall_t / b.duration().max(1e-4)).min(1.0));
+                    sim_request(&mut p, &lib, &b, 2_600_000 + data.air.seq as u64, 0.1)
+                }
                 _ => {
                     if p.seen_fall != Some(data.air.seq) {
                         p.seen_fall = Some(data.air.seq);

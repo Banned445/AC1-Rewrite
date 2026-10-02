@@ -209,6 +209,16 @@ Limitations:
   back). Legs during the stop pulls down (EdgeStop). `AC_AUTOPILOT=ledgestop`.
 - **Leap of Faith** (RE/04 §4.1.12): run (high profile + Legs) off an edge toward a haystack 3–30 m below. It plays the game's faith
   takeoff and dive, then the haystack landing and wait (context HayStack, 21). The stick hops out. `AC_AUTOPILOT=faith`.
+- **Wall run** (RE/05 §1.8): high profile, stick into a wall, press Legs within 1.5 m of it and keep holding Legs. He runs up
+  it and catches or pulls up onto an edge in reach, or drops back if there is none. Pushing the stick away from the wall
+  rebounds. `AC_AUTOPILOT=wallrun`.
+- **Beams** (RE/05 §2.7): walk at a beam end to step onto it. He crouch-walks along it (crouch-jogs in high profile) on the
+  game's root motion, stops short of an open end, turns around when you pull back, and steps off onto a floor at the far end.
+  `AC_AUTOPILOT=beam`.
+- **Beams and pilotis from the air, beam jumps** (RE/05 §2.8): running jumps land on beams (straight or side entries) and on
+  wooden posts (pilotis); falling onto either is caught. On a beam or post, high profile + Legs with the stick jumps to the
+  next target; without the stick he crouches (impulsion), and Legs again jumps on the spot, or up to a ledge above with the
+  game's beam jump flights. `AC_AUTOPILOT=pilotis`, `AC_AUTOPILOT=beamjump`.
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

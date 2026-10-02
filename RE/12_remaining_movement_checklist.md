@@ -116,20 +116,24 @@ post-run state 4, the command source, the rebound landing query.**
 ### 3.2 NarrowObject (context 12) — RE/05 §2
 **→ beams ported 2026-10-02 (RE/05 §2.7): straight mount from Ground, walk / jog / stop / turn on the beam line, step-off. Free-step
 arrival decoded as a transient (back to Ground on wide support).**
+**→ 2026-10-02 (RE/05 §2.8): free-step arrivals on beams (modes 2–5) and pilotis, the air catch of both (BeamReception / PilotisReception),
+the pilotis wait and lean, the beam impulsion, the jump on the spot (clear or to a hand target with the `beam_jumpstraight_*` flights),
+free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
       The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
 - [ ] **Edge:** walking along a narrow wall ledge (EdgeState Front/Left/Right).
 - [ ] **Lean:** FaceLeft / FaceRight (lean height/width).
 - [ ] **Beam:**
-  - entry modes and BeamReception from the air;
+  - ~~entry modes and BeamReception from the air~~ (done, §2.8); 90° waits / turns, corner hops / walks, edge stop, crouch attacks;
   - segment detection (±2 × ±0.5 m box, 60° cone);
   - projection onto the beam line;
   - turn-around;
   - stop 0.3 m before the end;
   - step off within 0.16 m;
   - Unbalanced.
-- [ ] **Pilotis** (wooden posts): entries FromFreeStep / FromInAir / FromJumpImpulsionStart, plus jump-on-place.
+- [x] **Pilotis** (wooden posts): entries FromFreeStep / FromInAir, wait + lean, impulsion and jump-on-place, jumps to targets (§2.8).
+      Open: FromJumpImpulsionStart, event 9, pull-down from a pilotis (`beam_pilotis_to_pulldown_*`).
 - [ ] **FreeRun** on narrow geometry (EntryB / EntrySide).
 - [ ] **CrowdRun** and **ObstacleCollision**.
 - [ ] **Support check and fall** (`CheckSupportAndFall` 0xE51190, jump types 0/1/3/4/6).

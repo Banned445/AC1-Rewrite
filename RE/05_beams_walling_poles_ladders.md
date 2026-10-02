@@ -211,8 +211,111 @@ So a roof-edge free-step arrival is a **transient** NarrowObject stay that retur
   - The event-72 trigger is walking at the beam.
   - Walk vs jog is set by the profile.
   - The entry alignment takes 0.25 s.
-- **Not ported:** side entries (modes 3–5), 90° waits, beam landings from the air (0xE0B890), jumps off the beam, corner hops, pilotis, edges and leans.
+- **Not ported:** 90° waits, corner hops, edges and leans (side entries, air landings, beam jumps and pilotis: §2.8).
 - `AC_AUTOPILOT=beam`.
+
+### 2.8 Beams and pilotis from the air, beam jumps, pilotis (verified 2026-10-02)
+**Free-step arrival** (`CheckJumpTargetArrival` 0xE07D00, target types 1 / 0x10000):
+- It plays the free-step reception, sets NarrowObjectData SubState 6, and enters context 12. `SelectInitialState` 0xE528C0 maps 6 to the Movement state (+456).
+- The Movement state then tries, in order:
+  1. `TryPilotisFreeStep` 0xE50190;
+  2. `TryMountBeam` 0xE52AD0;
+  3. otherwise it falls back to Ground on wide support (§2.7).
+- **Correction:** target type **0x100** is not a beam. Its arrival sets SubState 8, which maps to state 2 (`StateCrowdRun_Update` 0xE4E610). That state switches back to InAir as soon as the reception ends, so it is a step-on-and-keep-going target. RE/04 §2 is wrong to call it "beam". Beams reached by jumping are ordinary free-step targets.
+
+**`TryMountBeam` entry modes** (0xE52AD0; beam axis flipped toward the character's right):
+
+| Mode | Condition | Enter (`HumanNarrowObjectBeam__EnterByMode` 0xF7AAA0) |
+|---|---|---|
+| 4 | stick > 0.25, back-to-axis angle 80°–150°, stick within 45° of the axis | walk `0x28A3A8E4` with its item swapped to the side entry `0xE6E0E9B9` / `0xE6E0E9BB` by foot. Clips are [walk 30°, walk 90°, jog 30°, jog 90°], blended by the angle: a = clamp(angle + 30°, 120°, 180°), w90 = (60° − (a − 120°)) / 60°. Then Main. |
+| 5 | stick > 0.25, angle 30°–100°, stick > 135° from the axis | `0xE6E0E9B8` / `0xE6E0E9BA`, w90 = clamp(angle − 30°, 0, 90°) / 60° |
+| 2 | \|axis · forward\| ≥ 0.866 | speed 0: the beam wait by foot (table 0x1A353C0 = `0x28A3A8E2/E3`, filled by 0xF703C0); moving: Main |
+| 3 | otherwise | state +79 (`StateSideEntry_Update` 0xF80390): keeps warping until the warp and the playing action end, then Main |
+
+**Air catch** (`HumanInAir__CheckAirCatch` 0xE0BB70): runs with fall height < 9 m. It is skipped while a free-step / pass-over jump target is still ahead (`HumanInAir__IsJumpTargetAhead` 0xE044D0).
+1. **Pilotis first.** If a support is found within 0.5 m (Human+252 vt104) and `Human__FindPilotisTop` 0xB2B600 (from-air box) succeeds:
+   - play `0x2F3E9E0C` `beam_landing_soft_tr_pilotis_wait` (items a, b);
+   - warp 0.2 s;
+   - SubState 4 (PilotisReception) → pilotis inner state, PilotisEntryType 1.
+2. **Then a beam** (`HumanInAir__FindBeamCatch` 0xE0B890). Guidance box x ±0.55, y ±0.4, z ±0.35 around the feet + 0.15 m, forward = facing, cone π. The root goes to the closest point of the beam (0x946AC0) when a capsule fits (0x116D960). Then:
+   - play `0x010DD707` `xx_h_landing_damage_footl`;
+   - warp 0.2 s;
+   - SubState 3 → beam mode 7 → state +85 (`StateReception_Update` 0xF804A0: warp until the action ends) → Main.
+
+**Pilotis** (`Human__FindPilotisTop` 0xB2B600):
+- **Box query** at the support point, forward = the given direction, vertical ±0.5 m:
+  - from the air: x ±0.6, y −0.3…1.1;
+  - otherwise: x ±0.6, y ±0.6.
+- **Four LedgeGrab edges** (0xB1C550, cones 30° / 45°):
+  - outward normal −dir, within 0.3 m;
+  - normal +dir, within 1.3 m;
+  - the two sides, each within 0.6 m of the midpoint of the first two.
+- **Accept** when:
+  - the character is within 0.375 m of one of the four edge points;
+  - front–back and left–right spans are each ≤ 0.7 m;
+  - the top centre (the mean of the four points) is free for a 0.4 m capsule from 0.6 to 1.4 m above it (0xB2A290).
+- **Free-step entry** (0xE50190): plays `0x39193BBF` / `0x39193BC0` (`freestep_entry_foot{l,r}_tr_beam_pilotis_wait_a`), with the root interpolated to the top over that action's duration. Sets PilotisEntryType 0.
+- **Pilotis state** (`StatePilotis_Update` 0xE52170): the entries (sub 4 / 5) warp until their action ends, then `PilotisPlayWait` 0xE4CFA0 plays `0x388E97DA` = [wait, wait_left, wait_right].
+- **Wait lean** (`PilotisWait_Update` 0xE51960):
+  - target = signed angle (stick vs facing) / 120°, clamped to ±1;
+  - smoothed at 3/s (NarrowObject+372);
+  - weights l ≥ 0 → [1 − l, 0, l], else [1 + l, −l, 0].
+- **Events** (`StatePilotis_HandleEvent` 0xE53850):
+  - **4:** `SetupPilotisJumpToTarget` 0xE4D950 → `Human__SetupJumpToTarget` with **jump kind 1** (free-step takeoff `0x0112B589` / `0x0112B5AC`, 40 clips);
+  - **9:** another InAir setup (0xE4F2D0, not decoded);
+  - **2:** `PilotisToBeam` 0xE53680 → beam mode 8 → the impulsion.
+
+**Beam jumps** (`HumanNarrowObjectBeam__HandleEvent` 0xF80A30):
+- **Impulsion** (state +145, `ImpulseWait_Enter` 0xF738A0): a transition into `0x5288EF5C` `beam_impultionstraight_wait`. The transition clip depends on where it starts:
+  - from a pilotis: `0x5288D630`;
+  - from the 90° wait: `0x5288EF4F`;
+  - otherwise by foot: `0x516D4D0A` / `0x516D4D0B` (table 0x1A35420).
+- **Jump on the spot** (state +148, event 5, `PlayJumpOnPlace` 0xF717D0):
+  - with a hand target: `0x516D521A` `impultionstraight_to_jumpstraight`;
+  - otherwise: `0x516D52EB` `…_tr_jumpstraight_clear`;
+  - ActorState 25.
+- **Leaving the jump** (`StateJumpOnPlace_Update` 0xF751E0): at the action's release point (sub_5017B0) it switches to InAir with `SetupJumpFromBeam` 0xF73B80:
+  - **hand target:** `Human__SetupJumpToHandTarget` 0xB21DA0. Since the playing action is neither 89 nor 0x1099C96, the ≥ 1.5 m bands fly the `beam_jumpstraight_*` flights:
+
+    | Band | Flight |
+    |---|---|
+    | hangknee | `0x516D52DF` |
+    | hangwall | `0x516D52DD` |
+    | hangwaist | `0x516D52DE` |
+    | hangwallfree | `0x516D52DC` |
+    | hangfree | `0x516D52DB` |
+
+  - **no target:** `0x516D52E7` `beam_jumpstraight_clear` (rises 1.0 m in 0.4 s), then InAir+416 = `0x516D52E8` `…_clear_tr_fall`. The descent is caught back on the beam / pilotis by the air catch.
+- **Free-step descents:** `Human__UseBeamFreestepJumpVariants` 0xB145B0 swaps a descending free-step jump (start − 0.4 m above the target, clear sweep) to the `beam_freestep_*` / `beam_air_*` variants (`0x118DA41A…1D`). The condition is sub_4FDBA0, an action-availability test (hypothesis). Not ported.
+
+**Port** (`player/narrow.rs`, `air.rs`, `targets.rs`):
+- Free-step arrivals mount pilotis, then beams, with modes 2 / 3 / 4 / 5.
+- The air catch handles pilotis, then beams, before the ground contact.
+- Pilotis entries, wait and lean.
+- The impulsion, the jump on the spot (to a hand target with the beam flights, or the clear jump and the catch back).
+- Free-step jumps (kind 1) to targets from beams / pilotis.
+
+**PORT:**
+- **Targets:** beams (the beam line, 0.3 m in from the ends) and pilotis tops (0xB2B600) are offered as free-step targets. The game's guidance candidate builder (IHuman vt56/64/68) is not traced.
+- **Triggers:** the jump trigger is high profile + Legs:
+  - with the stick and a target in the cone → event 4;
+  - without the stick → impulsion;
+  - in the impulsion → the jump on the spot.
+- **Impulsion exit:** the stick leaves the impulsion; the game's exit event is not traced.
+- **Jump release:** the jump on the spot leaves at its action's end, not at the release point.
+- **Item choices:** the transition items a/b and the pilotis landing item a are picked (hypothesis). The foot index of table 0x1A35420 is read as "the clip of the current foot" (hypothesis).
+- **Mode 3:** keeps the free-step reception playing while the root moves onto the beam, turning to the nearest beam direction.
+
+**Not ported:**
+- pilotis event 9 and the `beam_pilotis_to_pulldown_*` clips;
+- 90° waits and turns;
+- corner hops / walks;
+- crouch attacks;
+- the beam edge stop;
+- obstacle mode 6;
+- free-step descent variants (0xB145B0).
+
+**Autopilot:** `AC_AUTOPILOT=pilotis`, `AC_AUTOPILOT=beamjump`.
 
 ## 3. HumanPole (lighter)
 

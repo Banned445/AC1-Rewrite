@@ -41,6 +41,10 @@ enum Scenario {
     WallRun,
     /// Run off the high block's +X edge into the haystack (Leap of Faith), wait, hop out.
     Faith,
+    /// Free-run onto the first pilotis, hop along the posts, land on the far platform.
+    Pilotis,
+    /// Running jump onto the free beam, walk under the slab, impulsion, jump at its ledge.
+    BeamJump,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -66,6 +70,8 @@ impl Plugin for DebugCapturePlugin {
                 "faith" => Scenario::Faith,
                 "wallrun" => Scenario::WallRun,
                 "beam" => Scenario::Beam,
+                "pilotis" => Scenario::Pilotis,
+                "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -127,6 +133,18 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
             }
+            Scenario::Pilotis => {
+                b.feet = Vec3::new(69.0, 3.0, 80.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
+            }
+            Scenario::BeamJump => {
+                b.feet = Vec3::new(79.0, 4.0, 70.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
+            }
             Scenario::WallRun => {
                 b.feet = Vec3::new(76.0, 0.0, 57.9);
                 b.heading = std::f32::consts::PI; // facing +Z, at the wall
@@ -183,8 +201,25 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
     }
 }
 
-fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
+fn autopilot(
+    time: Res<Time>,
+    sc: Res<Scenario>,
+    mut pad: ResMut<PadInput>,
+    q: Query<(&crate::player::Locomotion, &crate::player::HumanDataBundle, &Body), With<Player>>,
+    mut since: Local<(u32, f32)>,
+) {
     let t = time.elapsed_secs();
+    // seconds the narrow-object state has stayed the same (`since` = (state seq, time))
+    let narrow = q.single().ok().map(|(l, d, b)| (l.current, d.narrow.seq, d.narrow.state, b.feet));
+    let held = match narrow {
+        Some((crate::player::ActorContextId::NarrowObject, seq, _, _)) => {
+            if since.0 != seq {
+                *since = (seq, t);
+            }
+            t - since.1
+        }
+        _ => 0.0,
+    };
     pad.magnitude = 1.0;
     pad.speed01 = 1.0;
     match *sc {
@@ -221,6 +256,39 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             if t < 1.0 {
                 pad.magnitude = 0.0;
                 pad.speed01 = 0.0;
+            }
+        }
+        Scenario::Pilotis => {
+            use crate::player::narrow::BeamState;
+            pad.dir = Vec3::X;
+            pad.high_profile = true;
+            let on_post = matches!(narrow, Some((crate::player::ActorContextId::NarrowObject, ..)));
+            let wait = matches!(narrow, Some((_, _, BeamState::PilotisWait, _)));
+            // run off P with Legs held (1 s still first); on a post: wait 0.8 s, then high profile + Legs + stick
+            let go = (t > 1.0 && !on_post && narrow.is_some_and(|n| n.0 == crate::player::ActorContextId::Ground) && narrow.is_some_and(|n| n.3.x < 72.5)) || (wait && held > 0.8);
+            pad.legs_held = go && !on_post;
+            if wait && held > 0.8 && held < 0.82 {
+                pad.legs_pressed_ago = 0.0;
+            }
+            pad.magnitude = if go || matches!(narrow, Some((crate::player::ActorContextId::InAir, ..))) { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::BeamJump => {
+            use crate::player::narrow::BeamState;
+            pad.dir = Vec3::X;
+            let ctx = narrow.map(|n| n.0);
+            let x = narrow.map(|n| n.3.x).unwrap_or(0.0);
+            let st = narrow.map(|n| n.2);
+            let on = ctx == Some(crate::player::ActorContextId::NarrowObject);
+            // run + Legs off platform B onto the beam, walk to x 87.4, then impulsion and the jump
+            let run = t > 1.0 && ctx == Some(crate::player::ActorContextId::Ground) && x < 83.0;
+            let walk = on && x < 87.3 && !matches!(st, Some(BeamState::ImpulseIn | BeamState::ImpulseWait | BeamState::JumpOnPlace));
+            pad.high_profile = run || (on && !walk);
+            pad.legs_held = run;
+            pad.magnitude = if run || walk || ctx == Some(crate::player::ActorContextId::InAir) && x < 84.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if on && !walk && ((st == Some(BeamState::Wait) && held > 0.5 && held < 0.52) || (st == Some(BeamState::ImpulseWait) && held > 0.6 && held < 0.62)) {
+                pad.legs_pressed_ago = 0.0;
             }
         }
         Scenario::WallRun => {

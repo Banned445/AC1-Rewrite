@@ -64,10 +64,20 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     // --- beam (NarrowObject, RE/05 §2): two 4 m platforms joined by a 6 m beam at 4 m (BEAMS) ---
     (70.0, 70.0, 4.0, 4.0, 4.0),
     (80.0, 70.0, 4.0, 4.0, 4.0),
+    // --- pilotis (RE/05 §2.8): 0.5 m posts 2.5 m apart between two 3 m platforms, along +X at z 80 ---
+    (70.0, 80.0, 4.0, 4.0, 3.0),
+    (74.5, 80.0, 0.5, 0.5, 3.0),
+    (77.0, 80.0, 0.5, 0.5, 3.0),
+    (79.5, 80.0, 0.5, 0.5, 3.0),
+    (84.0, 80.0, 4.0, 4.0, 3.0),
 ];
 
 /// Beams (p0, p1 on the top centre line; 0.2 m wide, 0.2 m thick): solid, and guidance edges of sub-type Beam.
-pub const BEAMS: &[(Vec3, Vec3)] = &[(Vec3::new(72.0, 4.0, 70.0), Vec3::new(78.0, 4.0, 70.0))];
+pub const BEAMS: &[(Vec3, Vec3)] = &[
+    (Vec3::new(72.0, 4.0, 70.0), Vec3::new(78.0, 4.0, 70.0)),
+    // a free beam 2.5 m past platform B (x 82): reached by a running jump, a ledge 2.3 m above its far part
+    (Vec3::new(84.5, 4.0, 70.0), Vec3::new(90.5, 4.0, 70.0)),
+];
 
 /// Haystacks (centre x, centre z, size x, size z, height): not solid, jump targets of type 0x800. The first
 /// one sits 4.5 m off the high block's +X face (roof 9.5 m): the Leap of Faith test.
@@ -77,6 +87,7 @@ pub const HAYSTACKS: &[(f32, f32, f32, f32, f32)] = &[(37.5, 26.0, 2.2, 2.2, 1.5
 const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[
     (2.0, 3.0, 36.0, 6.0, 1.2, 0.3),
     (64.5, 2.6, 50.0, 3.0, 0.6, 0.3), // overhang continuing wall F's ledge (hang-type switch test)
+    (89.0, 6.3, 70.0, 2.0, 1.0, 0.3), // above the free beam: the beam's straight jump at a hand target (2.3 m)
 ];
 
 /// Extra ledges on wall faces (p0, p1, outward normal): stone ledges that are not roof edges.

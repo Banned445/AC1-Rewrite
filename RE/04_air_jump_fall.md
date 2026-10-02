@@ -123,7 +123,7 @@ Target-type flags (Data+0x290), from the switch in 0xE07D00:
 | 1, 0x10000 | free step / narrow object / pilotis — roof-edge jumps land here (§4.1.7) |
 | 2 | pass-over vault (flight `…_to_passover`; arrival still uses the ledge path) — see §4.1.2 |
 | 0x40, 0x80, 4…0x20 | ledge / hang variants |
-| 0x100 | beam |
+| 0x100 | step-on target (arrival SubState 8 → NarrowObject state 2, `StateCrowdRun_Update` 0xE4E610, back to InAir when the reception ends). **Not a beam** (RE/05 §2.8 correction) |
 | 0x200 | horse |
 | 0x400 | swing (225 \| 8) |
 | 0x800 | **haystack (Leap of Faith)** |

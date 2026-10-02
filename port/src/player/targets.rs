@@ -47,8 +47,70 @@ pub fn find_jump_target(
         return None;
     }
     let mut best: Option<(JumpTarget, f32, f32)> = None; // (target, dz, dist)
+    // PORT: the game's guidance candidates for beams and pilotis (IHuman vt56/64/68) are not traced; the port
+    // offers free-step targets (type 1) on them: the beam line (≥ 0.3 m from its ends) and the pilotis tops
+    // (0xB2B600), whose arrivals mount them (0xE07D00 → 0xE50190 / 0xE52AD0).
+    let mut pilotis: Vec<Vec3> = Vec::new();
     for e in &guidance.edges {
         if e.subtype != GuidanceSubType::LedgeGrab {
+            continue;
+        }
+        let mid = (e.p0 + e.p1) * 0.5;
+        let into = -Vec3::new(e.n1.x, 0.0, e.n1.z);
+        if let Some(top) = super::narrow::find_pilotis(mid, mid, into, false, guidance, collision) {
+            if !pilotis.iter().any(|p| (*p - top).length() < 0.1) {
+                pilotis.push(top);
+            }
+        }
+    }
+    let mut narrow: Vec<Vec3> = pilotis.clone();
+    for e in &guidance.edges {
+        if e.subtype != GuidanceSubType::Beam {
+            continue;
+        }
+        let len = (e.p1 - e.p0).length();
+        if len < 0.6 {
+            continue;
+        }
+        let ahead = feet + want * 4.0;
+        let q = e.closest_point(Vec3::new(ahead.x, e.p0.y, ahead.z));
+        let u = ((q - e.p0).length() / len).clamp(0.3 / len, 1.0 - 0.3 / len);
+        narrow.push(e.p0.lerp(e.p1, u));
+    }
+    for pos in narrow {
+        let target = JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None };
+        let flat = Vec3::new(pos.x - feet.x, 0.0, pos.z - feet.z);
+        let dist = flat.length();
+        let dz = pos.y - feet.y;
+        if !(0.6..=GROUND_FAR).contains(&dist) || dz > GROUND_MAX_UP || dz < TARGET_MIN_DZ {
+            continue;
+        }
+        if flat.normalize().dot(want).clamp(-1.0, 1.0).acos() > TARGET_CONE {
+            continue;
+        }
+        // a gap must lie between (not the beam / post we stand on)
+        let low = feet.y.min(pos.y);
+        let crosses_gap = [0.25f32, 0.5, 0.75].iter().any(|&t| {
+            let s = feet.lerp(pos, t);
+            collision.ground_height(Vec3::new(s.x, low + 0.05, s.z), 0.5).is_none()
+        });
+        if !crosses_gap {
+            continue;
+        }
+        let better = match &best {
+            None => true,
+            Some((_, bdz, bd)) => dz > bdz + 0.25 || ((dz - bdz).abs() <= 0.25 && dist < *bd),
+        };
+        if better {
+            best = Some((target, dz, dist));
+        }
+    }
+    for e in &guidance.edges {
+        if e.subtype != GuidanceSubType::LedgeGrab {
+            continue;
+        }
+        // a pilotis' own edges are not roof edges
+        if pilotis.iter().any(|p| Vec2::new(e.p0.x - p.x, e.p0.z - p.z).length() < 0.6 && (e.p0.y - p.y).abs() < 0.05) {
             continue;
         }
         // the edge must face us (its wall normal points back toward the player)
