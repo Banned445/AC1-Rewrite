@@ -317,6 +317,21 @@ So a roof-edge free-step arrival is a **transient** NarrowObject stay that retur
 
 **Autopilot:** `AC_AUTOPILOT=pilotis`, `AC_AUTOPILOT=beamjump`.
 
+### 2.9 Edge and Lean in this build (verified 2026-10-02)
+NarrowObject's **Edge** (inner state 8) and **Lean** (inner state 12) are effectively unused in v1.02:
+- **Lean:**
+  - Ground event 71 → `HumanGround__ToNarrowObject_Lean` 0xD89960 (fill 0xD7DAB0: SubState 7).
+  - `HumanGround__Movement_CanHandleEvent` 0xDAF610 always returns 1 (rejected) for event 71, and its guard 0xD7DAA0 is a stub.
+  - The narrow Lean state's vectors (+0xA0/+0xB0, CurrentLeanHeight/Width) have no other writer, and the HumanNarrowObject animation block has no lean clips.
+  - The game's leaning is Ground's obstacle collision (RE/02 §4.2).
+- **Edge:**
+  - Ground event 69, when `ClassifyEdgeSide` 0xD9D7F0 says the edge is to the side (3 left / 4 right: the normal 60°–120° from the facing, drop > 1.3 m), goes through `HumanGround__Guard_LedgeStopSide` 0xDA5D90 → `HumanGround__ToNarrowObject_Edge` 0xD8E5B0.
+  - Fill 0xD8A620: SubState 5, EdgeState 3 / 2, CurrentEdgeDir = cross(normal, up), +0x90 = −normal.
+  - The Edge sub-states (`StateEdge_Sub9` 0xE52540, `Sub10` 0xE51C70) set NarrowObject+185 bit 7 on their first tick. `StateEdge_Update` 0xE52720 sees that bit on the next tick and switches back to Ground (`SetupToGround` 0xE4D400, a movement mode from the stick flags).
+  - So a side ledge stop is a one-frame NarrowObject stay. The character keeps walking along the edge in Ground.
+  - No Edge clips exist. The visible edge behaviour is the look-down (RE/03 §7.8a, ported in RE/02 §4.2).
+- **Port:** walking along an edge stays in Ground (the same end state); no Edge / Lean narrow states are needed.
+
 ## 3. HumanPole (lighter)
 
 ### 3.1 Summary

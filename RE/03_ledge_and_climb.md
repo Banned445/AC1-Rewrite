@@ -598,7 +598,8 @@ Their root rises first and moves in over the lip once the hips reach the edge. T
   - The trigger is walking (low profile) into a front edge within 0.45 m with more than 2 m of drop. The sender of event 69 is not traced.
   - The feet stay 0.2 m behind the edge.
   - After a stop, pushing on into the same edge holds the character there, until the stick is released or turned away.
-- **Not ported:** side ledge stops and the look-down (event 119's sender and guard are unknown).
+- **Side ledge stops:** a one-frame NarrowObject Edge stay that returns to Ground (RE/05 §2.9); the port stays in Ground.
+- **Look-down:** ported (RE/02 §4.2); the trigger is standing still at the edge (PORT: event 119's sender and guard are unknown).
 - `AC_AUTOPILOT=ledgestop`.
 
 ### 7.8b PullDown in full (verified 2026-10-01)

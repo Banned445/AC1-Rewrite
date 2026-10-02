@@ -45,6 +45,10 @@ enum Scenario {
     Pilotis,
     /// Running jump onto the free beam, walk under the slab, impulsion, jump at its ledge.
     BeamJump,
+    /// Walk into the 1.1 m wall, lean on it, then walk off to the left.
+    Lean,
+    /// Stand at roof A's +X edge facing along it: the look-down to the side.
+    LookDown,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -71,6 +75,8 @@ impl Plugin for DebugCapturePlugin {
                 "wallrun" => Scenario::WallRun,
                 "beam" => Scenario::Beam,
                 "pilotis" => Scenario::Pilotis,
+                "lean" => Scenario::Lean,
+                "lookdown" => Scenario::LookDown,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
@@ -131,6 +137,18 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.feet = Vec3::new(71.0, 4.0, 70.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
                 rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::Lean => {
+                b.feet = Vec3::new(30.0, 0.0, -1.0);
+                b.heading = 0.0;
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::LookDown => {
+                b.feet = Vec3::new(2.7, 3.0, 12.0);
+                b.heading = 0.0;
+                rig.yaw = -0.6;
                 rig.distance = 6.0;
             }
             Scenario::Pilotis => {
@@ -257,6 +275,17 @@ fn autopilot(
                 pad.magnitude = 0.0;
                 pad.speed01 = 0.0;
             }
+        }
+        Scenario::Lean => {
+            // 1 s still, walk into the wall and keep pushing, then the stick to the left
+            pad.high_profile = false;
+            pad.dir = if t < 4.5 { Vec3::NEG_Z } else { Vec3::NEG_X };
+            pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::LookDown => {
+            pad.magnitude = 0.0;
+            pad.speed01 = 0.0;
         }
         Scenario::Pilotis => {
             use crate::player::narrow::BeamState;

@@ -10,6 +10,7 @@
 
 pub mod air;
 pub mod climb;
+pub mod collide;
 pub mod ground;
 pub mod hay;
 pub mod jump_blend;

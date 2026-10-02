@@ -202,6 +202,59 @@ The deceleration curve (§4.1.1) only runs while the stick still asks for moveme
 
 **Port** (`ground.rs`): the stop rule above, with the run stop played by the leading foot. Moving again during the stop cuts it (PORT).
 
+### 4.2 Obstacle collision and the lean (sub-state 5, verified 2026-10-02)
+This is what the player sees as "leaning": running into a wall or a low obstacle. It is a **Ground** state (data+176 = 5 = ObstacleCollision, Ground state byte +251), not NarrowObject's Lean (RE/05 §2.9).
+
+**Trigger:** Movement event **42**, the character controller's collision event (sender not traced).
+- **Guard** `HumanGround__Guard_Event42_Collision` 0xD838F0 → `Human__GetObstacleContact` 0xB25230:
+  - vertical speed |v.z| ≤ 0.2 m/s;
+  - a contact within 45° of the facing (sub_4F8EA0);
+  - the contact point ≥ 0.5 m above the feet;
+  - not certain entity classes.
+- **Payload** (`HumanGround__FillObstacleCollision` 0xD89F70):
+  - contact point → data+112;
+  - normal → data+16;
+  - obstacle height → data+224;
+  - entity → data+228.
+
+**Enter** (`HumanGround__ObstacleCollision_Enter` 0xD9CB90), h = entity+0x7C = 1:
+
+| Height | Type (+220) | Action | Blend |
+|---|---|---|---|
+| ≥ 0.7·h | 0, hand | `0x0121B894`: item 0 `collide_full_hand_{070,150}cm`, item 1 `…_tr_h_lean_025cm_twohand_*_wait` | w = (height − 0.7h) / 0.8h |
+| < 0.7·h | 1, foot | `0x012B2919` `collide_full_footl_{050,070}cm_{a,b}` | w = (height − 0.5h) / 0.2h |
+
+The root is interpolated over 0.15 s to contact + 0.4·h·normal, facing −normal.
+
+**Update** (`HumanGround__ObstacleCollision_Update` 0xD9DA20). Decisions are taken when the action ends, or at any time when its item is interruptible. Let a = the angle between the wanted direction and "away from the obstacle".
+- **Stick and a > 135°** (pushing into it): the wait again.
+  - Hand: `0x012739B6` `lean_040cm_twohand_{070,150}cm_wait`.
+  - Foot: `0x012B2D19`.
+- **Stick and a ≤ 135°:** leave along the stick.
+  - Left exit when a ≥ 0: `0x0121B895`; right: `0x012710F0`.
+  - k = min(|a|, 90°) / 90°.
+  - **Hand:** 8 clips [back 70, back 150, side 70, side 150] × [walk, jog]. Weights [(1−k)(1−w), (1−k)w, k(1−w), kw] × (1 − jog), then the same × jog (jog = +1504, **hypothesis**: high profile). Then the exit's own transition `0x01291741` / `0x01291742` [back walk, side walk, back jog, side jog] with [(1−k)(1−j), k(1−j), (1−k)j, kj] → Movement, mode 3 / 4.
+  - **Foot:** `0x012D81AB` / `0x012D81AC`, 4 clips [back 50, back 70, side 50, side 70] (run).
+- **No stick:** the transition `0x01273AA1` / `0x01273AA2` (`lean_*_wait_tr_{l,h}_wait_hipm_footr`) → Movement standing.
+- **Root motion:**
+  - the exits move 0.4 m back or sideways in the obstacle's frame;
+  - their transitions then walk forward in the turned frame (`…_to_left_walk_tr_l_walk` + 1.33 m along y).
+  - So the exits turn the character away from the obstacle.
+
+**Port** (`player/collide.rs`):
+- The enter / update rules above, with the game's actions, weights and root motion.
+- **PORT:**
+  - **Trigger:** the capsule is blocked within 45° of the facing by a box at least 0.5 m high. The box's top is the obstacle height.
+  - **Exit facing:** the stick direction, clamped to along the obstacle. The clips' root yaw is not dumped (hypothesis).
+  - **Speed after the exit:** 0.25 walk, 0.5 jog, 0.75 foot exits.
+- A 1.1 m wall at (30, −4). `AC_AUTOPILOT=lean`.
+
+**Look-down** (event 119, `HumanGround__LookDown_Enter` 0xD9FC80, RE/03 §7.8a) is ported in `ground.rs`:
+- the front/left/right blend toward a LedgeGrab edge within 0.6 m that is not behind the character and has more than 2 m of drop;
+- **PORT trigger:** standing still. The event's sender and its guard's mode value (0xD7E590) are not traced.
+- Any stick ends it.
+- `AC_AUTOPILOT=lookdown`.
+
 ### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
 MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
 - If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.

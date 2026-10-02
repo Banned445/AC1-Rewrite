@@ -940,3 +940,73 @@ fn beam_jump_at_a_ledge_above() {
     let f = s.body().feet;
     assert!(f.x > 88.0 && (f.y - 6.3).abs() < 0.05, "on top of the slab: {f:?}");
 }
+
+// ---------------------------------------------------------------- obstacle collision / lean, look-down (RE/02 §4.2)
+
+#[test]
+fn running_into_a_low_wall_leans_on_it_and_releasing_stands_up() {
+    use crate::player::collide::{CollideKind, CollidePhase, LEAN_TO_WAIT};
+    // the 1.1 m wall at z -4 (x 28..32, 0.4 thick): walk at it along -Z
+    let mut s = Sim::new(Vec3::new(30.0, 0.0, -1.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "never collided: {:?}", s.body().feet);
+    let c = s.ground().collide.unwrap();
+    assert_eq!(c.kind, CollideKind::Hand);
+    assert!((c.h - 0.5).abs() < 0.02, "1.1 m → halfway between the 70 and 150 cm clips: {}", c.h);
+    // keeps leaning while pushing into the wall
+    assert!(s.run_until(3.0, |s| s.ground().collide.is_some_and(|c| c.phase == CollidePhase::Wait)), "no lean wait");
+    s.run(1.0);
+    assert!(s.ground().collide.is_some(), "still leaning");
+    let f = s.body().feet;
+    assert!((f.z - (-3.8 + 0.4)).abs() < 0.02, "root 0.4 m out of the face: {f:?}");
+    assert!(s.body().forward().dot(Vec3::NEG_Z) > 0.99, "facing the wall");
+    // release: lean → wait, then standing
+    s.pad(Vec3::ZERO, 0.0, false, false);
+    s.run(2.0 / 60.0);
+    assert!(s.ground().collide.is_none());
+    assert!(s.ground().oneshot.is_some_and(|o| o.blend.id == LEAN_TO_WAIT[0]), "lean_*_wait_tr_l_wait");
+}
+
+#[test]
+fn leaning_then_pushing_sideways_walks_off_through_the_exit() {
+    use crate::player::collide::{CollidePhase, LEAN_EXIT, LEAN_EXIT_TR};
+    let mut s = Sim::new(Vec3::new(30.0, 0.0, -1.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    assert!(s.run_until(4.0, |s| s.ground().collide.is_some_and(|c| c.phase == CollidePhase::Wait)));
+    // stick to the character's left (facing -Z, left = -X)
+    s.pad(Vec3::NEG_X, 1.0, false, false);
+    s.run(2.0 / 60.0);
+    let os = s.ground().oneshot.expect("exit action");
+    assert_eq!(os.blend.id, LEAN_EXIT[0], "the left exit");
+    let w = os.blend.weights();
+    assert!(w[2] + w[3] > 0.99 && w[4..].iter().all(|x| *x == 0.0), "side walk clips: {w:?}");
+    assert!(s.run_until(3.0, |s| s.ground().oneshot.is_some_and(|o| o.blend.id == LEAN_EXIT_TR[0])), "exit transition");
+    assert!(s.run_until(3.0, |s| s.ground().oneshot.is_none()));
+    s.run(1.0);
+    assert!(s.body().feet.x < 29.0, "walked off to the left: {:?}", s.body().feet);
+}
+
+#[test]
+fn bumping_a_knee_high_obstacle_is_the_foot_collide() {
+    use crate::player::collide::CollideKind;
+    // the 0.6 m box at (9, 0): too high to step onto (0.35 m)
+    let mut s = Sim::new(Vec3::new(9.0, 0.0, 3.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "never collided: {:?}", s.body().feet);
+    let c = s.ground().collide.unwrap();
+    assert_eq!(c.kind, CollideKind::Foot);
+    assert!((c.h - 0.5).abs() < 0.02, "0.6 m → halfway between the 50 and 70 cm clips: {}", c.h);
+}
+
+#[test]
+fn standing_at_a_roof_edge_looks_down_toward_it() {
+    // roof A (x -3..3, top 3), standing 0.3 m from its +X edge facing -Z: the edge is on the right
+    let mut s = Sim::new(Vec3::new(2.7, 3.0, 12.0), 0.0);
+    s.run(0.3);
+    let ld = s.ground().look_down.expect("look-down");
+    let w = ld.action.weights();
+    assert!(w[2] > 0.95 && w[1] == 0.0, "right look-down: {w:?}");
+    s.pad(Vec3::NEG_X, 1.0, false, false);
+    s.run(0.1);
+    assert!(s.ground().look_down.is_none(), "the stick ends it");
+}

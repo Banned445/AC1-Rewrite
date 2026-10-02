@@ -393,6 +393,19 @@ fn choose_clip(
                 p.sim_phase = Some((os.t / os.duration.max(1e-4)).min(1.0));
                 sim_request(&mut p, &lib, &os.blend, 1_000_000 + g.landing_seq as u64, 0.1)
             }
+            // obstacle collision / lean (0xD9CB90 / 0xD9DA20): its action at the sim's phase
+            ActorContextId::Ground if g.collide.is_some_and(|c| sim_item(&lib, &c.action).is_some()) => {
+                let c = g.collide.unwrap();
+                let (b, ph) = c.current();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 1_500_000 + c.seq as u64, 0.1)
+            }
+            // look-down at an edge (0xD9FC80)
+            ActorContextId::Ground if g.look_down.is_some_and(|l| sim_item(&lib, &l.action).is_some()) => {
+                let l = g.look_down.unwrap();
+                p.sim_phase = Some((l.t / l.action.duration().max(1e-4)).fract());
+                sim_request(&mut p, &lib, &l.action, 1_600_000 + g.pose_seq as u64, 0.3)
+            }
             ActorContextId::Ground if g.landing_seq != p.seen_landing => {
                 p.seen_landing = g.landing_seq;
                 let clip = match g.last_landing {

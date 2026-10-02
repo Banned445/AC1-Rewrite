@@ -41,6 +41,7 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (6.0, 0.0, 1.5, 1.5, 0.3),
     (9.0, 0.0, 1.5, 1.5, 0.6),
     (0.0, -8.0, 14.0, 0.6, 2.4),
+    (30.0, -4.0, 4.0, 0.4, 1.1), // a 1.1 m wall: run into it to lean on it (ObstacleCollision, RE/02 §4.2)
     // --- stage 2: climbing ---
     (-20.0, 30.0, 6.0, 6.0, 9.6),  // climb tower: hold bands on its -Z face (CLIMB_FACE)
     (12.0, 42.0, 8.0, 0.6, 2.6),   // jump-up wall: top edge 2.6 m (ledge band max up 3.0 m)

@@ -122,8 +122,8 @@ free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
       The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
-- [ ] **Edge:** walking along a narrow wall ledge (EdgeState Front/Left/Right).
-- [ ] **Lean:** FaceLeft / FaceRight (lean height/width).
+- [x] **Edge:** decoded as a one-frame redirect back to Ground in this build (RE/05 §2.9); the side look-down is ported (RE/02 §4.2).
+- [x] **Lean:** NarrowObject's Lean is unreachable (event 71 rejected, RE/05 §2.9). The game's lean is Ground ObstacleCollision (event 42, RE/02 §4.2): ported (hand lean 70/150 cm, foot bump 50/70 cm, exits).
 - [ ] **Beam:**
   - ~~entry modes and BeamReception from the air~~ (done, §2.8); 90° waits / turns, corner hops / walks, edge stop, crouch attacks;
   - segment detection (±2 × ±0.5 m box, 60° cone);

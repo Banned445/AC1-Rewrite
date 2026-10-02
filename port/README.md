@@ -219,6 +219,11 @@ Limitations:
   wooden posts (pilotis); falling onto either is caught. On a beam or post, high profile + Legs with the stick jumps to the
   next target; without the stick he crouches (impulsion), and Legs again jumps on the spot, or up to a ledge above with the
   game's beam jump flights. `AC_AUTOPILOT=pilotis`, `AC_AUTOPILOT=beamjump`.
+- **Leaning and bumping into obstacles** (RE/02 §4.2): walk into a wall at least 0.7 m high and he puts both hands on it
+  and leans while you keep pushing; release to stand up, or push sideways / back to step away through the game's exits.
+  Knee-high obstacles (0.5–0.7 m) give the foot bump. `AC_AUTOPILOT=lean`.
+- **Look-down** (RE/03 §7.8a): standing still at a roof edge, he looks down over it (front / left / right).
+  `AC_AUTOPILOT=lookdown`. NarrowObject's own Edge and Lean states are unused in this game build (RE/05 §2.9).
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then
