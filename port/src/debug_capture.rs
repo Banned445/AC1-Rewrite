@@ -53,6 +53,8 @@ enum Scenario {
     PassOver,
     /// Jump at the first swing bar and swing from bar to bar onto the far platform.
     Swing,
+    /// Walk to the ladder and climb it onto the wall top.
+    Ladder,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -82,6 +84,7 @@ impl Plugin for DebugCapturePlugin {
                 "lean" => Scenario::Lean,
                 "passover" => Scenario::PassOver,
                 "swing" => Scenario::Swing,
+                "ladder" => Scenario::Ladder,
                 "lookdown" => Scenario::LookDown,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
@@ -144,6 +147,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
+            }
+            Scenario::Ladder => {
+                b.feet = Vec3::new(50.0, 0.0, 61.0);
+                b.heading = std::f32::consts::PI;
+                rig.yaw = std::f32::consts::FRAC_PI_2 + 0.5;
+                rig.distance = 7.0;
             }
             Scenario::Swing => {
                 b.feet = Vec3::new(60.0, 1.2, 85.0);
@@ -293,6 +302,14 @@ fn autopilot(
                 pad.magnitude = 0.0;
                 pad.speed01 = 0.0;
             }
+        }
+        Scenario::Ladder => {
+            // up the ladder onto the wall top, then stand
+            pad.high_profile = false;
+            pad.dir = Vec3::Z;
+            let on_top = q.single().ok().is_some_and(|(l, _, b)| l.current == crate::player::ActorContextId::Ground && b.feet.y > 4.9);
+            pad.magnitude = if t > 1.0 && !on_top { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
         }
         Scenario::Swing => {
             pad.dir = Vec3::Z;

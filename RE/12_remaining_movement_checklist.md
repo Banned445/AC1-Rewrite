@@ -150,7 +150,8 @@ free-step jumps (kind 1) from beams and pilotis.**
   - enter from ground or top; exit to ground or top;
   - release;
   - jump.
-- [ ] **Entries:** FromGround / FromAirStraight / FromAirInclined / FromWalling / FromClimb, and Ledge → Ladder (ToLadder 0xDD2430).
+- [x] **Ladder** (RE/05 §4.1): the animation table, ground / top entries, climb up / down by profile, exits to the top / ground, release, jump.
+- [ ] **Entries:** FromAirStraight / FromAirInclined / FromWalling / FromClimb, and Ledge → Ladder (ToLadder 0xDD2430); the turn and revolve.
 - [ ] **TopOfLadder monitor** (ActorState 60).
 - [ ] Rung and exit constants (0xE1C000–0xE28500, not yet mapped).
 ### 3.5 Rope (context 7) — RE/05 §5

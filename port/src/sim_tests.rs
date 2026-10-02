@@ -29,7 +29,7 @@ impl Sim {
             .insert_resource(PadInput { legs_pressed_ago: f32::INFINITY, ..default() })
             .insert_resource(SpawnPoint(SPAWN))
             .init_resource::<CameraRig>()
-            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling, crate::player::narrow::update_narrow).chain());
+            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling, crate::player::narrow::update_narrow, crate::player::ladder::update_ladder).chain());
         let (c, g) = level::geometry();
         app.insert_resource(c).insert_resource(g);
         let player = app.world_mut().spawn(player_components(feet, heading)).id();
@@ -1101,4 +1101,60 @@ fn landing_on_a_bar_with_nothing_ahead_settles_into_the_hang() {
         assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_none()), "the released stick stops the swing");
     }
     assert_eq!(s.loco().current, ActorContextId::Ledge, "hanging");
+}
+
+// ---------------------------------------------------------------- ladders (RE/05 §4.1)
+
+#[test]
+fn walk_to_a_ladder_climb_it_and_step_onto_the_top() {
+    use crate::player::ladder::{LadderPhase, CLIMB_UP, ENTER_GROUND, EXIT_TOP};
+    // the ladder at x 50 on the 5 m wall face z 63.5 (normal -Z); walk at it along +Z
+    let mut s = Sim::new(Vec3::new(50.0, 0.0, 60.5), std::f32::consts::PI);
+    s.pad(Vec3::Z, 1.0, false, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ladder), "never mounted: {:?} {:?}", s.loco().current, s.body().feet);
+    assert_eq!(s.data().ladder.action.unwrap().id, ENTER_GROUND[0][s.data().ladder.foot]);
+    assert!(s.run_until(2.0, |s| s.data().ladder.phase == Some(LadderPhase::ClimbUp)), "no climb: {:?}", s.data().ladder.phase);
+    assert_eq!(s.data().ladder.action.unwrap().id, CLIMB_UP[0], "low-profile climb");
+    let f = s.body().feet;
+    assert!((f.z - 63.0).abs() < 0.02 && (f.x - 50.0).abs() < 0.02, "0.5 m out from the ladder: {f:?}");
+    // keeps climbing in 0.5 m steps, then exits to the top
+    assert!(s.run_until(10.0, |s| s.data().ladder.phase == Some(LadderPhase::ExitTop(0))), "no exit at the top: {:?} {:?}", s.data().ladder.phase, s.data().ladder.height);
+    assert!(EXIT_TOP[0].contains(&s.data().ladder.action.unwrap().id));
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ground), "never stood on top");
+    let f = s.body().feet;
+    assert!((f.y - 5.0).abs() < 0.05 && f.z > 63.6, "on the wall top: {f:?}");
+}
+
+#[test]
+fn enter_a_ladder_from_the_top_and_climb_down() {
+    use crate::player::ladder::{LadderPhase, ENTER_TOP, EXIT_GROUND};
+    // on the wall top (z 63.5..64.5, top 5) at the ladder, facing out (-Z)
+    let mut s = Sim::new(Vec3::new(50.0, 5.0, 63.9), 0.0);
+    s.run(0.1);
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::Ladder), "no entry from the top: {:?}", s.loco().current);
+    assert!(ENTER_TOP[0].contains(&s.data().ladder.action.unwrap().id));
+    assert!(s.run_until(3.0, |s| s.data().ladder.phase == Some(LadderPhase::Wait)), "never settled: {:?}", s.data().ladder.phase);
+    assert!(s.body().forward().dot(Vec3::Z) > 0.99, "facing the ladder");
+    // down: the stick away from the ladder
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    assert!(s.run_until(12.0, |s| s.data().ladder.phase == Some(LadderPhase::ExitGround)), "no exit at the bottom: {:?} {:?}", s.data().ladder.phase, s.data().ladder.height);
+    assert!(EXIT_GROUND[0].contains(&s.data().ladder.action.unwrap().id));
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ground));
+    assert!(s.body().feet.y.abs() < 0.05, "on the floor: {:?}", s.body().feet);
+}
+
+#[test]
+fn letting_go_of_a_ladder_falls() {
+    use crate::player::ladder::{LadderPhase, RELEASE};
+    let mut s = Sim::new(Vec3::new(50.0, 0.0, 60.5), std::f32::consts::PI);
+    s.pad(Vec3::Z, 1.0, false, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ladder));
+    assert!(s.run_until(4.0, |s| s.data().ladder.height >= 2.0));
+    s.pad(Vec3::ZERO, 0.0, false, false);
+    assert!(s.run_until(1.0, |s| s.data().ladder.phase == Some(LadderPhase::Wait)));
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::InAir), "no release");
+    assert!(s.data().air.fall_action.is_some_and(|a| RELEASE[0].contains(&a.id)));
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground));
 }

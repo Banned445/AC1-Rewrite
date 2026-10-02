@@ -546,6 +546,12 @@ fn choose_clip(
                 sim_request(&mut p, &lib, &b, 5_000_000 + data.hay.seq as u64, 0.2)
             }
             // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            // ladder (0xE27D30): the table's action for the state, at the sim's phase
+            ActorContextId::Ladder if data.ladder.current().is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.ladder.current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_700_000 + data.ladder.seq as u64, 0.1)
+            }
             // swinging on a bar (0xDD24F0): landing, swing cycle, stops / impacts
             ActorContextId::Ledge if data.ledge.swing.is_some_and(|s| sim_item(&lib, &s.action).is_some()) => {
                 let s = data.ledge.swing.unwrap();

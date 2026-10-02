@@ -15,6 +15,7 @@ pub mod ground;
 pub mod hay;
 pub mod jump_blend;
 pub mod jump_clips;
+pub mod ladder;
 pub mod ledge;
 pub mod ledge_moves;
 pub mod move_blend;
@@ -126,6 +127,7 @@ pub struct HumanDataBundle {
     pub hay: hay::HumanHayStackData,
     pub walling: walling::HumanWallingData,
     pub narrow: narrow::HumanNarrowObjectData,
+    pub ladder: ladder::HumanLadderData,
 }
 
 /// Transition setup objects (`TransitionSetupDataToMovement` / `…ToInAir` …, RE/01 §4.2).
@@ -139,6 +141,7 @@ pub enum TransitionSetup {
     ToBeam(narrow::BeamEntry),
     ToPilotis(narrow::PilotisEntry),
     ToPassOver(passover::PassOverEntry),
+    ToLadder(ladder::LadderEntry),
 }
 
 /// Immediate context switch (0x55F7E0): exit old, apply setup to destination data, enter new.
@@ -173,6 +176,10 @@ pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: 
             data.narrow.enter(entry);
             ActorContextId::NarrowObject
         }
+        TransitionSetup::ToLadder(entry) => {
+            data.ladder.enter(entry);
+            ActorContextId::Ladder
+        }
         TransitionSetup::ToPassOver(entry) => {
             let seq = data.ledge.pass_over.map(|p| p.seq).unwrap_or(0);
             data.ledge.pass_over = passover::enter(entry, seq);
@@ -197,7 +204,7 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, spawn_player)
             .add_systems(
                 Update,
-                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, walling::update_walling, narrow::update_narrow, sync_visuals).chain(),
+                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, walling::update_walling, narrow::update_narrow, ladder::update_ladder, sync_visuals).chain(),
             );
     }
 }

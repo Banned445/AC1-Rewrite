@@ -339,6 +339,26 @@ pub fn update_ground(
             }
         }
 
+        // ---------------------------------------------------------------- ladder (event 38)
+        // Guard `sub_B239D0` (0xD83970): a ladder within reach, the character on its front within 90°; the entry from
+        // the top within 1.5 m of it. PORT triggers (event 38's sender is not traced): walking into the ladder's foot
+        // facing it; from the top, low profile + Legs at its top facing out over it.
+        {
+            let top_req = !g.high_profile && pad.jump_buffered();
+            if (moving || top_req) && !busy {
+                if let Some((base, top, n, from_top)) = super::ladder::find_ladder(body.feet, body.forward(), 0.8, &guidance) {
+                    if from_top == top_req {
+                        if from_top {
+                            pad.consume_jump();
+                        }
+                        let e = super::ladder::LadderEntry { base, top, n, from: body.feet, facing: body.forward(), from_top, high: g.high_profile, foot: (g.blend.foot != 0) as usize };
+                        switch_context(&mut loco, &mut data, TransitionSetup::ToLadder(e));
+                        continue;
+                    }
+                }
+            }
+        }
+
         // ---------------------------------------------------------------- climb / grab requests
         // interpreter vt736/740 (grab wall) and vt764/768 (climb start): high profile + Legs into a wall
         let forward = body.forward();

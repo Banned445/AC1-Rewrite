@@ -75,7 +75,12 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     // --- swing bars (RE/03 §7.10): platforms at z 86 / 101 (1.2 m), bars between them (SLABS)
     (60.0, 86.0, 3.0, 3.0, 1.2),
     (60.0, 101.5, 3.0, 3.0, 1.2),
+    // --- ladder (RE/05 §4): a 5 m wall at z 64 (x 48..52), the ladder on its -Z face at x 50 (LADDERS)
+    (50.0, 64.0, 4.0, 1.0, 5.0),
 ];
+
+/// Ladders (bottom, top on the wall face; outward normal): guidance edges of sub-type Ladder.
+pub const LADDERS: &[(Vec3, Vec3, Vec3)] = &[(Vec3::new(50.0, 0.0, 63.5), Vec3::new(50.0, 5.0, 63.5), Vec3::NEG_Z)];
 
 /// Beams (p0, p1 on the top centre line; 0.2 m wide, 0.2 m thick): solid, and guidance edges of sub-type Beam.
 pub const BEAMS: &[(Vec3, Vec3)] = &[
@@ -130,6 +135,9 @@ pub fn geometry() -> (CollisionWorld, GuidanceWorld) {
         let max = Vec3::new(x + sx * 0.5, top, z + sz * 0.5);
         collision.boxes.push(Aabb3 { min, max });
         add_roof_edges(&mut guidance, min, max);
+    }
+    for &(p0, p1, n) in LADDERS {
+        guidance.edges.push(GuidanceEdge { p0, p1, n0: Vec3::Y, n1: n, subtype: GuidanceSubType::Ladder });
     }
     for &(p0, p1) in BEAMS {
         let (lo, hi) = (p0.min(p1), p0.max(p1));

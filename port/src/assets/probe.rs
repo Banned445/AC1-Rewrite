@@ -151,7 +151,7 @@ fn probe_dump_jump_clips() {
     out += "pub struct ClipRoot {\n    pub name: &'static str,\n    pub duration: f32,\n    pub disp: [[f32; 3]; 9],\n}\n\n";
     out += "/// (action id, items: clip names per item in slot order).\npub const ACTIONS: &[(u32, &[&[&str]])] = &[\n";
     let mut clips: Vec<String> = Vec::new();
-    for id in crate::player::jump_blend::DUMPED_ACTIONS.iter().chain(crate::player::ledge_moves::DUMPED_ACTIONS.iter()).chain(crate::player::walling::DUMPED_ACTIONS.iter()).chain(crate::player::narrow::DUMPED_ACTIONS.iter()).chain(crate::player::collide::DUMPED_ACTIONS.iter()).chain(crate::player::passover::DUMPED_ACTIONS.iter()).chain(crate::player::swing::DUMPED_ACTIONS.iter()).chain(crate::player::ground::LOOK_DOWN.iter()) {
+    for id in crate::player::jump_blend::DUMPED_ACTIONS.iter().chain(crate::player::ledge_moves::DUMPED_ACTIONS.iter()).chain(crate::player::walling::DUMPED_ACTIONS.iter()).chain(crate::player::narrow::DUMPED_ACTIONS.iter()).chain(crate::player::collide::DUMPED_ACTIONS.iter()).chain(crate::player::passover::DUMPED_ACTIONS.iter()).chain(crate::player::swing::DUMPED_ACTIONS.iter()).chain(crate::player::ladder::DUMPED_ACTIONS.iter()).chain(crate::player::ground::LOOK_DOWN.iter()) {
         let a = graph.actions.get(id).unwrap_or_else(|| panic!("action {id:#x} missing"));
         out += &format!("    ({id:#010x}, &[\n");
         for it in &a.items {

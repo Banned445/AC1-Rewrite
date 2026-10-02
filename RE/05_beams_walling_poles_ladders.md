@@ -376,6 +376,61 @@ Swinging (ActorState 44, SwingEventMonitor) is handled by HumanLedge (`LedgeSubS
 - Same structure as pole: root-motion climb anims selected by MvtAnimState; enter-from-top / exit-to-top use TopOfLadderEventMonitor (ActorState 60 LadderTop). Entry from Walling (EntryType 3) exists.
 - Constants in 0xE1C000–0xE28500 include 0.35, 0.45, 0.55, 0.65, 0.85, 0.9, 0.95, 1.05, 1.55, 1.6, 1.8, 2.35, 2.85, 3.5, −3.5, 5 — likely rung spacing / top-exit heights **(hypothesis, not mapped to code)**.
 
+### 4.1 Ladder actions, entries and the port (verified 2026-10-02)
+**Animation table** (`HumanLadderData__ctor` 0xC7CAC0): dword index 98 + 4·MvtAnimState + 2·foot + inclination (+392 bytes). Low / High are the **low / high profile** (`xx_l_` / `xx_h_` clips); [foot l, foot r]; the inclination column only differs for the top entries.
+
+| MvtAnimState | Low | High |
+|---|---|---|
+| 0 / 1 Wait | `0x01068FF7` / `F8` | `0x0106902E` / `2F` |
+| 2 / 4 Climb up (items l, r) | `0x01068FFF`: 0.5 m per 0.4 s | `0x01068FF9`: 1.0 m per 0.4 s |
+| 3 / 5 Climb down | `0x01069001`: 0.5 m | `0x010C9CEE`: 1.0 m |
+| 6 Revolve | (empty) | |
+| 7 / 8 Enter from the ground, 3 clips [straight, left, right] | `0x010A34A7` / `A6` | `0x010A251E` / `20` |
+| 9 / 10 Enter from the top (pull-down onto it) | `0x010A396B` / `6C` | `0x010A251C` / `0x010A3493` |
+| 11 / 12 Exit to the ground | `0x010A2F5B` / `5C` | `0x010CA51A` / `0x010CA6C3` |
+| 13 / 14 Exit to the top | `0x010A349C` / `9D`: 1 m up, 1 m forward | `0x010A37FC` / `FD`: a 1 m up, b 0.5 m up, 1.05 m forward |
+| 15 / 16 Release (→ falling) | `0x010A3485` / `86` | `0x010A3483` / `84` |
+| 17 / 18 Jump (`wait_tr_rebound`) | `0x044933FE` / `FF` | same |
+
+The top entry's transition into the wait is `0x010A250E` / `0x010A250F` (items a: the drop 1.1 / 1.27 m, b; `HumanLadder__StateEntry_Update` 0xE25240). A back approach turns with `0x0A64400C` / `D`.
+
+**Ground entry** (event 38):
+- **Guard** `HumanGround__Guard_Event38_Ladder` 0xD83970 → `Human__CanGrabLadder` 0xB239D0:
+  - the ladder segment is base … base + H·up (H from a settings object, default 3.0);
+  - the feet must be within the caller's reach of it;
+  - the character must be on its front side within 90°;
+  - |feet.z − top.z| > 1.5 → from the ground, else from the top.
+- **Action:** `HumanGround__ToLadder` 0xD91E60 (fill 0xD8E8F0 binds the ladder, EntryType 0).
+
+**Entry** (`HumanLadder__StateEntry_Enter` 0xE266D0):
+- **From the ground:** the [straight, left, right] blend by the signed approach angle / 90°. The root goes to the ladder point − 0.5 along the ladder direction, with an interpolation in 0xE25240.
+- **From the top:** the pull-down with the root interpolated to top − 0.7 m, ± 0.5 m along the front, over the action.
+
+**Main** (`HumanLadder__UpdateFSM_Main` 0xE27D30, `HumanLadder__StateClimb_Update` 0xE27540): climb / wait by MvtAnimState from the table. The climb clips' displacement moves the root along the ladder (`HumanLadder__ClimbMovement` 0xE25ED0); the revolve is sub-state 7.
+
+**Port** (`player/ladder.rs`):
+- the guard, both entries, the waits, climbing up / down by profile with the clips' displacement;
+- the exit to the top when the remaining height fits the exit's rise, and to the ground at the bottom;
+- release (InAir with the release action as the fall animation) and the jump (`wait_tr_rebound`, then a jump away).
+
+**PORT:**
+- **Triggers:**
+  - walking into the ladder's foot facing it (reach 0.8 m) mounts it;
+  - from the top, low profile + Legs facing out over it;
+  - the stick toward / away from the ladder climbs up / down;
+  - Legs releases;
+  - high profile + Legs + the stick away jumps.
+  The game's event senders and MvtAnimState decision (0xE24540 / 0xE226D0) are not traced.
+- **Attach point:** the root sits 0.5 m out from the ladder line (hypothesis on the sign of 0xE266D0's offset).
+- **Not ported:**
+  - the back-approach turn;
+  - the revolve;
+  - inclined ladders;
+  - entries from the air, Walling and Climb;
+  - the TopOfLadder monitor (ActorState 60).
+
+**Test geometry:** a 5 m wall at (50, 64) with the ladder on its −Z face at x 50. `AC_AUTOPILOT=ladder`.
+
 ## 5. HumanRope (light)
 - Data: +0x10 DestHeading, +0x20 vec4, +0x30 Rope (objref), +0x34 DestSpeedRatio, +0x38 ReachedTop, +0x39 ReachedBottom.
 - `UpdateFSM 0xE33110`: state +0x1E8 with sub-states (+0x1EB/+0x1EE/+0x1F1/+0x1F4) and state +0x1F7. Per-frame `UpdateLimbGripsFromAnimTags 0xE32780`: animation tag bits 0x10/0x20/0x01/0x02 attach/detach the four limbs to the rope (IK slots 0–3 vs 4–7); accumulates a timer at +0x198 while hanging. Big helper `sub_E31490` not analysed. Constants: 0.55, 0.7, 1.2, 2.4, 10, cos 110° (−0.342).
