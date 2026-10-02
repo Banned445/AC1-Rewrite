@@ -83,6 +83,8 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     PULLDOWN_ORIENT[0], PULLDOWN_ORIENT[1], PULLDOWN_DESCENT, PULLDOWN_WALL[0], PULLDOWN_WALL[1], PULLDOWN_FREE[0], PULLDOWN_FREE[1],
     // ledge stop (HumanGround sub-state 38, 0xD93C60 / 0xD7D9D0)
     LEDGE_STOP_START, LEDGE_STOP_END,
+    // pull-up (Pullup_Start 0xDDBE80)
+    ACT_PULLUP_WALL, ACT_PULLUP_FREE,
 ];
 
 /// Ledge stop: `xx_h_ledge_stop_start_footl` (played on entry, 0xD93C60) and `xx_h_ledge_stop_end_footl` (played
@@ -104,6 +106,8 @@ pub enum MoveKind {
     Arrival,
     /// Wall ↔ free hang (0xDE1060).
     SwitchHang { to_wall: bool },
+    /// Onto the top (Pullup_Start 0xDDBE80).
+    Pullup,
     /// Ground → hang over an edge (0xDDE4D0 / 0xDDE980): orientation, descent, reception.
     PullDown { stage: u8 },
 }
@@ -187,6 +191,12 @@ impl LedgeMove {
             self.from.lerp(self.to, s)
         };
         (p, self.t >= total)
+    }
+
+    /// Where the clips' own displacement ends (no correction).
+    pub fn natural_end(&self) -> Vec3 {
+        let d = self.disp(self.duration());
+        self.from + right_of(self.facing_from) * d[0] + self.facing_from * d[1] + Vec3::Y * d[2]
     }
 
     /// Facing during the move (turned from the old wall to the new one).
@@ -517,6 +527,65 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
         hand_l,
         hand_r,
         normal: n,
+    }
+}
+
+// ---------------------------------------------------------------- pull-up
+
+/// Pull-up actions (Pullup_Start 0xDDBE80): wall hang `xx_h_hangwall{,_45_in,_30_out}_tr_hangknee_footl_{a,b}`;
+/// free hang `xx_h_hangfree_tr_hangwaist_{a,b}`, then hangwaist → hangknee; both end hangknee → wait.
+pub const ACT_PULLUP_WALL: u32 = 0x0106_D2C5;
+pub const ACT_PULLUP_FREE: u32 = 0x0127_19F2;
+
+/// An item with all weight on its first clip (the straight variant), sized to the item's clip count.
+fn first_clip(id: u32, item: usize) -> Option<ActionBlend> {
+    let n = jump_blend::action_items(id)?.get(item)?.len();
+    let mut w = vec![0.0; n.max(1)];
+    w[0] = 1.0;
+    Some(ActionBlend::new(id, item, &w))
+}
+
+/// The pull-up onto the top: the root follows the clips' own displacement (FROMANIM: up first, then in over
+/// the lip) and is corrected onto the stand point 0.5 m inside the edge (Pullup_Start 0xDDBE80). A straight
+/// line from the hang to that point cuts through the wall. Returns the move and, for the free hang (5 clips),
+/// the queued second part.
+pub fn pullup_move(hang: LedgeHangType, from: Vec3, hand_l: Vec3, hand_r: Vec3, n: Vec3, top_feet: Vec3) -> (LedgeMove, Option<LedgeMove>) {
+    let facing = -Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    let mk = |seq: [Option<ActionBlend>; 4], from: Vec3, to: Vec3, end_stand: bool| {
+        let durations = seq_durations(&seq);
+        let found = durations.iter().sum::<f32>() > 0.0;
+        LedgeMove {
+            kind: MoveKind::Pullup,
+            seq,
+            durations: if found { durations } else { [GRAB_TIME, 0.0, 0.0, 0.0] },
+            t: 0.0,
+            from,
+            to,
+            facing_from: facing,
+            facing_to: facing,
+            follow_disp: found,
+            lead: 0.0,
+            end_free: false,
+            end_wall: false,
+            end_stand,
+            hand_l,
+            hand_r,
+            normal: n,
+        }
+    };
+    let knee_to_wait = [first_clip(ACT_KNEE_TO_WAIT, 0), first_clip(ACT_KNEE_TO_WAIT, 1)];
+    match hang {
+        LedgeHangType::Wall => (
+            mk([first_clip(ACT_PULLUP_WALL, 0), first_clip(ACT_PULLUP_WALL, 1), knee_to_wait[0], knee_to_wait[1]], from, top_feet, true),
+            None,
+        ),
+        LedgeHangType::Free => {
+            let mut a = mk([first_clip(ACT_PULLUP_FREE, 0), first_clip(ACT_PULLUP_FREE, 1), first_clip(ACT_WAIST_TO_KNEE, 0), None], from, from, false);
+            // first part: the clips' path, corrected only by the second part
+            a.to = a.natural_end();
+            let b = mk([knee_to_wait[0], knee_to_wait[1], None, None], a.to, top_feet, true);
+            (a, Some(b))
+        }
     }
 }
 

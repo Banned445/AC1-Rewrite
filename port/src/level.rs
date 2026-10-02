@@ -12,6 +12,9 @@ pub struct LevelPlugin;
 impl Plugin for LevelPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(Color::srgb(0.62, 0.72, 0.82)))
+            // sky fill light: with Bevy's default (80) every face turned from the sun renders near-black, and the
+            // baked folds of Altaïr's robe texture read as dark blotches
+            .insert_resource(GlobalAmbientLight { color: Color::srgb(0.80, 0.86, 1.0), brightness: 1500.0, ..default() })
             .add_systems(Startup, build_level);
     }
 }

@@ -482,15 +482,13 @@ pub fn update_ledge(
                         .filter(|h| (h - mid.y).abs() < 0.25)
                         .is_some();
                     if standable && collision.capsule_fits(Vec3::new(top.x, mid.y, top.z)) {
-                        // root: onto the top, 0.5 m in (Pullup_Start 0xDDBE80), over the pull-up clip chain;
-                        // the clip's root motion shapes the path (up, then in)
+                        // root: onto the top, 0.5 m in (Pullup_Start 0xDDBE80), along the pull-up clips' own
+                        // displacement (up, then in over the lip) plus a correction onto that point
                         let top_feet = Vec3::new(top.x, mid.y, top.z);
-                        let time = if d.hang_type == LedgeHangType::Wall { PULLUP_WALL_TIME } else { PULLUP_FREE_TIME };
-                        d.moves.push(RootInterp::new(body.feet, top_feet, time));
-                        d.step_seq += 1;
-                        d.after = Some(After::StandOnTop);
+                        let (mv, rest) = ledge_moves::pullup_move(d.hang_type, body.feet, d.hand_l, d.hand_r, n, top_feet);
+                        start_move(d, mv, "pull-up");
+                        d.queue = rest.into_iter().collect();
                         d.sub_state = LedgeSubState::Pullup;
-                        d.last_action = "pull-up";
                         continue;
                     }
                     d.last_action = "blocked up";

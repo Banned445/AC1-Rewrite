@@ -640,3 +640,54 @@ fn leap_of_faith_into_the_haystack_then_hop_out() {
     s.run(0.6);
     assert!(s.body().feet.x > 38.0 && s.body().feet.y.abs() < 0.05, "hopped out: {:?}", s.body().feet);
 }
+
+#[test]
+fn releasing_the_stick_stops_quickly_like_the_game() {
+    use crate::player::jump_blend::{RUN_STOP, RUN_STOP_TO_WAIT};
+    // run (high profile), release: RunStop action + its settle into the wait (~0.7 s), short slide
+    let mut s = Sim::new(Vec3::new(0.0, 0.0, -30.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, false);
+    s.run(2.0);
+    let x0 = s.body().feet.x;
+    s.pad(Vec3::X, 0.0, false, false);
+    s.run(1.0 / 60.0 + 1e-4);
+    assert!(s.ground().oneshot.is_some_and(|o| RUN_STOP.contains(&o.blend.id)), "run stop playing");
+    assert_eq!(s.ground().speed_param, 0.0);
+    assert!(s.run_until(1.2, |s| s.ground().oneshot.is_none()), "stop + settle within 1.2 s");
+    let slide = s.body().feet.x - x0;
+    assert!((0.2..2.0).contains(&slide), "run stop slide {slide}");
+    let _ = RUN_STOP_TO_WAIT;
+    // walk, release: stopped at once
+    let mut s = Sim::new(Vec3::new(0.0, 0.0, -30.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, false, false);
+    s.run(1.5);
+    let x0 = s.body().feet.x;
+    s.pad(Vec3::X, 0.0, false, false);
+    s.run(0.3);
+    assert!(s.body().feet.x - x0 < 0.05, "walk stop slid {}", s.body().feet.x - x0);
+    assert!(s.ground().oneshot.is_none());
+}
+
+#[test]
+fn pull_up_does_not_cut_through_the_wall() {
+    // the root follows the pull-up clips (up, then in over the lip): body points stay outside the wall
+    let mut s = hang_on_jump_up_wall();
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    let c = crate::level::geometry().0;
+    s.pad(Vec3::Z, 1.0, false, false);
+    let mut worst = 0usize;
+    let mut frames = 0;
+    for _ in 0..240 {
+        s.run(1.0 / 60.0 + 1e-4);
+        if s.loco().current != ActorContextId::Ledge {
+            break;
+        }
+        frames += 1;
+        let f = s.body().feet;
+        worst += [0.3f32, 0.9, 1.5].iter().filter(|&&h| c.point_inside(f + Vec3::Y * h)).count();
+    }
+    assert!(frames > 10, "pull-up ran {frames} frames");
+    assert_eq!(worst, 0, "body inside the wall on {worst} samples");
+    assert_eq!(s.loco().current, ActorContextId::Ground);
+    assert!((s.body().feet.y - 2.6).abs() < 0.05);
+}

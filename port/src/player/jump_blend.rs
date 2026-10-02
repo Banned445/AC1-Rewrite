@@ -39,10 +39,25 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     RECEPTION_FREESTEP[0], RECEPTION_FREESTEP[1],
     LAND_FORWARD_MOVE[0], LAND_FORWARD_MOVE[1], LAND_FORWARD_STOP[0], LAND_FORWARD_STOP[1],
     LAND_STRAIGHT_MOVE, LAND_STRAIGHT_STOP, LAND_DAMAGE, LAND_DAMAGE_ROLL,
+    // climb start from the ground: wait → climbing (HumanGround block)
+    super::climb::CLIMB_FROM_GROUND[0], super::climb::CLIMB_FROM_GROUND[1],
+    // run stop (RE/02 §3: RunStop 0xD98E30) and its settle into the wait
+    RUN_STOP[0], RUN_STOP[1], RUN_STOP_TO_WAIT[0], RUN_STOP_TO_WAIT[1],
     // Leap of Faith and the haystack (RE/04 §4.1.12)
     TAKEOFF_FAITH[0], TAKEOFF_FAITH[1], FLIGHT_FAITH, FALL_FAITH,
     super::hay::HAYSTACK_FAITH_LANDING, super::hay::HAYSTACK_WAIT, super::hay::HAYSTACK_FROM_AIR, super::hay::HAYSTACK_HOP_OUT,
 ];
+
+/// Run stop (HumanGround state 18, enter 0xD98E30): [left-foot item playing, right] = `xx_h_{jog,run,sprint}stop_foot{l,r}`
+/// (0.2 / 0.2 / 0.4 s); then `xx_h_runstop_foot{l,r}_tr_h_wait_hipm_foot{r,l}` (0.47 s), the stop's own transition.
+pub const RUN_STOP: [u32; 2] = [0x00D8_37AE, 0x00D8_37F1];
+pub const RUN_STOP_TO_WAIT: [u32; 2] = [0x00D8_38BA, 0x00D8_38FD];
+
+/// RunStop weights (0xD98E30, locomotion action playing): [jog 0, run 1 − f, sprint f], f = clamp((s − 0.75)·4).
+pub fn run_stop_weights(speed_param: f32) -> [f32; 3] {
+    let f = if speed_param < 0.75 { 0.0 } else { ((speed_param - 0.75) * 4.0).min(1.0) };
+    [0.0, 1.0 - f, f]
+}
 
 /// Leap of Faith (0xB1EC40, target type 0x800 with the target ≥ 3 m below, jump kinds 0 / 1): takeoff
 /// `freestep_footr_to_faith_jump_*` [foot 1, other], flight `faith_jump_*` (4 clips: 100 / 800 cm long ×

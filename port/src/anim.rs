@@ -420,7 +420,13 @@ fn choose_clip(
             }
             ActorContextId::Ground => Some(looped(
                 match speed_band(g.speed_param) {
-                    SpeedBand::None => if g.high_profile { "idle_high" } else { "idle_low" },
+                    // wait item of the leading foot (MoveBlend foot: 0 = left ahead)
+                    SpeedBand::None => match (g.high_profile, g.blend.foot == 0) {
+                        (true, true) => "idle_high",
+                        (true, false) => "idle_high_r",
+                        (false, true) => "idle_low",
+                        (false, false) => "idle_low_r",
+                    },
                     SpeedBand::Walk => "walk",
                     SpeedBand::Jog => "jog",
                     SpeedBand::Run => "run",

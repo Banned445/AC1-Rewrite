@@ -565,6 +565,13 @@ The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
   - PullDownSubState = Orientation. The update (`StatePullDown_Update` 0xDDFCF0) ends in Entry (state 5), or in **InAir when PullDownSubState == 4 ReleaseToInAir** (fill 0xDDA100).
 - HandPassOver (state 9, SubState 12) is the vault over a ledge without hanging. HandPassOverSubState PassOver + anim done → **Ground context 4**.
 
+### 7.7b Pull-up root path (2026-10-02)
+The pull-up actions are FROMANIM:
+- **Wall:** `0x0106D2C5` hangwall → hangknee (a, b), then `0x0106C58B` hangknee → wait (a, b).
+- **Free:** `0x012719F2` hangfree → hangwaist (a, b), then `0x0127199E` waist → knee, then `0x0106C58B`.
+
+Their root rises first and moves in over the lip once the hips reach the edge. The port follows the clips' displacement plus a linear correction onto the stand point 0.5 m inside the edge (Pullup_Start 0xDDBE80); see `ledge_moves::pullup_move`. The earlier straight-line root interpolation cut through the wall.
+
 ### 7.8a Ledge stop and look-down (HumanGround, verified 2026-10-02)
 **Edge report** (event payload, also used by pull-down): point +16, outward normal +32, drop +48, +52, flag +56, distance limit +64, wide flag +68.
 

@@ -45,8 +45,12 @@ fn contact_keys(a: &super::ac_anim::AnimData) -> Vec<(f32, u8)> {
 /// (clip name, resource names joined in order). All from DataPC.forge → "Game Fix".
 pub const LOCOMOTION: &[(&str, &[&str])] = &[
     // ground
-    ("idle_low", &["xx_l_wait_hipm_footm"]),
+    // the game's wait actions (HumanGround 0xD8243F / 0xD824C5 low, 0xD82508 / 0xD8258E high), by the leading
+    // foot; the `_footm` waits are 1 s parallel-feet poses, not the idle
+    ("idle_low", &["xx_l_wait_hipm_footl"]),
+    ("idle_low_r", &["xx_l_wait_hipm_footr"]),
     ("idle_high", &["xx_h_wait_hipm_footl"]),
+    ("idle_high_r", &["xx_h_wait_hipm_footr"]),
     ("walk", &["xx_l_walk_hipm_footl", "xx_l_walk_hipm_footr"]),
     ("jog", &["xx_h_jog_hipm_footl", "xx_h_jog_hipm_footr"]),
     ("run", &["xx_h_run_hipm_footl", "xx_h_run_hipm_footr"]),

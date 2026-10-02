@@ -183,3 +183,77 @@ fn probe_dump_jump_clips() {
     std::fs::write(&path, out).unwrap();
     println!("wrote {} ({} clips)", path.display(), clips.len());
 }
+
+/// Model sanity: per part submeshes (ranges, materials), skin joints that fell back to the root / attach
+/// bone, and triangles that duplicate another triangle (overlapping LODs / double-sided copies).
+#[test]
+#[ignore]
+fn probe_model_parts() {
+    use super::altair::load_altair;
+    let m = load_altair(&game_dir()).unwrap();
+    println!("skeleton {} bones", m.skeleton.len());
+    for p in &m.parts {
+        let root_only = p.joints.iter().zip(p.weights.iter()).filter(|(j, w)| j[0] == 0 && w[0] > 0.99).count();
+        let mut tri_keys = std::collections::HashMap::new();
+        let mut dup = 0;
+        let mut total = 0;
+        for (idx, _) in &p.sections {
+            for t in idx.chunks_exact(3) {
+                total += 1;
+                let q = |i: u32| { let v = p.positions[i as usize]; [(v[0] * 1000.0) as i32, (v[1] * 1000.0) as i32, (v[2] * 1000.0) as i32] };
+                let mut k = [q(t[0]), q(t[1]), q(t[2])];
+                k.sort();
+                *tri_keys.entry(k).or_insert(0) += 1;
+            }
+        }
+        for c in tri_keys.values() {
+            if *c > 1 { dup += c - 1; }
+        }
+        println!("{}: {} verts, {} tris, {} sections, root-only verts {}, duplicate tris {}", p.name, p.positions.len(), total, p.sections.len(), root_only, dup);
+        for (i, (idx, tex)) in p.sections.iter().enumerate() {
+            let lo = idx.iter().min().copied().unwrap_or(0);
+            let hi = idx.iter().max().copied().unwrap_or(0);
+            let (mut agree, mut n) = (0, 0);
+            for t in idx.chunks_exact(3) {
+                let v = |i: u32| Vec3::from_array(p.positions[i as usize]);
+                let f = (v(t[1]) - v(t[0])).cross(v(t[2]) - v(t[0]));
+                let vn = Vec3::from_array(p.normals[t[0] as usize]) + Vec3::from_array(p.normals[t[1] as usize]) + Vec3::from_array(p.normals[t[2] as usize]);
+                if f.length() < 1e-9 { continue; }
+                n += 1;
+                if f.dot(vn) >= 0.0 { agree += 1; }
+            }
+            println!("   section {i}: tris {} verts {lo}..{hi} tex {:?} winding agrees {agree}/{n}", idx.len() / 3, tex);
+        }
+    }
+}
+
+/// Writes Altaïr's decoded diffuse textures (mip 0) as BMPs into PROBE_OUT (local inspection only).
+#[test]
+#[ignore]
+fn probe_dump_textures() {
+    let m = load_altair(&game_dir()).unwrap();
+    let out = std::path::PathBuf::from(std::env::var("PROBE_OUT").expect("PROBE_OUT"));
+    for (id, t) in &m.textures {
+        let (w, h) = (t.width as usize, t.height as usize);
+        let px = &t.mips[0];
+        let mut f = Vec::new();
+        let size = 54 + w * h * 4;
+        f.extend_from_slice(b"BM");
+        f.extend_from_slice(&(size as u32).to_le_bytes());
+        f.extend_from_slice(&[0; 4]);
+        f.extend_from_slice(&54u32.to_le_bytes());
+        f.extend_from_slice(&40u32.to_le_bytes());
+        f.extend_from_slice(&(w as i32).to_le_bytes());
+        f.extend_from_slice(&(-(h as i32)).to_le_bytes());
+        f.extend_from_slice(&1u16.to_le_bytes());
+        f.extend_from_slice(&32u16.to_le_bytes());
+        f.extend_from_slice(&[0; 24]);
+        let mut transparent = 0;
+        for p in px.chunks_exact(4).take(w * h) {
+            if p[3] < 128 { transparent += 1; }
+            f.extend_from_slice(&[p[2], p[1], p[0], 255]);
+        }
+        std::fs::write(out.join(format!("{id}.bmp")), f).unwrap();
+        println!("{id}: {w}x{h}, {transparent} transparent px");
+    }
+}

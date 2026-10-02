@@ -189,6 +189,19 @@ RotateTowards (0xD94F30): angle = unsigned angle (or forced side, 0..2π)
 ```
 Translation = root motion of the blended clips (no velocity code in the module).
 
+### 4.0 Stopping (verified 2026-10-02)
+The deceleration curve (§4.1.1) only runs while the stick still asks for movement toward a slower band. When the stick is released (desired mode HG+0x5D8 = 0) the Move state (11) is left:
+- **RunStop (18)**, guard 0xD7EC90: run-or-faster band HG+0x5DC == 1, foot phase HG+0x5D4 set, the playing item not locked (+60 & 0x20), Data+0x11F, and the locomotion action 93469659 playing (or anim 96/97, or clip time > 0.33).
+  - Enter 0xD98E30 plays the run-stop action from table 0x1A2C074 by foot (`sub_D86760`). Those are actions `0x00D837AE` / `0x00D837F1`, `xx_h_{jog,run,sprint}stop_foot{l,r}` (0.2 / 0.2 / 0.4 s).
+  - Weights: [0, 1−f, f] with f = clamp((speed − 0.75)·4). From another action they are instead [1−v, v, 0], v = (clip time − 0.33)/0.67.
+  - Its transition plays `xx_h_runstop_foot{l,r}_tr_h_wait_hipm_foot{r,l}` (`0x00D838BA` / `0x00D838FD`, 0.47 s) into the wait. Moving again goes through the `_tr_walk` / `_tr_jog` transitions instead.
+- **Idle (4)**, guard 0xD7ED30: desired mode 0 and (walk band, or not the locomotion action).
+  - Enter 0xD8B220 plays the wait from table 0x1A2BFE0 (by profile, foot and band) with a **0.2 s** blend, so a walk stops at once.
+- Tables 0x1A2BFE0 / 0x1A2C074 are filled at startup (0xDB6E50) with small ids (48–53, 86/87). These map through a runtime id table that is not traced; the actions above were matched by clip name.
+- **Waits:** `0x00D8243F` / `0x00D824C5` (`xx_l_wait_hipm_foot{l,r}`, 5 s) and `0x00D82508` / `0x00D8258E` (`xx_h_…`). The `_footm` waits are 1 s parallel-feet poses.
+
+**Port** (`ground.rs`): the stop rule above, with the run stop played by the leading foot. Moving again during the stop cuts it (PORT).
+
 ### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
 MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
 - If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.
