@@ -565,6 +565,35 @@ The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
   - PullDownSubState = Orientation. The update (`StatePullDown_Update` 0xDDFCF0) ends in Entry (state 5), or in **InAir when PullDownSubState == 4 ReleaseToInAir** (fill 0xDDA100).
 - HandPassOver (state 9, SubState 12) is the vault over a ledge without hanging. HandPassOverSubState PassOver + anim done → **Ground context 4**.
 
+### 7.8a Ledge stop and look-down (HumanGround, verified 2026-10-02)
+**Edge report** (event payload, also used by pull-down): point +16, outward normal +32, drop +48, +52, flag +56, distance limit +64, wide flag +68.
+
+**`HumanGround__ClassifyEdgeSide` 0xD9D7F0** returns 0 (no edge) when flag +56 is set, the drop is ≤ **1.3 m**, or the signed squared horizontal distance to the point (negative behind the edge) exceeds +64. Otherwise it classifies the angle between the facing and the flattened normal:
+- **1 front:** |a| < 60°, or < 120° with the wide flag +68;
+- **3:** −120° < a ≤ −60°; **4:** 60° ≤ a < 120°;
+- **2 back:** otherwise.
+
+**Ledge stop: Movement event 69** (`Movement_HandleEvent` 0xDB1470):
+- **Side edges:** guard `Guard_LedgeStopSide` 0xDA5D90 (side 3 / 4) → 0xD8E5B0. That is another state, not traced.
+- **Front edges:** guard `Guard_LedgeStopFront` 0xDA5DE0. It needs side 1, **drop > 2.0 m**, the body check `sub_B2E4F0` (0.5, 2.0), and `sub_C7F150` clear. It leads to `ToLedgeStop` 0xDA99F0, which aligns the facing to the normal when +68 is set.
+- **Clips:** `HumanGround__LedgeStop_Enter` 0xD93C60 (sub-state 38) plays `0x06E8BD7F` `xx_h_ledge_stop_start_footl` (0.27 s, no root motion). When it is done, `LedgeStop_PlayEnd` 0xD7D9D0 plays `0x06E8BD7D` `xx_h_ledge_stop_end_footl` (0.67 s, root steps back 0.50 m). Its transition 0x06E8BD7E goes to wait. When the end action is done, `Locomotion_Update` 0xDAF2D0 returns to Movement.
+- **Pull-down:** while the start action plays, `LedgeStop_HandleEvent` 0xDA4D90 accepts event 70, giving the EdgeStop pull-down (§7.8b).
+
+**Look-down:** event **119** in another ground sub-state handler (0xDA7250; guard 0xD7E590 needs a mode value == 1, **hypothesis**: the LookDown ability) leads to `ToLookDown` 0xDA5260. It copies the report to +1920.., then `HumanGround__LookDown_Enter` 0xD9FC80 (sub-state 9):
+- **Angle blend:** signed angle a between (point + normal − position) and the facing, clamped to ±90°. Weights are front = 1 − |a|/90°, and right (a ≥ 0) or left (a < 0) = |a|/90°.
+- **Action:** `0x2669E0F7` (`xx_l_ledge_lookdown_{front,left,right}_footl`) or `0x2669E0F8` (`_footr`) by the leading foot.
+- **Event:** posts event 62 with the edge.
+
+**Port** (`ground.rs` `edge_report` / `ledge_stop`):
+- Front ledge stop with the game's actions and timing.
+- EdgeStop pull-down from it (Legs during the start action).
+- **PORT:**
+  - The trigger is walking (low profile) into a front edge within 0.45 m with more than 2 m of drop. The sender of event 69 is not traced.
+  - The feet stay 0.2 m behind the edge.
+  - After a stop, pushing on into the same edge holds the character there, until the stick is released or turned away.
+- **Not ported:** side ledge stops and the look-down (event 119's sender and guard are unknown).
+- `AC_AUTOPILOT=ledgestop`.
+
 ### 7.8b PullDown in full (verified 2026-10-01)
 **Request:** event **70** from the decision layer (the input mapping is not traced), with an edge report. The report holds the point at +16, the outward normal at +32, the drop height at +48 and a flag at +56.
 

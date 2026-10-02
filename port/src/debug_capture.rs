@@ -33,6 +33,8 @@ enum Scenario {
     HangSwitch,
     /// Stand at roof A's +X edge, press Legs in low profile: pull-down into a wall hang (0xDDE4D0).
     PullDown,
+    /// Walk (low profile) into roof A's edge: ledge stop, step back.
+    LedgeStop,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -54,6 +56,7 @@ impl Plugin for DebugCapturePlugin {
                 "ledgemoves" => Scenario::LedgeMoves,
                 "hangswitch" => Scenario::HangSwitch,
                 "pulldown" => Scenario::PullDown,
+                "ledgestop" => Scenario::LedgeStop,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -106,6 +109,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
             Scenario::PullDown => {
                 b.feet = Vec3::new(10.6, 3.5, 12.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, over the drop
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::LedgeStop => {
+                b.feet = Vec3::new(8.5, 3.5, 12.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
             }
@@ -178,6 +187,12 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             if (0.5..0.52).contains(&t) {
                 pad.legs_pressed_ago = 0.0;
             }
+        }
+        Scenario::LedgeStop => {
+            pad.dir = Vec3::X;
+            pad.magnitude = if t < 2.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            pad.high_profile = false;
         }
         Scenario::HangSwitch | Scenario::LedgeMoves => {
             // grab C (jump up), then hold the stick toward +X (the player's left): side jump to D, shimmy

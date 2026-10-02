@@ -81,7 +81,19 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     RECEPTION_SURFACE_WALL, SWING_RECEPTION,
     // pull-down (0xDDE4D0 / 0xDDE980)
     PULLDOWN_ORIENT[0], PULLDOWN_ORIENT[1], PULLDOWN_DESCENT, PULLDOWN_WALL[0], PULLDOWN_WALL[1], PULLDOWN_FREE[0], PULLDOWN_FREE[1],
+    // ledge stop (HumanGround sub-state 38, 0xD93C60 / 0xD7D9D0)
+    LEDGE_STOP_START, LEDGE_STOP_END,
 ];
+
+/// Ledge stop: `xx_h_ledge_stop_start_footl` (played on entry, 0xD93C60) and `xx_h_ledge_stop_end_footl` (played
+/// when the start action is done, 0xD7D9D0; its transition 0x06E8BD7E leads to wait).
+pub const LEDGE_STOP_START: u32 = 0x06E8_BD7F;
+pub const LEDGE_STOP_END: u32 = 0x06E8_BD7D;
+
+/// One item of an action with weight 1 (for the ground's one-shot actions).
+pub fn single_item(id: u32, item: usize) -> Option<ActionBlend> {
+    single(id, item)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MoveKind {

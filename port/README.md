@@ -205,6 +205,8 @@ Limitations:
   the game's switch (`hangfree_tr_hangwall_*` / `hangwall_tr_hangfree_*`, 0xDE1060). `AC_AUTOPILOT=hangswitch` shows both.
 - **Pull-down** (RE/03 §7.8b): Legs in low profile at an edge with a drop over 2 m. It plays the game's orientation, descent and
   wall / free reception into a hang. `AC_AUTOPILOT=pulldown`.
+- **Ledge stop** (RE/03 §7.8a): walking into an edge with a drop over 2 m stops at it (`ledge_stop_start`, then `ledge_stop_end` steps
+  back). Legs during the stop pulls down (EdgeStop). `AC_AUTOPILOT=ledgestop`.
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

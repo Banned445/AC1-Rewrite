@@ -88,7 +88,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).
 - [ ] **Ground loss → InAir:** fall-type table, plus `Human__ShouldFallOffSupport` 0xB23CB0 (no floor within 0.8 m).
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
-- [ ] **Ledge look-down:** `xx_l_ledge_lookdown_*` (ability LookDown, vt1540).
+- [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. Open: side ledge stop
+      (0xD8E5B0), look-down port (event 119 sender / guard), event 69 sender**
 - [ ] **Leap of Faith** from a look-down edge.
 - [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
   - from a stop at the edge, from wait, hard, from a beam, and hand-pass-over;
