@@ -448,6 +448,12 @@ fn choose_clip(
                     };
                     Some(once(clip.into(), 2_000_000 + data.air.seq as u64, Some(duration), 0.1))
                 }
+                // Leap of Faith free-fall tail: `faith_jump_fall` (0xB1EC40 third action)
+                AirMode::Fall { .. } if data.air.flight.is_some_and(|f| f.id == crate::player::jump_blend::FLIGHT_FAITH) => {
+                    let b = crate::player::jump_blend::ActionBlend::new(crate::player::jump_blend::FALL_FAITH, 0, &[1.0]);
+                    p.sim_phase = Some(0.5);
+                    sim_request(&mut p, &lib, &b, 2_500_000 + data.air.seq as u64, 0.2)
+                }
                 _ => {
                     if p.seen_fall != Some(data.air.seq) {
                         p.seen_fall = Some(data.air.seq);
@@ -494,6 +500,13 @@ fn choose_clip(
                     }
                 }
             },
+            // haystack (0xE43140): entry action, then the wait, at the sim's time
+            ActorContextId::HayStack if data.hay.action.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                let b = data.hay.action.unwrap();
+                let ph = data.hay.t / b.duration().max(1e-4);
+                p.sim_phase = Some(if data.hay.phase == crate::player::hay::HayPhase::Waiting { ph.fract() } else { ph.min(1.0) });
+                sim_request(&mut p, &lib, &b, 5_000_000 + data.hay.seq as u64, 0.2)
+            }
             // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
             ActorContextId::Ledge if data.ledge.mv.and_then(|m| m.current()).is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
                 let (b, ph) = data.ledge.mv.unwrap().current().unwrap();

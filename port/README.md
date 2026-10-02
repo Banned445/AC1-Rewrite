@@ -207,6 +207,8 @@ Limitations:
   wall / free reception into a hang. `AC_AUTOPILOT=pulldown`.
 - **Ledge stop** (RE/03 §7.8a): walking into an edge with a drop over 2 m stops at it (`ledge_stop_start`, then `ledge_stop_end` steps
   back). Legs during the stop pulls down (EdgeStop). `AC_AUTOPILOT=ledgestop`.
+- **Leap of Faith** (RE/04 §4.1.12): run (high profile + Legs) off an edge toward a haystack 3–30 m below. It plays the game's faith
+  takeoff and dive, then the haystack landing and wait (context HayStack, 21). The stick hops out. `AC_AUTOPILOT=faith`.
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

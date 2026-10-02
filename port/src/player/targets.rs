@@ -116,6 +116,24 @@ pub fn find_jump_target(
             best = Some((target, dz, dist));
         }
     }
+    // haystacks (type 0x800): the top centre; a Leap of Faith when ≥ 3 m below (bands −30 m / 7.5 m), else the
+    // haystack free-step bands (−3 m / 6 m) (0xB1EC40). PORT: a haystack in the cone wins over roof targets
+    // (the game's LeapOfFaith ability path, IHuman vt1540/1544, is not traced).
+    for s in &guidance.haystacks {
+        let top = Vec3::new((s.min.x + s.max.x) * 0.5, s.max.y, (s.min.z + s.max.z) * 0.5);
+        let flat = Vec3::new(top.x - feet.x, 0.0, top.z - feet.z);
+        let dist = flat.length();
+        let dz = top.y - feet.y;
+        let faith = dz <= -super::jump_blend::FAITH_MIN_DROP;
+        let (far, min_dz) = if faith { (super::jump_blend::FAITH_NEAR, -super::jump_blend::FAITH_DOWN) } else { (6.0, TARGET_MIN_DZ) };
+        if !(0.6..=far).contains(&dist) || dz < min_dz || dz > 1.3 {
+            continue;
+        }
+        if flat.normalize().dot(want).clamp(-1.0, 1.0).acos() > TARGET_CONE {
+            continue;
+        }
+        return Some(JumpTarget { position: top, type_flags: super::jump_blend::TARGET_HAYSTACK, hang: None, straight: None });
+    }
     best.map(|b| b.0)
 }
 

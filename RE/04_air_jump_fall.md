@@ -404,6 +404,43 @@ The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget
   - **no target in range:** the port still jumps `FREE_JUMP_DISTANCE` ahead (PORT);
   - **leading foot:** taken from the playing locomotion item (**hypothesis** on the bit meaning).
 
+### 4.1.12 Leap of Faith and the haystack (verified 2026-10-02)
+**Jump** (`Human__ComputeJumpAnimBlend` 0xB1EC40, target type **0x800**):
+- **Faith mode** when the jump kind is 0 or 1 and target z − start z ≤ **−3 m** (internal mode v26 = 2).
+- **Actions:**
+  - takeoff `0x23A949B1` (foot 1) / `0x23A949B7`, `xx_h_freestep_footr_to_faith_jump_{100,800}cm_long_{300,3000}cm_down`;
+  - flight `0x23A949B2`, `xx_h_faith_jump_*` with the same four clips;
+  - third action `0x23A949B5`, `xx_h_faith_jump_fall` (FROMPHYSICS), used for the free-fall tail.
+- **Bands:** max down −30 m, near 7.5 m. The over-drop threshold (0xB1B8C0) is therefore −30 m instead of −3 m.
+- **Flight weights** (the end of 0xB1EC40): l = clamp(dist / 7.5), d = clamp(−dz / 27). Weights are [(1−l)(1−d), l(1−d), d(1−l), d·l] for 100/300, 800/300, 100/3000 and 800/3000.
+- **Takeoff weights:** the function returns before writing them. The port uses the same weights (**hypothesis**; the item's default is [0, 0, 1, 0]).
+- **Shallower haystacks** (dz > −3) use the free-step flight with bands 1.3 / −3 / 2.5 / 5.0 / 6.0.
+- **Clip lengths:** the takeoffs run 0.87–1.67 s and move 0.9–4.2 m forward. The flights run 0.47 s (1.3 m down) to 1.07 s (10.4 m down).
+
+**HayStack context (21)** (`HumanHayStack__Enter` 0xE43140):
+- **Entry:**
+  - From a faith jump, `EnterTop_FaithLanding` 0xE41D50 plays `0x23A9666C` `xx_h_faith_jump_landing` (blend 0.3 s).
+  - Other air entries go through `EnterFromAir` 0xE42700, which plays `0x7750D212` `xx_h_air_to_haystack` (blend 0.1 s).
+  - Both interpolate the root (`sub_711130`) to the haystack entity's position over clamp(distance / speed, 0.1, 0.4) s.
+- **Wait:** `ChooseWait` 0xE416B0, then `PlayWaitHigh` 0xE408C0, plays `0x23A9666D` `xx_h_haystack_wait` (5 s loop). The low wait is `0x23A96674`.
+- **Hop out:**
+  - Trigger: event **3** in `Wait_HandleEvent` 0xE43BD0.
+  - Guard `Guard_HopOut` 0xE434E0: a ray along the wanted direction must cross the haystack's footprint edge. The exit point is that edge + 0.5·dir, 1.25 m up, and must have room for the body (`sub_B2D2A0`, 0.35 / 0.5 / 0.75).
+  - Then `ToHopOut` 0xE41D00 → `PlayHopOut` 0xE41890 faces that direction and plays `0x2C4C2431` `xx_l_haystack_hop_out` (0.53 s, 0.8 m forward). Its transitions go to the low or high wait.
+- Events 2, 4 and 5 in the wait handler lead to other actions, not traced.
+
+**Port** (`jump_blend::faith`, `targets.rs` haystacks, `hay.rs`):
+- Running (high profile + Legs) off an edge toward a haystack 3–30 m below and ≤ 7.5 m away plays the faith takeoff and dive.
+- Arrival enters the HayStack context: the landing action and root interpolation, then the wait.
+- Pushing the stick hops out into Ground, with the hop-out action's root motion.
+- No landing damage.
+- **PORT:**
+  - A haystack in the jump cone wins over roof targets. The game's LeapOfFaith ability path (IHuman vt1540/1544) is not traced.
+  - Hop out is triggered by the stick (event 3's sender is not traced).
+  - Haystacks are not solid.
+  - Entry by a ballistic fall (`CheckHayStackEntry` 0xE05490) is not ported.
+- `AC_AUTOPILOT=faith`.
+
 ## 5. Constants
 
 | addr / site | value | meaning |

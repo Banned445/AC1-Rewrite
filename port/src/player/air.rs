@@ -147,8 +147,14 @@ impl HumanInAirData {
                 // over-drop rule (0xB1B8C0): target > 5 m below → aim 5 m down, then free-fall.
                 let mut aim = target.position;
                 let mut then_fall_to = None;
-                if target.position.y < from.y - OVERDROP {
-                    aim.y = from.y - OVERDROP;
+                // haystack: −3 m, or −30 m when deeper (Leap of Faith)
+                let thr = if target.type_flags == jump_blend::TARGET_HAYSTACK {
+                    if target.position.y - from.y <= -jump_blend::FAITH_MIN_DROP { jump_blend::FAITH_DOWN } else { jump_blend::FAITH_MIN_DROP }
+                } else {
+                    OVERDROP
+                };
+                if target.position.y < from.y - thr {
+                    aim.y = from.y - thr;
                     then_fall_to = Some(target.position);
                 }
                 self.mode = match (target.straight, target.hang) {
@@ -281,6 +287,7 @@ pub fn update_air(
         // landed by arriving on a jump target (0xE07D00) rather than by ground contact (0xE05200)
         let mut on_target = false;
         let mut hang_on: Option<LedgeEntry> = None;
+        let mut hay_on: Option<super::hay::HayStackEntry> = None;
         match air.mode {
             AirMode::Jump { from, clip_end, aim, apex, duration, t, then_fall_to, real, t_takeoff, fwd } => {
                 let t1 = (t + dt).min(duration);
@@ -319,8 +326,18 @@ pub fn update_air(
                         e.entry_move = Some(ledge_moves::arrival_move(arrival, body.feet, e.hand_l, e.hand_r, normal, &collision));
                         hang_on = Some(e);
                     }
+                    if air.target_flags == jump_blend::TARGET_HAYSTACK && then_fall_to.is_none() {
+                        if let Some(stack) = guidance.haystacks.iter().find(|s| {
+                            let p = body.feet;
+                            p.x >= s.min.x - 0.3 && p.x <= s.max.x + 0.3 && p.z >= s.min.z - 0.3 && p.z <= s.max.z + 0.3
+                        }) {
+                            // arrival on a haystack target (0xE07D00 → RequestHayStack 0xE01AF0)
+                            let faith = air.flight.is_some_and(|f| f.id == jump_blend::FLIGHT_FAITH);
+                            hay_on = Some(super::hay::HayStackEntry { stack: *stack, faith, from: body.feet, speed: body.velocity.length() });
+                        }
+                    }
                     match then_fall_to {
-                        _ if hang_on.is_some() => {}
+                        _ if hang_on.is_some() || hay_on.is_some() => {}
                         Some(p) if collision.ground_height(body.feet + Vec3::Y * 0.05, 0.1).is_none() => {
                             air.mode = AirMode::Fall { steer_to: if p == aim { None } else { Some(p) } };
                         }
@@ -393,6 +410,10 @@ pub fn update_air(
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;
             switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+        } else if let Some(e) = hay_on {
+            air.mode = AirMode::Idle;
+            body.velocity = Vec3::ZERO;
+            switch_context(&mut loco, &mut data, TransitionSetup::ToHayStack(e));
         } else if let Some(y) = landed_at {
             body.grounded = true;
             body.velocity.y = 0.0;

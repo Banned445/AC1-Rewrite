@@ -56,6 +56,10 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (61.5, 50.0, 3.0, 0.6, 2.6),
 ];
 
+/// Haystacks (centre x, centre z, size x, size z, height): not solid, jump targets of type 0x800. The first
+/// one sits 4.5 m off the high block's +X face (roof 9.5 m): the Leap of Faith test.
+pub const HAYSTACKS: &[(f32, f32, f32, f32, f32)] = &[(37.5, 26.0, 2.2, 2.2, 1.5)];
+
 /// Floating slabs (centre x, top y, centre z, size x, size z, thickness): free-hang ledges.
 const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[
     (2.0, 3.0, 36.0, 6.0, 1.2, 0.3),
@@ -94,6 +98,9 @@ pub fn geometry() -> (CollisionWorld, GuidanceWorld) {
         let max = Vec3::new(x + sx * 0.5, top, z + sz * 0.5);
         collision.boxes.push(Aabb3 { min, max });
         add_roof_edges(&mut guidance, min, max);
+    }
+    for &(x, z, sx, sz, h) in HAYSTACKS {
+        guidance.haystacks.push(Aabb3 { min: Vec3::new(x - sx * 0.5, 0.0, z - sz * 0.5), max: Vec3::new(x + sx * 0.5, h, z + sz * 0.5) });
     }
     for &(p0, p1, n1) in WALL_LEDGES {
         guidance.edges.push(GuidanceEdge { p0, p1, n0: Vec3::Y, n1, subtype: GuidanceSubType::LedgeGrab });
@@ -157,6 +164,10 @@ fn build_level(
             MeshMaterial3d(wall_mat.clone()),
             Transform::from_xyz(x, top - t * 0.5, z),
         ));
+    }
+    let hay_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.85, 0.72, 0.30), perceptual_roughness: 1.0, ..default() });
+    for &(x, z, sx, sz, h) in HAYSTACKS {
+        commands.spawn((Mesh3d(meshes.add(Cuboid::new(sx, h, sz))), MeshMaterial3d(hay_mat.clone()), Transform::from_xyz(x, h * 0.5, z)));
     }
     // visual stone bands on the climb tower
     let band_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.62, 0.55, 0.45), ..default() });

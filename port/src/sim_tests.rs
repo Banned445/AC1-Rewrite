@@ -29,7 +29,7 @@ impl Sim {
             .insert_resource(PadInput { legs_pressed_ago: f32::INFINITY, ..default() })
             .insert_resource(SpawnPoint(SPAWN))
             .init_resource::<CameraRig>()
-            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb).chain());
+            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay).chain());
         let (c, g) = level::geometry();
         app.insert_resource(c).insert_resource(g);
         let player = app.world_mut().spawn(player_components(feet, heading)).id();
@@ -610,4 +610,33 @@ fn pull_down_from_the_ledge_stop_uses_the_edge_stop_orientation() {
     assert_eq!(mv.seq[0].map(|a| a.id), Some(PULLDOWN_ORIENT[0]));
     assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none() && s.data().ledge.queue.is_empty()));
     assert_eq!(s.loco().current, ActorContextId::Ledge);
+}
+
+#[test]
+fn leap_of_faith_into_the_haystack_then_hop_out() {
+    use crate::player::hay::{HayPhase, HAYSTACK_FAITH_LANDING, HAYSTACK_HOP_OUT, HAYSTACK_WAIT};
+    use crate::player::jump_blend::{FLIGHT_FAITH, TAKEOFF_FAITH};
+    // high block: x 27..33, roof 9.5 m; haystack at (37.5, 26), 2.2 m wide, 1 m high
+    let mut s = Sim::new(Vec3::new(30.5, 9.5, 26.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never jumped");
+    let air = &s.data().air;
+    assert_eq!(air.target_flags, 0x800);
+    assert_eq!(air.flight.map(|f| f.id), Some(FLIGHT_FAITH));
+    assert!(air.takeoff.is_some_and(|t| TAKEOFF_FAITH.contains(&t.id)));
+    s.pad(Vec3::X, 0.0, false, false);
+    assert!(s.run_until(5.0, |s| s.loco().current == ActorContextId::HayStack), "never reached the haystack: {:?}", s.loco().current);
+    assert_eq!(s.data().hay.action.map(|a| a.id), Some(HAYSTACK_FAITH_LANDING));
+    assert!(s.run_until(2.0, |s| s.data().hay.phase == HayPhase::Waiting));
+    assert_eq!(s.data().hay.action.map(|a| a.id), Some(HAYSTACK_WAIT));
+    let f = s.body().feet;
+    assert!((f - Vec3::new(37.5, 0.0, 26.0)).length() < 0.05, "inside the stack: {f:?}");
+    // no fall damage: the haystack takes the landing
+    assert!(s.ground().last_landing.is_none());
+    s.run(0.3);
+    s.pad(Vec3::X, 1.0, false, false);
+    assert!(s.run_until(1.0, |s| s.loco().current == ActorContextId::Ground));
+    assert_eq!(s.ground().oneshot.map(|o| o.blend.id), Some(HAYSTACK_HOP_OUT));
+    s.run(0.6);
+    assert!(s.body().feet.x > 38.0 && s.body().feet.y.abs() < 0.05, "hopped out: {:?}", s.body().feet);
 }

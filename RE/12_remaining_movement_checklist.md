@@ -90,7 +90,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
 - [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. Open: side ledge stop
       (0xD8E5B0), look-down port (event 119 sender / guard), event 69 sender**
-- [ ] **Leap of Faith** from a look-down edge.
+- [~] **Leap of Faith** from a look-down edge. **→ faith jump + HayStack context ported (RE/04 §4.1.12); open: the ability /
+      look-down trigger path (vt1540/1544), fall entry 0xE05490**
 - [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
   - from a stop at the edge, from wait, hard, from a beam, and hand-pass-over;
   - all four sides.
@@ -226,7 +227,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - 4: Drop from hang or climb, with catching when `Data+0x3F0 == 2`;
   - 5: RagFall.
 - [ ] **Air catch of ladders, beams/narrow objects and poles**, not only ledges.
-- [ ] **Leap of Faith:** 3 m over-drop, `faith_jump_*` clips, haystack landing, ActorState 41.
+- [x] **Leap of Faith:** 3 m over-drop, `faith_jump_*` clips, haystack landing, ActorState 41. **→ RE/04 §4.1.12 (ActorState 41 not sent by the port)**
 - [ ] **Small-damage landing** and the fixed height table (flag `this+226 & 8`: 8–20 m); camera shake on rolls.
 - [ ] **ActorState events:** Jumping, JumpingOnPlace, LongFall, FreeFalling, Landing, Roll.
 
