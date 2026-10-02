@@ -546,6 +546,13 @@ fn choose_clip(
                 sim_request(&mut p, &lib, &b, 5_000_000 + data.hay.seq as u64, 0.2)
             }
             // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            // swinging on a bar (0xDD24F0): landing, swing cycle, stops / impacts
+            ActorContextId::Ledge if data.ledge.swing.is_some_and(|s| sim_item(&lib, &s.action).is_some()) => {
+                let s = data.ledge.swing.unwrap();
+                let (b, ph) = s.current();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_600_000 + s.seq as u64, 0.08)
+            }
             // pass-over (0xE07D00 case 2 / 0xDDB800): the reception, then the vault, at the sim's phase
             ActorContextId::Ledge if data.ledge.pass_over.is_some_and(|p| sim_item(&lib, &p.action).is_some()) => {
                 let po = data.ledge.pass_over.unwrap();

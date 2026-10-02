@@ -51,6 +51,8 @@ enum Scenario {
     LookDown,
     /// Run at the 1 m railing and jump: pass-over vault.
     PassOver,
+    /// Jump at the first swing bar and swing from bar to bar onto the far platform.
+    Swing,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -79,6 +81,7 @@ impl Plugin for DebugCapturePlugin {
                 "pilotis" => Scenario::Pilotis,
                 "lean" => Scenario::Lean,
                 "passover" => Scenario::PassOver,
+                "swing" => Scenario::Swing,
                 "lookdown" => Scenario::LookDown,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
@@ -141,6 +144,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
+            }
+            Scenario::Swing => {
+                b.feet = Vec3::new(60.0, 1.2, 85.0);
+                b.heading = std::f32::consts::PI;
+                rig.yaw = std::f32::consts::FRAC_PI_2;
+                rig.distance = 8.0;
             }
             Scenario::PassOver => {
                 b.feet = Vec3::new(40.0, 0.0, 9.5);
@@ -283,6 +292,17 @@ fn autopilot(
             if t < 1.0 {
                 pad.magnitude = 0.0;
                 pad.speed01 = 0.0;
+            }
+        }
+        Scenario::Swing => {
+            pad.dir = Vec3::Z;
+            pad.high_profile = true;
+            let swinging = q.single().ok().is_some_and(|(_, d, _)| d.ledge.swing.is_some_and(|w| matches!(w.phase, crate::player::swing::SwingPhase::Cycle(_))));
+            let run = t > 1.0 && t < 1.6;
+            pad.magnitude = if run || swinging { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if (1.35..1.37).contains(&t) || swinging {
+                pad.legs_pressed_ago = 0.0;
             }
         }
         Scenario::PassOver => {

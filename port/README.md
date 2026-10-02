@@ -226,7 +226,10 @@ Limitations:
   `AC_AUTOPILOT=lookdown`.
 - **Pass-over vault** (RE/04 §4.1.13): a running jump (high profile + Legs) at a thin wall top (≤ 1 m thick) plays the game's
   pass-over flight, plants a hand and vaults across (30 / 100 cm clips by thickness), then runs on or drops down.
-  `AC_AUTOPILOT=passover`. NarrowObject's own Edge and Lean states are unused in this game build (RE/05 §2.9).
+  `AC_AUTOPILOT=passover`.
+- **Swing bars** (RE/03 §7.10a): a running jump at a bar with nothing below plays the game's swing landing and swing cycle;
+  high profile + Legs jumps to the next bar or ledge at the forward swing with the game's swing takeoff; releasing the stick
+  stops the swing. Climbing poles is cut content in this game build (no animations ship, RE/05 §3.5). `AC_AUTOPILOT=swing`. NarrowObject's own Edge and Lean states are unused in this game build (RE/05 §2.9).
 
 **Jumps and landings (RE/04 §4.1)**
 - A running jump to a roof edge (free-step target, type 1) plays the game's takeoff item (`run_*_to_air`, 40 clips) then

@@ -100,6 +100,8 @@ enum After {
 pub struct HumanLedgeData {
     /// HandPassOver (SubState 12): the pass-over vault (`passover`).
     pub pass_over: Option<super::passover::HandPassOver>,
+    /// SwingReception (SubState 8): swinging on a bar (`swing`).
+    pub swing: Option<super::swing::Swing>,
     pub sub_state: LedgeSubState,
     pub hang_type: LedgeHangType,
     pub hand_l: Vec3,
@@ -135,6 +137,7 @@ impl HumanLedgeData {
         self.normal = e.normal;
         self.sub_state = e.sub_state;
         self.pass_over = None;
+        self.swing = None;
         self.alt_flag = false; // EnterCommon 0xDE26D0 clears +0x85
         self.blocked_up = false;
         self.moves.clear();
@@ -287,6 +290,39 @@ pub fn update_ledge(
         if loco.just_switched {
             loco.just_switched = false;
             limbs.feet = None;
+            continue;
+        }
+        // ---------------------------------------------------------------- SwingReception (SubState 8)
+        if let Some(mut s) = data.ledge.swing {
+            limbs.hands = Some((data.ledge.hand_l, data.ledge.hand_r));
+            limbs.feet = None;
+            body.velocity = Vec3::ZERO;
+            body.heading = heading_of(s.fwd);
+            let mut feet = body.feet;
+            let jump = pad.high_profile && pad.jump_buffered();
+            if jump {
+                pad.consume_jump();
+            }
+            let stick = pad.speed01 > 0.0;
+            let out = super::swing::update(&mut s, dt, stick, jump, &mut feet, &collision, |p, f| super::targets::find_jump_target(p, f, &guidance, &collision));
+            body.feet = feet;
+            match out {
+                super::swing::SwingOut::Stay => data.ledge.swing = Some(s),
+                super::swing::SwingOut::Hang => {
+                    data.ledge.swing = None;
+                    // the swing replaced the plain grab: the hang starts here
+                    data.ledge.moves.clear();
+                    data.ledge.after = None;
+                    data.ledge.sub_state = LedgeSubState::Movement;
+                    data.ledge.hang_type = LedgeHangType::Free;
+                    data.ledge.hang_set = true;
+                }
+                super::swing::SwingOut::Jump(target) => {
+                    data.ledge.swing = None;
+                    let from = body.feet;
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(super::air::InAirEntry::SwingJump { from, target }));
+                }
+            }
             continue;
         }
         // ---------------------------------------------------------------- HandPassOver (SubState 12)

@@ -72,6 +72,9 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (77.0, 80.0, 0.5, 0.5, 3.0),
     (79.5, 80.0, 0.5, 0.5, 3.0),
     (84.0, 80.0, 4.0, 4.0, 3.0),
+    // --- swing bars (RE/03 §7.10): platforms at z 86 / 101 (1.2 m), bars between them (SLABS)
+    (60.0, 86.0, 3.0, 3.0, 1.2),
+    (60.0, 101.5, 3.0, 3.0, 1.2),
 ];
 
 /// Beams (p0, p1 on the top centre line; 0.2 m wide, 0.2 m thick): solid, and guidance edges of sub-type Beam.
@@ -89,6 +92,9 @@ pub const HAYSTACKS: &[(f32, f32, f32, f32, f32)] = &[(37.5, 26.0, 2.2, 2.2, 1.5
 const SLABS: &[(f32, f32, f32, f32, f32, f32)] = &[
     (2.0, 3.0, 36.0, 6.0, 1.2, 0.3),
     (64.5, 2.6, 50.0, 3.0, 0.6, 0.3), // overhang continuing wall F's ledge (hang-type switch test)
+    (60.0, 3.4, 90.0, 3.0, 0.2, 0.2), // swing bars 3.5 m apart
+    (60.0, 3.4, 93.5, 3.0, 0.2, 0.2),
+    (60.0, 3.4, 97.0, 3.0, 0.2, 0.2),
     (89.0, 6.3, 70.0, 2.0, 1.0, 0.3), // above the free beam: the beam's straight jump at a hand target (2.3 m)
 ];
 

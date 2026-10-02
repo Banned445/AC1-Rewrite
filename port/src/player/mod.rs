@@ -20,6 +20,7 @@ pub mod ledge_moves;
 pub mod move_blend;
 pub mod narrow;
 pub mod passover;
+pub mod swing;
 pub mod targets;
 pub mod walling;
 

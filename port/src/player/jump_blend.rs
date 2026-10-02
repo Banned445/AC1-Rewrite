@@ -144,7 +144,8 @@ pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale
         return faith(dz, dist, foot_left);
     }
     let (up, down_max, near, mid, far) = bands(target_type);
-    let o = 0.0; // kinds 0, 1, 2, 4
+    // kinds 0, 1, 2, 4: no offset; other kinds (3, the swing jump) shift the bands by -0.7 m (0xB1EC40 v29)
+    let o = if kind == 3 { -0.7 } else { 0.0 };
     let (range_up, range_down) = (up - o, down_max - o);
     let v56 = -0.5 - o;
     let v51 = dz.max(-3.0);
@@ -166,7 +167,11 @@ pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale
     let n_flight = action_items(flight).and_then(|i| i.first().map(|c| c.len())).unwrap_or(16);
     let deep = has_deep(target_type);
     let mut fw = vec![0.0f32; n_flight.max(16)];
-    let takeoff = if kind == 1 { TAKEOFF_FREESTEP } else { TAKEOFF_RUN }[(!foot_left) as usize];
+    let takeoff = match kind {
+        1 => TAKEOFF_FREESTEP[(!foot_left) as usize],
+        3 => super::swing::TAKEOFF_SWING,
+        _ => TAKEOFF_RUN[(!foot_left) as usize],
+    };
     let mut tw = vec![0.0f32; 40];
     if target_type == 2 {
         passover_flight_weights(&mut fw, d, h, class);
@@ -176,6 +181,10 @@ pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale
     }
     flight_weights(&mut fw, d, h, down, class, deep);
     takeoff_weights(&mut tw, &fw, down, 0.0, class, deep);
+    if kind == 3 {
+        // the swing takeoff is one 8-clip group (0xB1EC40 kind 3 maps both side groups onto the front one)
+        tw.truncate(8);
+    }
     // > 3 m drop: move weight into the deep flight variants (0xB1EC40 tail, after the takeoff used them)
     if deep && dz < -3.0 {
         let k = ((-dz - 3.0) / 5.0).clamp(0.0, 1.0);

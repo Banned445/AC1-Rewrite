@@ -361,6 +361,15 @@ Constants (scan 0xE28600–0xE2DF00): 0.2 attach offset, 0.25 input threshold, 0
 PoleData layout: +0x10 DestHeading (input), +0x20 PoleJumpDirection, +0x30 GrabPosition, +0x40 EntryType, +0x44 InclinationType, +0x48 MvtDivision, +0x4C MvtAnimState, +0x50 segment index (u32), +0x54 DestSpeedRatio, +0x58 Pole (objref), +0x5C ReachedTop, +0x5D ReachedBottom; unreflected +0x130..+0x188 anim-id tables, +0x1F0 byte "high grip/swing" **(hypothesis)**, +0x1F4 pole object.
 Swinging (ActorState 44, SwingEventMonitor) is handled by HumanLedge (`LedgeSubState 8 SwingReception`), not by HumanPole **(hypothesis; not traced)**.
 
+### 3.5 Poles are cut content in v1.02 (verified 2026-10-02)
+- **No pole data ships.**
+  - DataPC.forge "Game Fix" holds 51 ActionBlocks and **none is HumanPole**.
+  - The actions `HumanPole__StateEntry_Enter` 0xE2AFB0 plays (`0x010D74B0`, `0x010D7A7A`, `0x010D7A7F`, `0x010D7A78`, `0x010D7A7E`) are neither actions nor resources there.
+  - The only pole clips are the 9 `xx_h_air_surface_tr_pole_verti_{up,down,long}_{a,b,c}`. They form action `0x02927226` in the HumanInAir block, which the arrival on a type 0x2000 target plays (0xE07D00).
+- **Conclusion:** pole climbing (vertical / inclined, ClimbMovement 0xE2C610) has code but no animations, so it cannot be played as shipped.
+- **What plays instead:** the poles players use are horizontal **swing bars**, handled by HumanLedge's SwingReception (RE/03 §7.10).
+- **Port:** no Pole context.
+
 ## 4. HumanLadder (light)
 - Data: +0x20 DestHeading, +0x30 EntryType {FromGround, FromAirStraight, FromAirInclined, FromWalling, FromClimb}, +0x34 InclinationType {Vertical, Horizontal}, +0x38 MvtDivision, +0x3C MvtAnimState (20 values: Wait/Climb Low/High Up/Down, Revolve, Enter/Exit Ground/Top Low/High, Release, Jump), +0x48 Ladder (objref), +0x4C LadderHeight, +0x50 HeightInLadder, +0x54 ReachedTop, +0x55 ReachedBottom.
 - FSM: 12 states (`SetupFSMStates 0xE1EDE0`), `UpdateFSM 0xE27D30`: if the ladder object reference becomes invalid → leave (event 8). State 1 = entry (`sub_E25240`), then state 5 = main (`StateMain_Update 0xE278E0`, sub-states 6/7/8); states 9..12 = exits (`0xE1F6C0`, `0xE21D60`, `0xE1F710`, `0xE21E20`). Big helpers `sub_E228E0`, `sub_E266D0` not analysed.

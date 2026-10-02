@@ -656,6 +656,44 @@ Other entry work:
 ### 7.10 Swing / receptions
 - SwingReception (13): Human+2704 is reset. `sub_DCFE90` → state 6, `sub_DCD300` → state 7 (`sub_DD0140`), `sub_DCD260` → 0xDCF8E0.
   **SwingStrength** (data +0x70) is written by the caller (InAir) and read by these helpers (h). Not decoded further.
+
+### 7.10a Swinging on a bar (verified 2026-10-02)
+**Entry:** a running jump at a free-hang target (type 0x80) whose arrival finds no foot holds (0xE07D00, generic branch):
+- it plays the landing `0x02926510` (`xx_h_air_{down 050/300/550/900, front 050/300/650, up 300, up 050}cm_to_swing_tr_swing_front_a`) as the transition into the swing cycle `0x023E0C60`;
+- LedgeData+76 = 8 (SwingReception, state 13, `HumanLedge__StateSwingReception_Update` 0xDD24F0).
+
+**Swing cycle `0x023E0C60`:** items 0 front_up (0.17 s), 1 front_down (0.67 s), 2 back_up (0.6 s), 3 back_down (0.33 s). All four are in place; the root stays at the free-hang root.
+
+**After the landing clip:**
+- **Jump target ahead** (+1792 == 3 and +1796 == 3): it keeps swinging.
+- **Otherwise** (`HumanLedge__SwingLandingToSettle` 0xDCD300 → `HumanLedge__PlaySwingImpact` 0xDD0140): the settle chosen by `HumanLedge__PickSwingImpact` 0xDCFBC0. Two sweeps 0.5 m along the facing from 0.65 m (r 0.35) and 1.6 m (r 0.6) below the hands, pulled back 0.25 m:
+
+  | Sweeps | Settle |
+  |---|---|
+  | legs blocked | `0x02F4BF02`: `hangwallfree_impact_00cm` / `hangfree_impact_{50,150}cm`, then `…_tr_hangfree`, weighted by the fraction |
+  | legs free, shoulders blocked | `0x14809A03` (shoulder impact) |
+  | all free | `0x8AAE420E` (elbow impact) |
+
+  The free-hang idle `0x012719F1` follows.
+- **Support under the feet** (`HumanLedge__SwingHasSupport` 0xDCD260) → InAir (`HumanLedge__SwingToInAir` 0xDCF8E0).
+
+**Events** (`HumanLedge__StateSwingReception_HandleEvent` 0xDD2890):
+- **6, stop.** Guard `HumanLedge__Guard_SwingStop` 0xDCCF40: refused during the landing and on cycle items 0 / 2. `HumanLedge__SwingStopToHang` 0xDCE900 → free-hang Movement. The stops `0x023E0C61` (front) / `0x023E0C62` (back), items a–d, follow through the graph.
+- **7, jump.** Guard `HumanLedge__Guard_SwingJump` 0xDCD000: the targets found (+1792 / +1796 == 3), at the end of the landing clip or of cycle **item 3** (back_down: swinging forward through the bottom). `HumanLedge__SetupSwingJump` 0xDCD0B0 → `Human__SetupJumpToTarget` with **jump kind 3**. In 0xB1EC40, kind 3 means:
+  - takeoff `0x0292655B` (`xx_h_swing_cycle_{front 050/300/550, down 050/300/550, up 100/300}cm_to_air`);
+  - one 8-clip group (case 3 maps the side group onto the front one);
+  - the height bands shifted by o = −0.7 m.
+
+**Port** (`player/swing.rs`):
+- The landing (weights matched to the flight by clip name), the cycle, the jump at the end of back_down with the swing takeoff, the impact settle without a target, and the stop on the down items.
+
+**PORT:**
+- **Triggers:** the jump request is high profile + Legs, kept until the release point. The stop is the stick released.
+- **Targets:** the game's +1792 / +1796 targets are `find_jump_target` along the facing.
+- **Stops:** they play item a only.
+- **Not decoded:** SwingStrength.
+
+**Test geometry:** three bars 3.5 m apart at 3.4 m between platforms at z 86 / 101.5 (x 60). `AC_AUTOPILOT=swing`.
 - HangWallReception (11): interpolate until progress 1 → Movement when `sub_DCC190`. On anim event bit 4 → 0xDCF8B0.
 - HangFreeReception (12): 0xDCEE00 drives it until SubState == 1.
 

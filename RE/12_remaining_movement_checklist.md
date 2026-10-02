@@ -138,7 +138,8 @@ free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **CrowdRun** and **ObstacleCollision**.
 - [ ] **Support check and fall** (`CheckSupportAndFall` 0xE51190, jump types 0/1/3/4/6).
 ### 3.3 Pole (context 6) — RE/05 §3
-- [ ] **Entries:** from Ground (`CanGrabPole` 0xD9C360), FromAirStraight, FromAirInclined.
+- [x] **Poles are cut content** in v1.02: no HumanPole animations ship (RE/05 §3.5). The playable "poles" are swing bars: ported (RE/03 §7.10a).
+- [ ] ~~**Entries:** from Ground (`CanGrabPole` 0xD9C360), FromAirStraight, FromAirInclined.~~
 - [ ] **Inclination:** Light / Med / High (cos 20°, cos 60°).
 - [ ] **Climbing:** attach 0.2 m off the pole; climb up/down at low/high grip; turn left/right; reached top/bottom.
 - [ ] **Jumps:** jump off (PoleJumpDirection); horizontal poles and **swing** (ActorState 44, SwingReception in Ledge).

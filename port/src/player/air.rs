@@ -70,6 +70,9 @@ pub enum InAirEntry {
     /// A jump without a target that plays one action's root motion, then falls (the beam's jump on the spot,
     /// 0xF73B80: `beam_jumpstraight_clear`, then InAir +416 = `…_clear_tr_fall`).
     OnPlace { from: Vec3, fwd: Vec3, action: ActionBlend, fall: Option<ActionBlend> },
+    /// The swing jump from a bar (Ledge SwingReception event 7 -> `sub_DCD0B0`: `Human__SetupJumpToTarget` with jump
+    /// kind 3, the `swing_cycle_*_to_air` takeoff).
+    SwingJump { from: Vec3, target: JumpTarget },
     Fall { from: Vec3, velocity: Vec3, origin: FallOrigin, speed_param: f32 },
 }
 
@@ -189,6 +192,23 @@ impl HumanInAirData {
                     then_fall_to = Some(target.position);
                 }
                 self.mode = self.real_jump(from, aim, target.type_flags, then_fall_to, 1);
+            }
+            InAirEntry::SwingJump { from, target } => {
+                self.speed_ratio = 0.0;
+                self.foot_left = true;
+                self.start_y = from.y;
+                self.start = from;
+                self.apex_y = from.y;
+                self.prev_y = from.y;
+                self.target_flags = target.type_flags;
+                self.target = Some(target);
+                let mut aim = target.position;
+                let mut then_fall_to = None;
+                if target.position.y < from.y - OVERDROP {
+                    aim.y = from.y - OVERDROP;
+                    then_fall_to = Some(target.position);
+                }
+                self.mode = self.real_jump(from, aim, target.type_flags, then_fall_to, 3);
             }
             InAirEntry::OnPlace { from, fwd, action, fall } => {
                 self.speed_ratio = 0.0;
@@ -349,6 +369,7 @@ pub fn update_air(
         let mut hay_on: Option<super::hay::HayStackEntry> = None;
         let mut narrow_on: Option<TransitionSetup> = None;
         let mut pass_on: Option<super::passover::PassOverEntry> = None;
+        let mut swing_on = false;
         let foot = (!air.foot_left) as usize;
         match air.mode {
             AirMode::Jump { from, clip_end, aim, apex, duration, t, then_fall_to, real, t_takeoff, fwd } => {
@@ -385,7 +406,12 @@ pub fn update_air(
                             None => LedgeArrival::Surface { free: t.type_flags == super::targets::TARGET_LEDGE_FREE },
                         };
                         let mut e = LedgeEntry::at(mid, normal, body.feet, LedgeSubState::HangWallReception);
-                        e.entry_move = Some(ledge_moves::arrival_move(arrival, body.feet, e.hand_l, e.hand_r, normal, &collision));
+                        if matches!(arrival, LedgeArrival::Surface { free: true }) {
+                            // no foot holds: SwingReception (Ledge SubState 8), `swing`
+                            swing_on = true;
+                        } else {
+                            e.entry_move = Some(ledge_moves::arrival_move(arrival, body.feet, e.hand_l, e.hand_r, normal, &collision));
+                        }
                         hang_on = Some(e);
                     }
                     // pass-over target (type 2): 0xE07D00 case 2 → Ledge HandPassOver
@@ -493,7 +519,17 @@ pub fn update_air(
         if let Some(entry) = hang_on {
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;
+            let flight = air.flight;
             switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+            if swing_on {
+                let n = entry.normal;
+                let root = super::ledge::hang_root_at(entry.hand_l, entry.hand_r, n, super::ledge::LedgeHangType::Free, &collision);
+                let fwd = -Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+                let seq = data.ledge.swing.map(|s| s.seq).unwrap_or(0);
+                data.ledge.swing = super::swing::enter(body.feet, root, fwd, (entry.hand_l + entry.hand_r) * 0.5, flight, seq);
+                data.ledge.hang_type = super::ledge::LedgeHangType::Free;
+                data.ledge.hang_set = true;
+            }
         } else if let Some(e) = pass_on {
             air.mode = AirMode::Idle;
             body.velocity = Vec3::ZERO;

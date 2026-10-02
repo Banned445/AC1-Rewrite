@@ -319,7 +319,7 @@ fn hang_on_balcony() -> Sim {
     assert!(hung, "never reached the balcony: ctx {:?} feet {:?}", s.loco().current, s.body().feet);
     s.pad(Vec3::Z, 0.0, false, false);
     // the arrival's reception (swing) plays before the hang takes input
-    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none()), "reception never ended");
+    assert!(s.run_until(4.0, |s| s.data().ledge.mv.is_none() && s.data().ledge.swing.is_none()), "reception never ended");
     s.run(0.2);
     s
 }
@@ -1047,4 +1047,58 @@ fn running_jump_at_a_railing_vaults_it() {
     // over and down on the far side
     assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::Ground && s.body().feet.y < 0.01), "never landed beyond: {:?} {:?}", s.loco().current, s.body().feet);
     assert!(s.body().feet.z < 3.85, "on the far side: {:?}", s.body().feet);
+}
+
+// ---------------------------------------------------------------- swing bars (RE/03 §7.10)
+
+#[test]
+fn swing_from_bar_to_bar() {
+    use crate::player::swing::{SwingPhase, SWING_CYCLE, SWING_LANDING, TAKEOFF_SWING};
+    let mut s = Sim::new(Vec3::new(60.0, 1.2, 85.0), std::f32::consts::PI);
+    s.pad(Vec3::Z, 1.0, true, false);
+    s.run(0.35);
+    s.press_legs();
+    assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::InAir), "no jump");
+    assert_eq!(s.data().air.target.unwrap().type_flags, crate::player::targets::TARGET_LEDGE_FREE);
+    assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_some()), "never swung: {:?} {:?}", s.loco().current, s.body().feet);
+    assert_eq!(s.data().ledge.swing.unwrap().action.id, SWING_LANDING);
+    // a bar ahead → the swing cycle
+    assert!(s.run_until(2.0, |s| s.data().ledge.swing.is_some_and(|w| matches!(w.phase, SwingPhase::Cycle(_)))), "no cycle: {:?}", s.data().ledge.swing.map(|w| w.phase));
+    assert_eq!(s.data().ledge.swing.unwrap().action.id, SWING_CYCLE);
+    for z in [93.5f32, 97.0] {
+        s.press_legs();
+        assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "no swing jump toward {z}");
+        assert_eq!(s.data().air.takeoff.unwrap().id, TAKEOFF_SWING);
+        assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_some() && s.loco().current == ActorContextId::Ledge), "never reached bar {z}: {:?} {:?}", s.loco().current, s.body().feet);
+        let mid = (s.data().ledge.hand_l + s.data().ledge.hand_r) * 0.5;
+        assert!((mid.z - (z - 0.1)).abs() < 0.05, "hands on bar {z}: {mid:?}");
+        assert!(s.run_until(2.0, |s| s.data().ledge.swing.is_some_and(|w| matches!(w.phase, SwingPhase::Cycle(_)))), "no cycle on {z}");
+    }
+    // and onto the far platform
+    s.press_legs();
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground), "never landed: {:?} {:?}", s.loco().current, s.body().feet);
+    assert!(s.body().feet.z > 100.0 && (s.body().feet.y - 1.2).abs() < 0.05, "on the far platform: {:?}", s.body().feet);
+}
+
+#[test]
+fn landing_on_a_bar_with_nothing_ahead_settles_into_the_hang() {
+    use crate::player::swing::{SwingPhase, IMPACT_ELBOW};
+    // from the end platform back toward bar 3 (z 97): nothing to jump to beyond bar 2 ... use bar 1 from the start
+    // platform facing -Z instead: the start platform side has no bar behind
+    let mut s = Sim::new(Vec3::new(60.0, 1.2, 100.5), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(0.2);
+    s.press_legs();
+    assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_some()), "never swung");
+    s.pad(Vec3::ZERO, 0.0, true, false);
+    assert!(s.run_until(2.0, |s| s.data().ledge.swing.is_some_and(|w| !matches!(w.phase, SwingPhase::Landing))));
+    let w = s.data().ledge.swing.unwrap();
+    // bar 2 lies ahead (3.5 m): a target, so it swings; released stick on a down phase -> stop -> hang
+    if matches!(w.phase, SwingPhase::Settle(id, _) if id == IMPACT_ELBOW) {
+        assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_none()));
+    } else {
+        assert!(s.run_until(3.0, |s| s.data().ledge.swing.is_none()), "the released stick stops the swing");
+    }
+    assert_eq!(s.loco().current, ActorContextId::Ledge, "hanging");
 }
