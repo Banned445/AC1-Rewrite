@@ -57,6 +57,10 @@ const BUILDINGS: &[(f32, f32, f32, f32, f32)] = &[
     (56.0, 50.3, 3.0, 1.0, 2.2),   // 2.0–2.5 m with a wall below: jump into a wall hang
     // --- hang-type switch (0xDE1060): wall F (x 60..63) continues as an overhang slab (SLABS) with no wall below
     (61.5, 50.0, 3.0, 0.6, 2.6),
+    // --- wall run (Walling, RE/05 §1): faces at z 59.25, run at them along +Z ---
+    (70.0, 60.0, 3.0, 1.5, 1.8), // probe A: pull-up onto the top from the entry
+    (76.0, 60.0, 3.0, 1.5, 3.8), // the vertical step, then probe C: hang from the top edge
+    (82.0, 60.0, 3.0, 1.5, 6.0), // no ledge in reach: vertical end, drop back
 ];
 
 /// Haystacks (centre x, centre z, size x, size z, height): not solid, jump targets of type 0x800. The first

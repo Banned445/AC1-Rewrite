@@ -103,7 +103,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 
 ## 3. Missing locomotion contexts
 ### 3.1 Walling / wall-run (context 11) — RE/05 §1
-- [ ] **Entries:**
+**→ ported 2026-10-02 (RE/05 §1.8): entry test, sub-states, probes A–D, rebound (PORT trigger). Open: pass-over exits,
+post-run state 4, the command source, the rebound landing query.**
+- [~] **Entries:**
   - from Ground (0xDA2C30) and from NarrowObject / the decision layer (0xB263B0);
   - takeoff `impultionstraight_*_to_wallingfront_*`.
 - [ ] **Sub-states:** EntryA → EntryB → Vertical / Horizontal, ReboundTransition, VerticalEnd, WallStep. Both sides (Left/Right).

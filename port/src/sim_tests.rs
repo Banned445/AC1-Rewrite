@@ -29,7 +29,7 @@ impl Sim {
             .insert_resource(PadInput { legs_pressed_ago: f32::INFINITY, ..default() })
             .insert_resource(SpawnPoint(SPAWN))
             .init_resource::<CameraRig>()
-            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay).chain());
+            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling).chain());
         let (c, g) = level::geometry();
         app.insert_resource(c).insert_resource(g);
         let player = app.world_mut().spawn(player_components(feet, heading)).id();
@@ -706,4 +706,69 @@ fn free_hang_against_a_wall_keeps_the_body_out_of_it() {
     for h in [0.3f32, 1.2, 1.8] {
         assert!(!c.point_inside(f + Vec3::Y * h - l.normal * 0.3), "body point {h} m up inside the wall");
     }
+}
+
+/// Run at a wall face (z 59.25) with high profile, press Legs, keep holding it.
+fn wall_run_at(x: f32) -> Sim {
+    let mut s = Sim::new(Vec3::new(x, 0.0, 55.5), FACE_PZ);
+    s.pad(Vec3::Z, 1.0, true, false);
+    // the wall ray is 1.5 m long from the chest (0xE18390): press Legs once within reach
+    assert!(s.run_until(2.0, |s| s.body().feet.z > 58.0));
+    s.pad(Vec3::Z, 1.0, true, true);
+    s.press_legs();
+    assert!(s.run_until(1.5, |s| s.loco().current == ActorContextId::Walling), "no wall run: {:?} at {:?}", s.loco().current, s.body().feet);
+    s
+}
+
+#[test]
+fn wall_run_pulls_up_onto_a_low_wall() {
+    use crate::player::walling::{WallingSubState, ENTRY_A};
+    let mut s = wall_run_at(70.0);
+    assert_eq!(s.data().walling.action.map(|a| a.id), Some(ENTRY_A));
+    assert_eq!(s.data().walling.sub_state, WallingSubState::EntryA);
+    // EntryA ends 0.5 m out from the wall, 1.0 m up (the entry clip's rise = the warp target, 0xE18390)
+    assert!(s.run_until(0.5, |s| s.data().walling.sub_state == WallingSubState::EntryB));
+    let f = s.body().feet;
+    assert!((f.y - 1.0).abs() < 0.05 && (59.25 - f.z - 0.5).abs() < 0.05, "entry root: {f:?}");
+    // probe A (ledge 0.8 m above the root): entry_footl_tr_hangknee → hangknee → wait, standing on top
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground), "never on top: {:?}", s.loco().current);
+    assert!((s.body().feet.y - 1.8).abs() < 0.05, "on the 1.8 m top: {:?}", s.body().feet);
+}
+
+#[test]
+fn wall_run_steps_up_then_hangs_from_a_higher_edge() {
+    use crate::player::walling::WallingSubState;
+    let mut s = wall_run_at(76.0);
+    assert!(s.run_until(1.0, |s| s.data().walling.sub_state == WallingSubState::Vertical), "no vertical step");
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge), "never hung: {:?}", s.loco().current);
+    assert!(s.run_until(2.0, |s| s.data().ledge.mv.is_none()));
+    let l = &s.data().ledge;
+    assert!((l.hand_l.y - 3.8).abs() < 0.05, "hands on the 3.8 m edge: {:?}", l.hand_l);
+}
+
+#[test]
+fn wall_run_without_a_ledge_drops_back() {
+    use crate::player::walling::WallingSubState;
+    let mut s = wall_run_at(82.0);
+    assert!(s.run_until(1.0, |s| s.data().walling.sub_state == WallingSubState::VerticalEnd), "no vertical end");
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground), "never landed: {:?}", s.loco().current);
+    assert!(s.body().feet.y.abs() < 0.05);
+}
+
+#[test]
+fn releasing_legs_on_the_wall_falls_off() {
+    let mut s = wall_run_at(82.0);
+    s.pad(Vec3::Z, 1.0, true, false);
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ground), "never landed: {:?}", s.loco().current);
+}
+
+#[test]
+fn pushing_away_from_the_wall_rebounds() {
+    let mut s = wall_run_at(82.0);
+    s.run(0.15);
+    s.pad(Vec3::NEG_Z, 1.0, true, true);
+    assert!(s.run_until(0.3, |s| s.loco().current == ActorContextId::InAir), "no rebound: {:?}", s.loco().current);
+    let z0 = s.body().feet.z;
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground));
+    assert!(s.body().feet.z < z0 - 2.0, "pushed off away from the wall: {:?}", s.body().feet);
 }

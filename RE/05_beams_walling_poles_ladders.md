@@ -86,6 +86,52 @@ Push-off direction = stick direction, clamped to within ±89° (1.5533 rad) of t
 ### 1.7 Constants
 1/30 dt; 0.0005 stick dead-zone; ±45° fan (0.785398); −75°/+135° search fan (−1.308997/2.356194); 0.42 query param (`flt_19BA818`); 0.27, −0.23 box offsets; 0.05/0.3/0.1/0.7/1.05/1.5/1.2/0.8/2.0/2.4/2.7 multipliers above; 7.0 / 3.0 rebound fallback; −3.5 / 5.6 rebound distances; 0.13 s warp.
 
+### 1.8 Entry request, wall test and the port (verified 2026-10-02)
+**Request:**
+- **Input handler 0xEE65A0:** tested before the guidance jumps and the grab. It needs: no lock; the stick > 0.35 and within 45° of the facing; high profile; the Legs buffer; ability Walling (0xD32580); and IHumanGround **vt112** = `CanStartWalling` 0xDB5FB0.
+- **Events:** vt112 is `CanHandleEvent(49)`, and vt116 0xDBBD40 posts event **49**.
+- **Movement event 49:** guard 0xDA54F0 (the playing item allows a mode exit, 0xD80010) → `FindWallingWall` 0xDA2B10, then action 0xDA7B90 → context 11 → `StartWalling` 0xDA2C30.
+
+**Wall test `Human__WallingWallTest` 0xE18390** (h = entity+0x7C):
+- **Ray:** from feet + 1.3·h, along the facing, 1.5·h long.
+- **Hit:** the normal must be within 45° of facing back.
+- **`WallingWidthCheck` 0xE149E0:** capsule sweeps rotated ±45°, 0.5 m long; the wall must extend to both sides.
+- **`WallingSlopeDir` 0xE14590 + `WallingSlopeLimit` 0xE14FB0:** a probe 1 m higher measures the slope, which must be within 45° (clamped −10°…+20°). A wall that ends lower is not rejected.
+- **Output:** contact = hit + 0.5·h out, at feet + h; normal = into the wall.
+- **h = 1.0** for Altaïr: the EntryA clip `entry_footl_a` raises its root exactly 1.0 m (and 0.44 m forward), which is the warp target.
+
+**Start 0xDA2C30:** SubState 1, Vertical; action **68** = `xx_h_wallingfront_entry_footl_a` (0x00D82C5C); the root is warped to the contact over the action's length.
+
+**Actions** (HumanWalling block, matched by name; only `wallingfront_*` exists, so there is no horizontal wall run):
+
+| Action | Id | Clips |
+|---|---|---|
+| EntryB | `0x01004122` | `entry_footl_b` |
+| Vertical (69) | `0x00D82C9F` | `step1_footr`, +0.5 m |
+| VerticalEnd | `0x0121847A` | `step1_footr_tr_rebound` a, b |
+| Fall | `0x00FF7CA1` / `0x00D82CE2` | `entry_footl_tr_fall` / `step1_footr_tr_fall` |
+| Probe A | `0x0100759B` | `entry_tr_hangknee_{131,200}cm` |
+| Probe A (pass-over) | `0x0109B6CF` | `entry_tr_passover_{131,200}cm` |
+| Probe B | `0x0564BB1D` | `entry_tr_hangfree_{250,350}cm_swingback_{min,max}` |
+| Probe C | `0x0564BB1E` | `step1_tr_hangfree_{350,400}` |
+| Probe D | `0x0106CFC2` | `step1_tr_hangknee_{201,250}cm` |
+| Probe D | `0x0106CFC5` | `step1_tr_hangwall_{251,430}cm_{000,050}cm` (a, b) |
+| Pass-over | `0x0109BB50` | |
+| Rebound | `0x01157E35` / `0x01157E36` | |
+
+The clip heights (from the ground) match the probe bands with h = 1, measured from the root at 1.0 m (entry) or 1.5 m (after the step).
+
+**Port** (`player/walling.rs`):
+- The entry test, EntryA → EntryB → Vertical → VerticalEnd, and probes A–D with the exit clips, handed to Ledge (pull-up to standing, free / wall-free / wall hang).
+- **Root:** the actions' displacement plus the warp correction.
+- **PORT:**
+  - Command 0 (`+0x38`) = Legs held; releasing Legs falls off.
+  - Rebound = the stick pushed away from the wall, toward the fallback target pos + 7·dir − 3·up (the landing query is not ported), with the free-step jump.
+  - The ledge probe box and classification are reduced.
+  - The pass-over exits and post-run state 4 are not ported.
+  - The wall normal comes from the greybox faces.
+- `AC_AUTOPILOT=wallrun`.
+
 ## 2. HumanNarrowObject (+ HumanNarrowObjectBeam)
 
 ### 2.1 Summary

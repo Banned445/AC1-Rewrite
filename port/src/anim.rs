@@ -507,6 +507,12 @@ fn choose_clip(
                     }
                 }
             },
+            // wall run (0xE37590): the sub-state's action at the sim's phase
+            ActorContextId::Walling if data.walling.current().is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.walling.current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 8_000_000 + data.walling.seq as u64 * 2 + (b.id == crate::player::walling::VERTICAL_END && b.item == 1) as u64, 0.08)
+            }
             // haystack (0xE43140): entry action, then the wait, at the sim's time
             ActorContextId::HayStack if data.hay.action.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
                 let b = data.hay.action.unwrap();
@@ -756,6 +762,9 @@ pub fn apply_clip(
             if fading {
                 rot = qinterp(prev_pose[i].0, rot, p.fade);
                 pos = prev_pose[i].1.lerp(pos, p.fade);
+            }
+            if !(rot.is_finite() && pos.is_finite()) && std::env::var_os("AC_NAN_LOG").is_some() {
+                warn!("non-finite joint {i} (bone {:08x}) clip {:?} item {} phase {:.3} fade {:.3} layers {:?}", rig.bone_ids[i], p.clip, p.item, p.phase, p.fade, item.layers);
             }
             tr.rotation = rot;
             tr.translation = pos;

@@ -35,6 +35,8 @@ enum Scenario {
     PullDown,
     /// Walk (low profile) into roof A's edge: ledge stop, step back.
     LedgeStop,
+    /// Wall run at the 3.8 m wall: entry, vertical step, hang from the top edge.
+    WallRun,
     /// Run off the high block's +X edge into the haystack (Leap of Faith), wait, hop out.
     Faith,
     /// Walk off the 6 m block and fall.
@@ -60,6 +62,7 @@ impl Plugin for DebugCapturePlugin {
                 "pulldown" => Scenario::PullDown,
                 "ledgestop" => Scenario::LedgeStop,
                 "faith" => Scenario::Faith,
+                "wallrun" => Scenario::WallRun,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -113,6 +116,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.feet = Vec3::new(10.6, 3.5, 12.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, over the drop
                 rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::WallRun => {
+                b.feet = Vec3::new(76.0, 0.0, 57.9);
+                b.heading = std::f32::consts::PI; // facing +Z, at the wall
+                rig.yaw = std::f32::consts::FRAC_PI_2;
                 rig.distance = 6.0;
             }
             Scenario::Faith => {
@@ -195,6 +204,20 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             pad.high_profile = false;
             if (0.5..0.52).contains(&t) {
                 pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::WallRun => {
+            // stand for 1 s first (the renderer's pipelines finish compiling), then go
+            let t = t - 1.0;
+            pad.dir = Vec3::Z;
+            pad.high_profile = true;
+            pad.legs_held = t > 0.2;
+            if (0.2..0.22).contains(&t) {
+                pad.legs_pressed_ago = 0.0;
+            }
+            if !(0.0..=0.85).contains(&t) {
+                pad.magnitude = 0.0;
+                pad.speed01 = 0.0;
             }
         }
         Scenario::Faith => {
@@ -371,6 +394,9 @@ fn shots(
     // focus: the hips joint (falls back to the body root)
     let hips = rig.single().ok().and_then(|r| r.bone_ids.iter().position(|b| *b == 0xded1_0611).and_then(|i| globals.get(r.joints[i]).ok()));
     let focus = hips.map(|g| g.translation()).unwrap_or(body.feet + Vec3::Y * 1.0);
+    if std::env::var_os("AC_SHOT_LOG").is_some() {
+        info!("shot t={t:.2} feet {:?} hips {:?}", body.feet, hips.map(|g| g.translation()));
+    }
     let name = shots.views[vi].clone();
     let (target, eye) = match name.as_str() {
         "left" => (focus, focus - right * 3.0 + Vec3::Y * 0.3),

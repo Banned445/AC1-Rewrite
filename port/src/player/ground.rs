@@ -245,6 +245,19 @@ pub fn update_ground(
             body.heading += d.clamp(-step, step);
         }
 
+        // ---------------------------------------------------------------- wall run (Walling, event 49)
+        // Input handler 0xEE65A0 (tested before the jumps and the grab): high profile, Legs pressed, the stick
+        // pushed within 45° of the facing (> 0.35), ability Walling, and IHumanGround vt112 = event 49's guard
+        // (0xDA54F0: the playing item allows a mode exit, then the wall test 0xE18390).
+        if g.high_profile && pad.jump_buffered() && moving && pad.dir.dot(body.forward()) >= 45f32.to_radians().cos() {
+            if let Some((contact, normal)) = super::walling::wall_ahead(body.feet, body.forward(), &collision) {
+                pad.consume_jump();
+                let from = body.feet;
+                switch_context(&mut loco, &mut data, TransitionSetup::ToWalling(super::walling::WallingEntry { contact, normal, from }));
+                continue;
+            }
+        }
+
         // ---------------------------------------------------------------- climb / grab requests
         // interpreter vt736/740 (grab wall) and vt764/768 (climb start): high profile + Legs into a wall
         let forward = body.forward();

@@ -18,6 +18,7 @@ pub mod ledge;
 pub mod ledge_moves;
 pub mod move_blend;
 pub mod targets;
+pub mod walling;
 
 use bevy::prelude::*;
 
@@ -119,6 +120,7 @@ pub struct HumanDataBundle {
     pub ledge: ledge::HumanLedgeData,
     pub climb: climb::HumanClimbData,
     pub hay: hay::HumanHayStackData,
+    pub walling: walling::HumanWallingData,
 }
 
 /// Transition setup objects (`TransitionSetupDataToMovement` / `…ToInAir` …, RE/01 §4.2).
@@ -128,6 +130,7 @@ pub enum TransitionSetup {
     ToLedge(ledge::LedgeEntry),
     ToClimb(climb::ClimbEntry),
     ToHayStack(hay::HayStackEntry),
+    ToWalling(walling::WallingEntry),
 }
 
 /// Immediate context switch (0x55F7E0): exit old, apply setup to destination data, enter new.
@@ -154,6 +157,10 @@ pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: 
             data.hay.enter(entry);
             ActorContextId::HayStack
         }
+        TransitionSetup::ToWalling(entry) => {
+            data.walling.enter(entry);
+            ActorContextId::Walling
+        }
     };
     loco.just_switched = true;
 }
@@ -169,7 +176,7 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, spawn_player)
             .add_systems(
                 Update,
-                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, sync_visuals).chain(),
+                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, walling::update_walling, sync_visuals).chain(),
             );
     }
 }
