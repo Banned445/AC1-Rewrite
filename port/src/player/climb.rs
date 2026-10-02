@@ -192,6 +192,10 @@ pub struct HumanClimbData {
 
 impl HumanClimbData {
     pub fn enter(&mut self, e: ClimbEntry) {
+        if e.entry_type == ClimbEntryType::FromGround {
+            self.enter_from_ground(e);
+            return;
+        }
         self.entry_type = e.entry_type;
         self.normal = e.normal;
         self.foot_l = e.foot_l;
@@ -203,6 +207,32 @@ impl HumanClimbData {
         self.last_action = "enter";
         self.move_action = None;
         self.moving = Some(RootInterp::new(e.from_feet, climb_root(e.foot_l, e.foot_r, e.normal), CLIMB_MOVE_TIME));
+    }
+}
+
+/// Climb start from standing: `xx_h_wait_hipm_foot{l,r}_tr_climbing_1m` (HumanGround actions 0x01BC382C /
+/// 0x01BC382D, FROMAI: the root is interpolated over the clip to the climb root).
+pub const CLIMB_FROM_GROUND: [u32; 2] = [0x01BC_382C, 0x01BC_382D];
+
+impl HumanClimbData {
+    fn enter_from_ground(&mut self, e: ClimbEntry) {
+        self.entry_type = e.entry_type;
+        self.normal = e.normal;
+        self.foot_l = e.foot_l;
+        self.foot_r = e.foot_r;
+        self.hand_l = e.hand_l;
+        self.hand_r = e.hand_r;
+        self.pose = if (e.foot_r - e.foot_l).length() > CLIMB_COL * 0.6 { 3 } else { 0 };
+        self.last_action = "enter";
+        // PORT: the left-foot variant (the game picks it by the leading foot)
+        let id = CLIMB_FROM_GROUND[0];
+        let dur = super::jump_blend::action_items(id)
+            .map(|_| super::jump_blend::ActionBlend::new(id, 0, &[1.0]).duration())
+            .filter(|d| *d > 0.0)
+            .unwrap_or(CLIMB_MOVE_TIME);
+        self.move_action = Some(id);
+        self.move_seq += 1;
+        self.moving = Some(RootInterp::new(e.from_feet, climb_root(e.foot_l, e.foot_r, e.normal), dur));
     }
 }
 

@@ -565,6 +565,43 @@ The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
   - PullDownSubState = Orientation. The update (`StatePullDown_Update` 0xDDFCF0) ends in Entry (state 5), or in **InAir when PullDownSubState == 4 ReleaseToInAir** (fill 0xDDA100).
 - HandPassOver (state 9, SubState 12) is the vault over a ledge without hanging. HandPassOverSubState PassOver + anim done → **Ground context 4**.
 
+### 7.7b Pull-up root path (2026-10-02)
+The pull-up actions are FROMANIM:
+- **Wall:** `0x0106D2C5` hangwall → hangknee (a, b), then `0x0106C58B` hangknee → wait (a, b).
+- **Free:** `0x012719F2` hangfree → hangwaist (a, b), then `0x0127199E` waist → knee, then `0x0106C58B`.
+
+Their root rises first and moves in over the lip once the hips reach the edge. The port follows the clips' displacement plus a linear correction onto the stand point 0.5 m inside the edge (Pullup_Start 0xDDBE80); see `ledge_moves::pullup_move`. The earlier straight-line root interpolation cut through the wall.
+
+### 7.8a Ledge stop and look-down (HumanGround, verified 2026-10-02)
+**Edge report** (event payload, also used by pull-down): point +16, outward normal +32, drop +48, +52, flag +56, distance limit +64, wide flag +68.
+
+**`HumanGround__ClassifyEdgeSide` 0xD9D7F0** returns 0 (no edge) when flag +56 is set, the drop is ≤ **1.3 m**, or the signed squared horizontal distance to the point (negative behind the edge) exceeds +64. Otherwise it classifies the angle between the facing and the flattened normal:
+- **1 front:** |a| < 60°, or < 120° with the wide flag +68;
+- **3:** −120° < a ≤ −60°; **4:** 60° ≤ a < 120°;
+- **2 back:** otherwise.
+
+**Ledge stop: Movement event 69** (`Movement_HandleEvent` 0xDB1470):
+- **Side edges:** guard `Guard_LedgeStopSide` 0xDA5D90 (side 3 / 4) → 0xD8E5B0. That is another state, not traced.
+- **Front edges:** guard `Guard_LedgeStopFront` 0xDA5DE0. It needs side 1, **drop > 2.0 m**, the body check `sub_B2E4F0` (0.5, 2.0), and `sub_C7F150` clear. It leads to `ToLedgeStop` 0xDA99F0, which aligns the facing to the normal when +68 is set.
+- **Clips:** `HumanGround__LedgeStop_Enter` 0xD93C60 (sub-state 38) plays `0x06E8BD7F` `xx_h_ledge_stop_start_footl` (0.27 s, no root motion). When it is done, `LedgeStop_PlayEnd` 0xD7D9D0 plays `0x06E8BD7D` `xx_h_ledge_stop_end_footl` (0.67 s, root steps back 0.50 m). Its transition 0x06E8BD7E goes to wait. When the end action is done, `Locomotion_Update` 0xDAF2D0 returns to Movement.
+- **Pull-down:** while the start action plays, `LedgeStop_HandleEvent` 0xDA4D90 accepts event 70, giving the EdgeStop pull-down (§7.8b).
+
+**Look-down:** event **119** in another ground sub-state handler (0xDA7250; guard 0xD7E590 needs a mode value == 1, **hypothesis**: the LookDown ability) leads to `ToLookDown` 0xDA5260. It copies the report to +1920.., then `HumanGround__LookDown_Enter` 0xD9FC80 (sub-state 9):
+- **Angle blend:** signed angle a between (point + normal − position) and the facing, clamped to ±90°. Weights are front = 1 − |a|/90°, and right (a ≥ 0) or left (a < 0) = |a|/90°.
+- **Action:** `0x2669E0F7` (`xx_l_ledge_lookdown_{front,left,right}_footl`) or `0x2669E0F8` (`_footr`) by the leading foot.
+- **Event:** posts event 62 with the edge.
+
+**Port** (`ground.rs` `edge_report` / `ledge_stop`):
+- Front ledge stop with the game's actions and timing.
+- EdgeStop pull-down from it (Legs during the start action).
+- **PORT:**
+  - The trigger is walking (low profile) into a front edge within 0.45 m with more than 2 m of drop. The sender of event 69 is not traced.
+  - The feet stay 0.2 m behind the edge.
+  - After a stop, pushing on into the same edge holds the character there, until the stick is released or turned away.
+- **Side ledge stops:** a one-frame NarrowObject Edge stay that returns to Ground (RE/05 §2.9); the port stays in Ground.
+- **Look-down:** ported (RE/02 §4.2); the trigger is standing still at the edge (PORT: event 119's sender and guard are unknown).
+- `AC_AUTOPILOT=ledgestop`.
+
 ### 7.8b PullDown in full (verified 2026-10-01)
 **Request:** event **70** from the decision layer (the input mapping is not traced), with an edge report. The report holds the point at +16, the outward normal at +32, the drop height at +48 and a flag at +56.
 
@@ -619,6 +656,44 @@ Other entry work:
 ### 7.10 Swing / receptions
 - SwingReception (13): Human+2704 is reset. `sub_DCFE90` → state 6, `sub_DCD300` → state 7 (`sub_DD0140`), `sub_DCD260` → 0xDCF8E0.
   **SwingStrength** (data +0x70) is written by the caller (InAir) and read by these helpers (h). Not decoded further.
+
+### 7.10a Swinging on a bar (verified 2026-10-02)
+**Entry:** a running jump at a free-hang target (type 0x80) whose arrival finds no foot holds (0xE07D00, generic branch):
+- it plays the landing `0x02926510` (`xx_h_air_{down 050/300/550/900, front 050/300/650, up 300, up 050}cm_to_swing_tr_swing_front_a`) as the transition into the swing cycle `0x023E0C60`;
+- LedgeData+76 = 8 (SwingReception, state 13, `HumanLedge__StateSwingReception_Update` 0xDD24F0).
+
+**Swing cycle `0x023E0C60`:** items 0 front_up (0.17 s), 1 front_down (0.67 s), 2 back_up (0.6 s), 3 back_down (0.33 s). All four are in place; the root stays at the free-hang root.
+
+**After the landing clip:**
+- **Jump target ahead** (+1792 == 3 and +1796 == 3): it keeps swinging.
+- **Otherwise** (`HumanLedge__SwingLandingToSettle` 0xDCD300 → `HumanLedge__PlaySwingImpact` 0xDD0140): the settle chosen by `HumanLedge__PickSwingImpact` 0xDCFBC0. Two sweeps 0.5 m along the facing from 0.65 m (r 0.35) and 1.6 m (r 0.6) below the hands, pulled back 0.25 m:
+
+  | Sweeps | Settle |
+  |---|---|
+  | legs blocked | `0x02F4BF02`: `hangwallfree_impact_00cm` / `hangfree_impact_{50,150}cm`, then `…_tr_hangfree`, weighted by the fraction |
+  | legs free, shoulders blocked | `0x14809A03` (shoulder impact) |
+  | all free | `0x8AAE420E` (elbow impact) |
+
+  The free-hang idle `0x012719F1` follows.
+- **Support under the feet** (`HumanLedge__SwingHasSupport` 0xDCD260) → InAir (`HumanLedge__SwingToInAir` 0xDCF8E0).
+
+**Events** (`HumanLedge__StateSwingReception_HandleEvent` 0xDD2890):
+- **6, stop.** Guard `HumanLedge__Guard_SwingStop` 0xDCCF40: refused during the landing and on cycle items 0 / 2. `HumanLedge__SwingStopToHang` 0xDCE900 → free-hang Movement. The stops `0x023E0C61` (front) / `0x023E0C62` (back), items a–d, follow through the graph.
+- **7, jump.** Guard `HumanLedge__Guard_SwingJump` 0xDCD000: the targets found (+1792 / +1796 == 3), at the end of the landing clip or of cycle **item 3** (back_down: swinging forward through the bottom). `HumanLedge__SetupSwingJump` 0xDCD0B0 → `Human__SetupJumpToTarget` with **jump kind 3**. In 0xB1EC40, kind 3 means:
+  - takeoff `0x0292655B` (`xx_h_swing_cycle_{front 050/300/550, down 050/300/550, up 100/300}cm_to_air`);
+  - one 8-clip group (case 3 maps the side group onto the front one);
+  - the height bands shifted by o = −0.7 m.
+
+**Port** (`player/swing.rs`):
+- The landing (weights matched to the flight by clip name), the cycle, the jump at the end of back_down with the swing takeoff, the impact settle without a target, and the stop on the down items.
+
+**PORT:**
+- **Triggers:** the jump request is high profile + Legs, kept until the release point. The stop is the stick released.
+- **Targets:** the game's +1792 / +1796 targets are `find_jump_target` along the facing.
+- **Stops:** they play item a only.
+- **Not decoded:** SwingStrength.
+
+**Test geometry:** three bars 3.5 m apart at 3.4 m between platforms at z 86 / 101.5 (x 60). `AC_AUTOPILOT=swing`.
 - HangWallReception (11): interpolate until progress 1 → Movement when `sub_DCC190`. On anim event bit 4 → 0xDCF8B0.
 - HangFreeReception (12): 0xDCEE00 drives it until SubState == 1.
 

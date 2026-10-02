@@ -315,6 +315,7 @@ pub fn fall_grasp_weights(smoothed: Vec3, facing: Vec3) -> [f32; 6] {
 // Action ids used by the exe (RE/13 §4). Ledge tables 0x1A2C490.. (shimmy), 0x1A2C4C0.. (vertical steps).
 const ACT_HANG_WALL: u32 = 0x0106_F2E8;
 const ACT_HANG_FREE: u32 = 0x0127_19F1;
+const ACT_HANG_WALLFREE: u32 = 0x0106_F2E9;
 const ACT_PULLUP_WALL: u32 = 0x0106_D2C5;
 const ACT_PULLUP_FREE: u32 = 0x0127_19F2;
 /// Pull-up outcome "stand": hangknee → wait (transition target of the pull-up's last item).
@@ -392,6 +393,19 @@ fn choose_clip(
                 p.sim_phase = Some((os.t / os.duration.max(1e-4)).min(1.0));
                 sim_request(&mut p, &lib, &os.blend, 1_000_000 + g.landing_seq as u64, 0.1)
             }
+            // obstacle collision / lean (0xD9CB90 / 0xD9DA20): its action at the sim's phase
+            ActorContextId::Ground if g.collide.is_some_and(|c| sim_item(&lib, &c.action).is_some()) => {
+                let c = g.collide.unwrap();
+                let (b, ph) = c.current();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 1_500_000 + c.seq as u64, 0.1)
+            }
+            // look-down at an edge (0xD9FC80)
+            ActorContextId::Ground if g.look_down.is_some_and(|l| sim_item(&lib, &l.action).is_some()) => {
+                let l = g.look_down.unwrap();
+                p.sim_phase = Some((l.t / l.action.duration().max(1e-4)).fract());
+                sim_request(&mut p, &lib, &l.action, 1_600_000 + g.pose_seq as u64, 0.3)
+            }
             ActorContextId::Ground if g.landing_seq != p.seen_landing => {
                 p.seen_landing = g.landing_seq;
                 let clip = match g.last_landing {
@@ -420,7 +434,13 @@ fn choose_clip(
             }
             ActorContextId::Ground => Some(looped(
                 match speed_band(g.speed_param) {
-                    SpeedBand::None => if g.high_profile { "idle_high" } else { "idle_low" },
+                    // wait item of the leading foot (MoveBlend foot: 0 = left ahead)
+                    SpeedBand::None => match (g.high_profile, g.blend.foot == 0) {
+                        (true, true) => "idle_high",
+                        (true, false) => "idle_high_r",
+                        (false, true) => "idle_low",
+                        (false, false) => "idle_low_r",
+                    },
                     SpeedBand::Walk => "walk",
                     SpeedBand::Jog => "jog",
                     SpeedBand::Run => "run",
@@ -447,6 +467,18 @@ fn choose_clip(
                         None => "jump",
                     };
                     Some(once(clip.into(), 2_000_000 + data.air.seq as u64, Some(duration), 0.1))
+                }
+                // Leap of Faith free-fall tail: `faith_jump_fall` (0xB1EC40 third action)
+                AirMode::Fall { .. } if data.air.flight.is_some_and(|f| f.id == crate::player::jump_blend::FLIGHT_FAITH) => {
+                    let b = crate::player::jump_blend::ActionBlend::new(crate::player::jump_blend::FALL_FAITH, 0, &[1.0]);
+                    p.sim_phase = Some(0.5);
+                    sim_request(&mut p, &lib, &b, 2_500_000 + data.air.seq as u64, 0.2)
+                }
+                // the jump's own fall action (InAir +416, e.g. `beam_jumpstraight_clear_tr_fall`)
+                AirMode::Fall { .. } if data.air.fall_action.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                    let b = data.air.fall_action.unwrap();
+                    p.sim_phase = Some((data.air.fall_t / b.duration().max(1e-4)).min(1.0));
+                    sim_request(&mut p, &lib, &b, 2_600_000 + data.air.seq as u64, 0.1)
                 }
                 _ => {
                     if p.seen_fall != Some(data.air.seq) {
@@ -494,7 +526,45 @@ fn choose_clip(
                     }
                 }
             },
+            // beam (HumanNarrowObjectBeam): the state's action at the sim's phase
+            ActorContextId::NarrowObject if data.narrow.current().is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.narrow.current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 9_000_000 + data.narrow.seq as u64, 0.12)
+            }
+            // wall run (0xE37590): the sub-state's action at the sim's phase
+            ActorContextId::Walling if data.walling.current().is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.walling.current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 8_000_000 + data.walling.seq as u64 * 2 + (b.id == crate::player::walling::VERTICAL_END && b.item == 1) as u64, 0.08)
+            }
+            // haystack (0xE43140): entry action, then the wait, at the sim's time
+            ActorContextId::HayStack if data.hay.action.is_some_and(|b| sim_item(&lib, &b).is_some()) => {
+                let b = data.hay.action.unwrap();
+                let ph = data.hay.t / b.duration().max(1e-4);
+                p.sim_phase = Some(if data.hay.phase == crate::player::hay::HayPhase::Waiting { ph.fract() } else { ph.min(1.0) });
+                sim_request(&mut p, &lib, &b, 5_000_000 + data.hay.seq as u64, 0.2)
+            }
             // corner turn / ledge jump / hop up (`ledge_moves`): its current action at the sim's phase
+            // ladder (0xE27D30): the table's action for the state, at the sim's phase
+            ActorContextId::Ladder if data.ladder.current().is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
+                let (b, ph) = data.ladder.current().unwrap();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_700_000 + data.ladder.seq as u64, 0.1)
+            }
+            // swinging on a bar (0xDD24F0): landing, swing cycle, stops / impacts
+            ActorContextId::Ledge if data.ledge.swing.is_some_and(|s| sim_item(&lib, &s.action).is_some()) => {
+                let s = data.ledge.swing.unwrap();
+                let (b, ph) = s.current();
+                p.sim_phase = Some(ph);
+                sim_request(&mut p, &lib, &b, 7_600_000 + s.seq as u64, 0.08)
+            }
+            // pass-over (0xE07D00 case 2 / 0xDDB800): the reception, then the vault, at the sim's phase
+            ActorContextId::Ledge if data.ledge.pass_over.is_some_and(|p| sim_item(&lib, &p.action).is_some()) => {
+                let po = data.ledge.pass_over.unwrap();
+                p.sim_phase = Some((po.t / po.action.duration().max(1e-4)).min(1.0));
+                sim_request(&mut p, &lib, &po.action, 7_500_000 + po.seq as u64, 0.06)
+            }
             ActorContextId::Ledge if data.ledge.mv.and_then(|m| m.current()).is_some_and(|(b, _)| sim_item(&lib, &b).is_some()) => {
                 let (b, ph) = data.ledge.mv.unwrap().current().unwrap();
                 p.sim_phase = Some(ph);
@@ -557,6 +627,12 @@ fn choose_clip(
                             [Some(ACT_PULLUP_FREE), waist, Some(ACT_HANGKNEE_TO_WAIT)].into_iter().flatten().collect()
                         };
                         action(&lib, &ids, false, token, Some(0.1), None)
+                    }
+                    // free hang with a wall under it = LedgeHangType WallFree: `xx_h_hangwallfree_wait` (0x0106F2E9,
+                    // played after the straight jump's wall-free reception, 0xE07D00 → 0xE09055; the wait update
+                    // 0xDE1FE0 plays it for type 2), legs held clear of the wall
+                    _ if !wall && crate::player::ledge::wall_below_hands((l.hand_l + l.hand_r) * 0.5, l.normal, &collision) => {
+                        action(&lib, &[ACT_HANG_WALLFREE], true, 0, Some(0.15), Some("hang_free"))
                     }
                     _ => action(&lib, &[if wall { ACT_HANG_WALL } else { ACT_HANG_FREE }], true, 0, Some(0.15), Some(if wall { "hang_wall" } else { "hang_free" })),
                 }
@@ -730,6 +806,9 @@ pub fn apply_clip(
             if fading {
                 rot = qinterp(prev_pose[i].0, rot, p.fade);
                 pos = prev_pose[i].1.lerp(pos, p.fade);
+            }
+            if !(rot.is_finite() && pos.is_finite()) && std::env::var_os("AC_NAN_LOG").is_some() {
+                warn!("non-finite joint {i} (bone {:08x}) clip {:?} item {} phase {:.3} fade {:.3} layers {:?}", rig.bone_ids[i], p.clip, p.item, p.phase, p.fade, item.layers);
             }
             tr.rotation = rot;
             tr.translation = pos;

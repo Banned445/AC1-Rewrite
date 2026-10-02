@@ -45,8 +45,12 @@ fn contact_keys(a: &super::ac_anim::AnimData) -> Vec<(f32, u8)> {
 /// (clip name, resource names joined in order). All from DataPC.forge → "Game Fix".
 pub const LOCOMOTION: &[(&str, &[&str])] = &[
     // ground
-    ("idle_low", &["xx_l_wait_hipm_footm"]),
+    // the game's wait actions (HumanGround 0xD8243F / 0xD824C5 low, 0xD82508 / 0xD8258E high), by the leading
+    // foot; the `_footm` waits are 1 s parallel-feet poses, not the idle
+    ("idle_low", &["xx_l_wait_hipm_footl"]),
+    ("idle_low_r", &["xx_l_wait_hipm_footr"]),
     ("idle_high", &["xx_h_wait_hipm_footl"]),
+    ("idle_high_r", &["xx_h_wait_hipm_footr"]),
     ("walk", &["xx_l_walk_hipm_footl", "xx_l_walk_hipm_footr"]),
     ("jog", &["xx_h_jog_hipm_footl", "xx_h_jog_hipm_footr"]),
     ("run", &["xx_h_run_hipm_footl", "xx_h_run_hipm_footr"]),
@@ -137,6 +141,14 @@ pub fn load_locomotion(game_dir: &Path) -> Result<(Vec<RawClip>, ActionGraph, Ha
             MOVEMENT_BLOCKS.contains(&a.block.as_str())
                 || EXTRA_ACTIONS.contains(&a.id)
                 || crate::player::ledge_moves::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::jump_blend::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::walling::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::narrow::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::collide::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::passover::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::swing::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::ladder::DUMPED_ACTIONS.contains(&a.id)
+                || crate::player::ground::LOOK_DOWN.contains(&a.id)
         })
         .flat_map(|a| a.items.iter().flat_map(|it| it.animations.iter()))
         .filter_map(|id| anim_names.get(id).cloned())

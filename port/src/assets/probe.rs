@@ -151,7 +151,7 @@ fn probe_dump_jump_clips() {
     out += "pub struct ClipRoot {\n    pub name: &'static str,\n    pub duration: f32,\n    pub disp: [[f32; 3]; 9],\n}\n\n";
     out += "/// (action id, items: clip names per item in slot order).\npub const ACTIONS: &[(u32, &[&[&str]])] = &[\n";
     let mut clips: Vec<String> = Vec::new();
-    for id in crate::player::jump_blend::DUMPED_ACTIONS.iter().chain(crate::player::ledge_moves::DUMPED_ACTIONS.iter()) {
+    for id in crate::player::jump_blend::DUMPED_ACTIONS.iter().chain(crate::player::ledge_moves::DUMPED_ACTIONS.iter()).chain(crate::player::walling::DUMPED_ACTIONS.iter()).chain(crate::player::narrow::DUMPED_ACTIONS.iter()).chain(crate::player::collide::DUMPED_ACTIONS.iter()).chain(crate::player::passover::DUMPED_ACTIONS.iter()).chain(crate::player::swing::DUMPED_ACTIONS.iter()).chain(crate::player::ladder::DUMPED_ACTIONS.iter()).chain(crate::player::ground::LOOK_DOWN.iter()) {
         let a = graph.actions.get(id).unwrap_or_else(|| panic!("action {id:#x} missing"));
         out += &format!("    ({id:#010x}, &[\n");
         for it in &a.items {
@@ -182,4 +182,146 @@ fn probe_dump_jump_clips() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/player/jump_clips.rs");
     std::fs::write(&path, out).unwrap();
     println!("wrote {} ({} clips)", path.display(), clips.len());
+}
+
+/// Model sanity: per part submeshes (ranges, materials), skin joints that fell back to the root / attach
+/// bone, and triangles that duplicate another triangle (overlapping LODs / double-sided copies).
+#[test]
+#[ignore]
+fn probe_model_parts() {
+    use super::altair::load_altair;
+    let m = load_altair(&game_dir()).unwrap();
+    println!("skeleton {} bones", m.skeleton.len());
+    for p in &m.parts {
+        let root_only = p.joints.iter().zip(p.weights.iter()).filter(|(j, w)| j[0] == 0 && w[0] > 0.99).count();
+        let mut tri_keys = std::collections::HashMap::new();
+        let mut dup = 0;
+        let mut total = 0;
+        for (idx, _) in &p.sections {
+            for t in idx.chunks_exact(3) {
+                total += 1;
+                let q = |i: u32| { let v = p.positions[i as usize]; [(v[0] * 1000.0) as i32, (v[1] * 1000.0) as i32, (v[2] * 1000.0) as i32] };
+                let mut k = [q(t[0]), q(t[1]), q(t[2])];
+                k.sort();
+                *tri_keys.entry(k).or_insert(0) += 1;
+            }
+        }
+        for c in tri_keys.values() {
+            if *c > 1 { dup += c - 1; }
+        }
+        println!("{}: {} verts, {} tris, {} sections, root-only verts {}, duplicate tris {}", p.name, p.positions.len(), total, p.sections.len(), root_only, dup);
+        for (i, (idx, tex)) in p.sections.iter().enumerate() {
+            let lo = idx.iter().min().copied().unwrap_or(0);
+            let hi = idx.iter().max().copied().unwrap_or(0);
+            let (mut agree, mut n) = (0, 0);
+            for t in idx.chunks_exact(3) {
+                let v = |i: u32| Vec3::from_array(p.positions[i as usize]);
+                let f = (v(t[1]) - v(t[0])).cross(v(t[2]) - v(t[0]));
+                let vn = Vec3::from_array(p.normals[t[0] as usize]) + Vec3::from_array(p.normals[t[1] as usize]) + Vec3::from_array(p.normals[t[2] as usize]);
+                if f.length() < 1e-9 { continue; }
+                n += 1;
+                if f.dot(vn) >= 0.0 { agree += 1; }
+            }
+            println!("   section {i}: tris {} verts {lo}..{hi} tex {:?} winding agrees {agree}/{n}", idx.len() / 3, tex);
+        }
+    }
+}
+
+/// Writes Altaïr's decoded diffuse textures (mip 0) as BMPs into PROBE_OUT (local inspection only).
+#[test]
+#[ignore]
+fn probe_dump_textures() {
+    let m = load_altair(&game_dir()).unwrap();
+    let out = std::path::PathBuf::from(std::env::var("PROBE_OUT").expect("PROBE_OUT"));
+    for (id, t) in &m.textures {
+        let (w, h) = (t.width as usize, t.height as usize);
+        let px = &t.mips[0];
+        let mut f = Vec::new();
+        let size = 54 + w * h * 4;
+        f.extend_from_slice(b"BM");
+        f.extend_from_slice(&(size as u32).to_le_bytes());
+        f.extend_from_slice(&[0; 4]);
+        f.extend_from_slice(&54u32.to_le_bytes());
+        f.extend_from_slice(&40u32.to_le_bytes());
+        f.extend_from_slice(&(w as i32).to_le_bytes());
+        f.extend_from_slice(&(-(h as i32)).to_le_bytes());
+        f.extend_from_slice(&1u16.to_le_bytes());
+        f.extend_from_slice(&32u16.to_le_bytes());
+        f.extend_from_slice(&[0; 24]);
+        let mut transparent = 0;
+        for p in px.chunks_exact(4).take(w * h) {
+            if p[3] < 128 { transparent += 1; }
+            f.extend_from_slice(&[p[2], p[1], p[0], 255]);
+        }
+        std::fs::write(out.join(format!("{id}.bmp")), f).unwrap();
+        println!("{id}: {w}x{h}, {transparent} transparent px");
+    }
+}
+
+/// Which joints the top of the head / hood is skinned to, per part (vertices above `PROBE_Y`, default 1.65 m).
+#[test]
+#[ignore]
+fn probe_hood_skin() {
+    let m = load_altair(&game_dir()).unwrap();
+    let names = serde_free_names();
+    let y: f32 = std::env::var("PROBE_Y").ok().and_then(|v| v.parse().ok()).unwrap_or(1.65);
+    for p in &m.parts {
+        let mut count: HashMap<u16, f32> = HashMap::new();
+        let mut n = 0;
+        for (i, pos) in p.positions.iter().enumerate() {
+            if pos[1] < y {
+                continue;
+            }
+            n += 1;
+            for k in 0..4 {
+                *count.entry(p.joints[i][k]).or_default() += p.weights[i][k];
+            }
+        }
+        if n == 0 {
+            continue;
+        }
+        let mut v: Vec<_> = count.into_iter().filter(|c| c.1 > 0.01).collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let s: Vec<String> = v.iter().take(8).map(|(j, w)| {
+            let id = m.skeleton[*j as usize].bone_id;
+            format!("{}({:08x})={:.1}", names.get(&id).cloned().unwrap_or("?".into()), id, w)
+        }).collect();
+        println!("{}: {} verts above {y}: {}", p.name, n, s.join(", "));
+    }
+}
+
+/// Mesh bones missing from Altaïr's 90-bone skeleton, per part, with their skin weight and bind position.
+#[test]
+#[ignore]
+fn probe_missing_bones() {
+    use super::ac_formats::{parse_mesh, parse_skeleton};
+    use super::forge::{crc32, Forge};
+    let names = serde_free_names();
+    let path = game_dir().join("DataPC.forge");
+    let mut forge = Forge::open(&path).unwrap();
+    let entry = forge.find("Rank 9").cloned().unwrap();
+    let res = forge.resources(&entry).unwrap();
+    let skel = res.iter().find(|r| r.name == "UCMA_Altair" && r.class_hash == crc32("Skeleton")).map(|r| parse_skeleton(&r.payload)).unwrap();
+    let have: std::collections::HashSet<u32> = skel.iter().map(|b| b.bone_id).collect();
+    for &name in super::altair::PARTS {
+        let Some(r) = res.iter().find(|r| r.name == name && r.class_hash == crc32("Mesh")) else { continue };
+        let Some(m) = parse_mesh(&r.payload) else { continue };
+        let mut w: HashMap<u32, f32> = HashMap::new();
+        for s in &m.submeshes {
+            for v in s.vstart as usize..(s.vstart + s.vcount) as usize {
+                for k in 0..4 {
+                    let local = m.bone_idx[v][k] as usize;
+                    if let Some(b) = s.palette.get(local).and_then(|&mb| m.bones.get(mb as usize)) {
+                        if !have.contains(&b.bone_id) {
+                            *w.entry(b.bone_id).or_default() += m.bone_w[v][k] as f32 / 255.0;
+                        }
+                    }
+                }
+            }
+        }
+        let mut v: Vec<_> = w.into_iter().collect();
+        v.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let s: Vec<String> = v.iter().map(|(id, x)| format!("{}({id:08x})={x:.0}", names.get(id).cloned().unwrap_or("?".into()))).collect();
+        println!("{name}: {} mesh bones, missing: {}", m.bones.len(), s.join(", "));
+    }
 }

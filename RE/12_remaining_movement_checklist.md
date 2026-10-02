@@ -67,7 +67,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 ## 2. Ground (HumanGround, context 4) — RE/02
 - [ ] Full 87-state tree (`HumanGround__InitStateTree` 0xD90D00), including the event table 0xDB1470 (guards and actions).
 - [ ] **Start-move clips:** chosen by leading foot from bone positions (0xD98990); walk start 161516230/161522726, run start 161524269/70.
-- [ ] **Stops:** walk stop (11 → 4, 0xD8B220) and **run stop** (state 18, 0xD7EC90 conditions).
+- [x] **Stops:** walk stop (11 → 4, 0xD8B220) and **run stop** (state 18, 0xD7EC90 conditions). **→ RE/02 §4.0, ported**
 - [ ] **U-turn / pivot** above 90° (state 25, 0xD84B10).
 - [ ] **Turn in place** at 1° or more (0xD84B80).
 - [ ] Clip **exit-flag gating** (0xD80010 bits 0x40/0x80/0x100/0x200/0x400/0x800, 0x20 = locked).
@@ -83,13 +83,15 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - ObstacleCollision (5) with **ObstacleLeanType** Hands/Feet.
 - [ ] **Free-run steps:** `xx_h_freestep_*` (up / down / front / left / right at 50 / 300 / 550 cm) and
       `freerunfront_entry_*` low-fall entries.
-- [ ] **Vault / pass-over** (vt1592/1596, `air_up_*_to_passover`, HandPassOver).
+- [x] **Vault / pass-over** (RE/04 §4.1.13): type 2 jumps, reception, HandPassOver vault, Ground / InAir. Open: pass-over pull-down, kind 4 chained jumps, roll ending, vt1592/1596.
 - [ ] **High obstacle** request (vt744/748, minimum height 5.0).
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).
 - [ ] **Ground loss → InAir:** fall-type table, plus `Human__ShouldFallOffSupport` 0xB23CB0 (no floor within 0.8 m).
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
-- [ ] **Ledge look-down:** `xx_l_ledge_lookdown_*` (ability LookDown, vt1540).
-- [ ] **Leap of Faith** from a look-down edge.
+- [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. Open: side ledge stop
+      (0xD8E5B0), look-down port (event 119 sender / guard), event 69 sender**
+- [~] **Leap of Faith** from a look-down edge. **→ faith jump + HayStack context ported (RE/04 §4.1.12); open: the ability /
+      look-down trigger path (vt1540/1544), fall entry 0xE05490**
 - [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
   - from a stop at the edge, from wait, hard, from a beam, and hand-pass-over;
   - all four sides.
@@ -101,7 +103,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 
 ## 3. Missing locomotion contexts
 ### 3.1 Walling / wall-run (context 11) — RE/05 §1
-- [ ] **Entries:**
+**→ ported 2026-10-02 (RE/05 §1.8): entry test, sub-states, probes A–D, rebound (PORT trigger). Open: pass-over exits,
+post-run state 4, the command source, the rebound landing query.**
+- [~] **Entries:**
   - from Ground (0xDA2C30) and from NarrowObject / the decision layer (0xB263B0);
   - takeoff `impultionstraight_*_to_wallingfront_*`.
 - [ ] **Sub-states:** EntryA → EntryB → Vertical / Horizontal, ReboundTransition, VerticalEnd, WallStep. Both sides (Left/Right).
@@ -110,25 +114,32 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Rebound jump** (0xE365C0): within ±89° of the wall normal; fallback 7 m out, 3 m down.
 - [ ] **Walling commands 0–4** from the pad controller (+0x38; meaning still open).
 ### 3.2 NarrowObject (context 12) — RE/05 §2
+**→ beams ported 2026-10-02 (RE/05 §2.7): straight mount from Ground, walk / jog / stop / turn on the beam line, step-off. Free-step
+arrival decoded as a transient (back to Ground on wide support).**
+**→ 2026-10-02 (RE/05 §2.8): free-step arrivals on beams (modes 2–5) and pilotis, the air catch of both (BeamReception / PilotisReception),
+the pilotis wait and lean, the beam impulsion, the jump on the spot (clear or to a hand target with the `beam_jumpstraight_*` flights),
+free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
       The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
-- [ ] **Edge:** walking along a narrow wall ledge (EdgeState Front/Left/Right).
-- [ ] **Lean:** FaceLeft / FaceRight (lean height/width).
+- [x] **Edge:** decoded as a one-frame redirect back to Ground in this build (RE/05 §2.9); the side look-down is ported (RE/02 §4.2).
+- [x] **Lean:** NarrowObject's Lean is unreachable (event 71 rejected, RE/05 §2.9). The game's lean is Ground ObstacleCollision (event 42, RE/02 §4.2): ported (hand lean 70/150 cm, foot bump 50/70 cm, exits).
 - [ ] **Beam:**
-  - entry modes and BeamReception from the air;
+  - ~~entry modes and BeamReception from the air~~ (done, §2.8); 90° waits / turns, corner hops / walks, edge stop, crouch attacks;
   - segment detection (±2 × ±0.5 m box, 60° cone);
   - projection onto the beam line;
   - turn-around;
   - stop 0.3 m before the end;
   - step off within 0.16 m;
   - Unbalanced.
-- [ ] **Pilotis** (wooden posts): entries FromFreeStep / FromInAir / FromJumpImpulsionStart, plus jump-on-place.
+- [x] **Pilotis** (wooden posts): entries FromFreeStep / FromInAir, wait + lean, impulsion and jump-on-place, jumps to targets (§2.8).
+      Open: FromJumpImpulsionStart, event 9, pull-down from a pilotis (`beam_pilotis_to_pulldown_*`).
 - [ ] **FreeRun** on narrow geometry (EntryB / EntrySide).
 - [ ] **CrowdRun** and **ObstacleCollision**.
 - [ ] **Support check and fall** (`CheckSupportAndFall` 0xE51190, jump types 0/1/3/4/6).
 ### 3.3 Pole (context 6) — RE/05 §3
-- [ ] **Entries:** from Ground (`CanGrabPole` 0xD9C360), FromAirStraight, FromAirInclined.
+- [x] **Poles are cut content** in v1.02: no HumanPole animations ship (RE/05 §3.5). The playable "poles" are swing bars: ported (RE/03 §7.10a).
+- [ ] ~~**Entries:** from Ground (`CanGrabPole` 0xD9C360), FromAirStraight, FromAirInclined.~~
 - [ ] **Inclination:** Light / Med / High (cos 20°, cos 60°).
 - [ ] **Climbing:** attach 0.2 m off the pole; climb up/down at low/high grip; turn left/right; reached top/bottom.
 - [ ] **Jumps:** jump off (PoleJumpDirection); horizontal poles and **swing** (ActorState 44, SwingReception in Ledge).
@@ -139,7 +150,8 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - enter from ground or top; exit to ground or top;
   - release;
   - jump.
-- [ ] **Entries:** FromGround / FromAirStraight / FromAirInclined / FromWalling / FromClimb, and Ledge → Ladder (ToLadder 0xDD2430).
+- [x] **Ladder** (RE/05 §4.1): the animation table, ground / top entries, climb up / down by profile, exits to the top / ground, release, jump.
+- [ ] **Entries:** FromAirStraight / FromAirInclined / FromWalling / FromClimb, and Ledge → Ladder (ToLadder 0xDD2430); the turn and revolve.
 - [ ] **TopOfLadder monitor** (ActorState 60).
 - [ ] Rung and exit constants (0xE1C000–0xE28500, not yet mapped).
 ### 3.5 Rope (context 7) — RE/05 §5
@@ -189,7 +201,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
       `air_surface_tr_hangwall_reception_*`.
 - [ ] **One-hand catch** (`hangfree_onehand`, `hangwall_onehand`) → SecondHandGrab.
 - [ ] **Impacts:** `hangfree_impact_*` (catching at elbow/shoulder height, 50 cm, 150 cm).
-- [ ] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground).
+- [x] **HandPassOver:** vault over the ledge without hanging (state 9 → Ground), RE/04 §4.1.13.
 - [~] **PullDown, ground → hang:** all PullDownTypes × PullDownSides, Orientation → Descent → Reception → ReleaseToInAir.
       **→ decoded (RE/03 §7.8b); type Wait / front ported with the game's actions and roots. Open: EdgeStop (needs the ledge stop),
       side and beam variants, HandPassOver, ReleaseToInAir, the decision layer's event 70 input**
@@ -225,7 +237,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - 4: Drop from hang or climb, with catching when `Data+0x3F0 == 2`;
   - 5: RagFall.
 - [ ] **Air catch of ladders, beams/narrow objects and poles**, not only ledges.
-- [ ] **Leap of Faith:** 3 m over-drop, `faith_jump_*` clips, haystack landing, ActorState 41.
+- [x] **Leap of Faith:** 3 m over-drop, `faith_jump_*` clips, haystack landing, ActorState 41. **→ RE/04 §4.1.12 (ActorState 41 not sent by the port)**
 - [ ] **Small-damage landing** and the fixed height table (flag `this+226 & 8`: 8–20 m); camera shake on rolls.
 - [ ] **ActorState events:** Jumping, JumpingOnPlace, LongFall, FreeFalling, Landing, Roll.
 

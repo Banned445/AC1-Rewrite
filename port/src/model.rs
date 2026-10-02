@@ -108,7 +108,13 @@ fn attach_altair(
         img.data = Some(t.mips.concat());
         tex_handles.insert(*id, images.add(img));
     }
-    let untextured = materials.add(StandardMaterial { base_color: Color::srgb(0.85, 0.85, 0.82), perceptual_roughness: 0.9, ..default() });
+    let untextured = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.85, 0.85, 0.82),
+        perceptual_roughness: 0.9,
+        double_sided: true,
+        cull_mode: None,
+        ..default()
+    });
 
     // ---------------------------------------------------------------- meshes
     let mut tris = 0;
@@ -125,7 +131,17 @@ fn attach_altair(
             }
             mesh.insert_indices(Indices::U32(idx.clone()));
             let mat = match tex.and_then(|t| tex_handles.get(&t)) {
-                Some(h) => materials.add(StandardMaterial { base_color_texture: Some(h.clone()), perceptual_roughness: 0.85, ..default() }),
+                // Cloth (robe, flaps, hood) is single-layer geometry the game draws two-sided; with back-face
+                // culling the inner side disappears and the body shows through. BC1 textures carry 1-bit alpha for
+                // frayed edges and feathers: alpha-tested.
+                Some(h) => materials.add(StandardMaterial {
+                    base_color_texture: Some(h.clone()),
+                    perceptual_roughness: 0.85,
+                    double_sided: true,
+                    cull_mode: None,
+                    alpha_mode: AlphaMode::Mask(0.5),
+                    ..default()
+                }),
                 None => untextured.clone(),
             };
             let mut ec = commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(mat), Transform::default()));

@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use super::air::{FallOrigin, InAirEntry, Landing, LandingType};
 use super::climb::{ClimbEntry, ClimbEntryType};
 
-use super::jump_blend::ActionBlend;
+use super::jump_blend::{self, ActionBlend};
 use super::move_blend::MoveBlend;
 use super::targets::{edge_ahead, find_jump_target, JumpTarget};
 use super::{
@@ -76,11 +76,57 @@ pub struct HumanGroundData {
     /// motion moves the character and input waits until it ends (its transitions lead back to the
     /// locomotion action 0x05923BDB or wait).
     pub oneshot: Option<GroundOneShot>,
+    /// Played when `oneshot` ends (the run stop's settle into the wait).
+    pub oneshot_next: Option<ActionBlend>,
     pub last_landing: Option<Landing>,
     /// Incremented on every landing (lets the animator play the landing clip once).
     pub landing_seq: u32,
     /// `HumanGround__UpdateMoveBlend` state: blend weights, timers, lean/bank, step cycle.
     pub blend: MoveBlend,
+    /// LedgeStop sub-state (38): the edge it stopped at.
+    pub ledge_stop: Option<LedgeStop>,
+    /// PORT: no new ledge stop until the stick lets go or turns away from this edge normal (the game's event 69
+    /// sender is not traced).
+    pub ledge_stop_lock: Option<Vec3>,
+    /// ObstacleCollision (sub-state 5, event 42): the collide / lean on an obstacle (`collide`).
+    pub collide: Option<super::collide::Collide>,
+    /// Look-down at an edge (sub-state 9, event 119, `HumanGround__LookDown_Enter` 0xD9FC80).
+    pub look_down: Option<LookDown>,
+    pub pose_seq: u32,
+    /// Facing applied when the next one-shot starts (the lean exits end turned, `collide`).
+    pub face_next: Option<f32>,
+}
+
+/// `HumanGround__LookDown_Enter` 0xD9FC80: `xx_l_ledge_lookdown_{front,left,right}_foot{l,r}` (by the leading foot)
+/// blended by the angle between the facing and the point 1 m past the edge (report point + normal): [1 − k, left k,
+/// right k], k = min(|a|, 90°) / 90°.
+pub const LOOK_DOWN: [u32; 2] = [0x2669_E0F7, 0x2669_E0F8];
+
+#[derive(Clone, Copy, Debug)]
+pub struct LookDown {
+    pub action: ActionBlend,
+    pub t: f32,
+    pub point: Vec3,
+    pub normal: Vec3,
+}
+
+/// The look-down weights for an edge at `p` / outward normal `n` seen from `feet` facing `forward`.
+pub fn look_down_weights(feet: Vec3, forward: Vec3, p: Vec3, n: Vec3) -> [f32; 3] {
+    let to = Vec3::new(p.x + n.x - feet.x, 0.0, p.z + n.z - feet.z).normalize_or_zero();
+    let a = to.dot(forward).clamp(-1.0, 1.0).acos();
+    let k = (a.min(std::f32::consts::FRAC_PI_2) / std::f32::consts::FRAC_PI_2).clamp(0.0, 1.0);
+    // left when the edge is on the character's left
+    if to.dot(super::right_of(forward)) < 0.0 { [1.0 - k, k, 0.0] } else { [1.0 - k, 0.0, k] }
+}
+
+/// `HumanGround__LedgeStop_Enter` 0xD93C60 / `HumanGround__LedgeStop_PlayEnd` 0xD7D9D0.
+#[derive(Clone, Copy, Debug)]
+pub struct LedgeStop {
+    /// Edge report: point (+16) and outward normal (+32).
+    pub point: Vec3,
+    pub normal: Vec3,
+    /// The end action is playing (the start action, 0x06E8BD7F, is done).
+    pub ending: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -93,9 +139,19 @@ pub struct GroundOneShot {
 }
 
 impl HumanGroundData {
+    /// Play a ground one-shot action with its root motion (landings, receptions, ledge stop).
+    pub fn play_oneshot(&mut self, b: ActionBlend) {
+        self.landing_seq = self.landing_seq.wrapping_add(1);
+        self.oneshot = Some(GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
+    }
+
     /// `TransitionSetupDataToMovement::Apply` (0xC80310), simplified.
     pub fn enter(&mut self, landing: Option<Landing>) {
         self.sub_state = HumanGroundSubState::Movement;
+        self.ledge_stop = None;
+        self.collide = None;
+        self.look_down = None;
+        self.oneshot_next = None;
         if let Some(l) = landing {
             self.landing_seq = self.landing_seq.wrapping_add(1);
             self.oneshot = l.action.map(|b| GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
@@ -184,6 +240,27 @@ pub fn update_ground(
         // the target follows the stick even while a landing action plays (MoveBlend's transition path keeps
         // ramping toward it, 0xDA0810)
         let target = if pad.speed01 > 0.0 { (base + STICK_SPAN * pad.speed01 * g.turn_atten).min(1.0) } else { 0.0 };
+        // stick released (desired mode HG+0x5D8 = 0): the game leaves the Move state instead of decelerating
+        // (the curve at HG+0x63C only runs while still moving toward a slower band):
+        // - jog or faster (HG+0x5DC, speed > 0.25) → RunStop 0xD98E30 (guard 0xD7EC90): the run-stop action by the
+        //   leading foot, its root motion, then its settle into the wait;
+        // - walk band → Idle 0xD8B220 (guard 0xD7ED30): the wait with a 0.2 s blend, i.e. stopped at once.
+        if pad.speed01 <= 0.0 && g.speed_param > 0.0 && g.oneshot.is_none() {
+            if g.speed_param > 0.25 {
+                let foot = (g.blend.foot != 0) as usize;
+                if let Some(b) = jump_blend::action_items(jump_blend::RUN_STOP[foot]).map(|_| ActionBlend::new(jump_blend::RUN_STOP[foot], 0, &jump_blend::run_stop_weights(g.speed_param))) {
+                    g.play_oneshot(b);
+                    g.oneshot_next = jump_blend::action_items(jump_blend::RUN_STOP_TO_WAIT[foot]).map(|_| ActionBlend::new(jump_blend::RUN_STOP_TO_WAIT[foot], 0, &[1.0]));
+                }
+            }
+            g.speed_param = 0.0;
+            g.blend.speed_param = 0.0;
+        }
+        // moving again during the run stop: its transitions to walk / jog take over (PORT: the stop is cut)
+        if pad.speed01 > 0.0 && g.oneshot.is_some_and(|o| jump_blend::RUN_STOP.contains(&o.blend.id) || jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id)) {
+            g.oneshot = None;
+            g.oneshot_next = None;
+        }
         // speed parameter, lean/bank and blend weights (MoveBlend 0xDA0810). The heading snapshot is the
         // heading before this frame's turn (HG+0x600, Movement_PreUpdate 0xD97E30).
         g.blend.speed_param = g.speed_param;
@@ -199,6 +276,89 @@ pub fn update_ground(
             body.heading += d.clamp(-step, step);
         }
 
+        // ---------------------------------------------------------------- obstacle collision / lean (sub-state 5)
+        if let Some(mut c) = g.collide {
+            g.sub_state = HumanGroundSubState::ObstacleCollision;
+            let stick = (pad.speed01 > 0.0).then_some(pad.dir);
+            let (mut feet, mut heading) = (body.feet, body.heading);
+            let out = super::collide::update(&mut c, dt, stick, pad.high_profile, &mut feet, &mut heading);
+            body.feet = feet;
+            body.heading = heading;
+            match out {
+                super::collide::CollideOut::Stay => g.collide = Some(c),
+                super::collide::CollideOut::Leave { first, then, speed, face } => {
+                    g.collide = None;
+                    g.face_next = face.map(heading_of);
+                    g.speed_param = speed;
+                    g.blend.speed_param = speed;
+                    if let Some(b) = first {
+                        g.play_oneshot(b);
+                        g.oneshot_next = then;
+                    }
+                }
+            }
+            body.velocity = Vec3::ZERO;
+            continue;
+        }
+
+        // ---------------------------------------------------------------- look-down at an edge (event 119)
+        // PORT trigger: standing still (the event's sender and its guard's mode value, 0xD7E590, are not traced)
+        if moving || busy || g.speed_param > 0.0 {
+            g.look_down = None;
+        } else if let Some(mut ld) = g.look_down {
+            ld.t += dt;
+            g.look_down = Some(ld);
+        } else if let Some((p, n)) = look_down_edge(body.feet, body.forward(), &guidance, &collision) {
+            let w = look_down_weights(body.feet, body.forward(), p, n);
+            if let Some(a) = jump_blend::action_items(LOOK_DOWN[(g.blend.foot != 0) as usize]).map(|_| ActionBlend::new(LOOK_DOWN[(g.blend.foot != 0) as usize], 0, &w)) {
+                g.pose_seq = g.pose_seq.wrapping_add(1);
+                g.look_down = Some(LookDown { action: a, t: 0.0, point: p, normal: n });
+            }
+        }
+
+        // ---------------------------------------------------------------- wall run (Walling, event 49)
+        // Input handler 0xEE65A0 (tested before the jumps and the grab): high profile, Legs pressed, the stick
+        // pushed within 45° of the facing (> 0.35), ability Walling, and IHumanGround vt112 = event 49's guard
+        // (0xDA54F0: the playing item allows a mode exit, then the wall test 0xE18390).
+        if g.high_profile && pad.jump_buffered() && moving && pad.dir.dot(body.forward()) >= 45f32.to_radians().cos() {
+            if let Some((contact, normal)) = super::walling::wall_ahead(body.feet, body.forward(), &collision) {
+                pad.consume_jump();
+                let from = body.feet;
+                switch_context(&mut loco, &mut data, TransitionSetup::ToWalling(super::walling::WallingEntry { contact, normal, from }));
+                continue;
+            }
+        }
+
+        // ---------------------------------------------------------------- beam (NarrowObject, event 72)
+        // Guard 0xD9F4C0: a beam in the box ahead (±0.75 m, 0–1 m, ±0.53 m). PORT trigger: walking at it (the
+        // decision layer's event 72 sender is not traced).
+        if moving && !busy {
+            if let Some(entry) = super::narrow::try_mount_beam(body.feet, body.forward(), &guidance) {
+                switch_context(&mut loco, &mut data, TransitionSetup::ToBeam(entry));
+                continue;
+            }
+        }
+
+        // ---------------------------------------------------------------- ladder (event 38)
+        // Guard `sub_B239D0` (0xD83970): a ladder within reach, the character on its front within 90°; the entry from
+        // the top within 1.5 m of it. PORT triggers (event 38's sender is not traced): walking into the ladder's foot
+        // facing it; from the top, low profile + Legs at its top facing out over it.
+        {
+            let top_req = !g.high_profile && pad.jump_buffered();
+            if (moving || top_req) && !busy {
+                if let Some((base, top, n, from_top)) = super::ladder::find_ladder(body.feet, body.forward(), 0.8, &guidance) {
+                    if from_top == top_req {
+                        if from_top {
+                            pad.consume_jump();
+                        }
+                        let e = super::ladder::LadderEntry { base, top, n, from: body.feet, facing: body.forward(), from_top, high: g.high_profile, foot: (g.blend.foot != 0) as usize };
+                        switch_context(&mut loco, &mut data, TransitionSetup::ToLadder(e));
+                        continue;
+                    }
+                }
+            }
+        }
+
         // ---------------------------------------------------------------- climb / grab requests
         // interpreter vt736/740 (grab wall) and vt764/768 (climb start): high profile + Legs into a wall
         let forward = body.forward();
@@ -207,6 +367,46 @@ pub fn update_ground(
                 pad.consume_jump();
                 switch_context(&mut loco, &mut data, setup);
                 continue;
+            }
+        }
+
+        // ---------------------------------------------------------------- ledge stop (event 69 / sub-state 38)
+        if let Some(ls) = g.ledge_stop {
+            // pull-down EdgeStop (LedgeStop_HandleEvent 0xDA4D90, event 70): only while the start action plays
+            // (guard 0xD9D580). PORT trigger as for Wait: Legs.
+            if !ls.ending && pad.jump_buffered() {
+                if let Some(entry) = pulldown_entry(ls.point, ls.normal, body.feet, false, &guidance, &collision) {
+                    pad.consume_jump();
+                    g.ledge_stop = None;
+                    g.oneshot = None;
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToLedge(entry));
+                    continue;
+                }
+            }
+            if g.oneshot.is_none() {
+                // end done → Movement (Locomotion_Update 0xDAF2D0, sub_5017B0); start → end is in the move step
+                g.ledge_stop = None;
+            }
+        }
+        if let Some(n) = g.ledge_stop_lock {
+            if pad.speed01 <= 0.0 || pad.dir.dot(Vec3::new(n.x, 0.0, n.z).normalize_or_zero()) < FRONT_COS {
+                g.ledge_stop_lock = None;
+            }
+        }
+        // Movement event 69 (0xDB1470): guard 0xDA5DE0 = front edge (ClassifyEdgeSide 0xD9D7F0 → 1), drop > 2 m,
+        // body space → ToLedgeStop 0xDA99F0. Side edges (3/4, guard 0xDA5D90) go to another state (not ported).
+        // PORT trigger: walking (low profile) into such an edge.
+        let busy = g.oneshot.is_some();
+        if !g.high_profile && moving && !busy && g.ledge_stop_lock.is_none() {
+            if let Some((p, n)) = edge_report(body.feet, body.forward(), LEDGE_STOP_REACH, FRONT_COS, &guidance, &collision) {
+                if let Some(b) = super::ledge_moves::single_item(super::ledge_moves::LEDGE_STOP_START, 0) {
+                    g.ledge_stop = Some(LedgeStop { point: p, normal: n, ending: false });
+                    g.ledge_stop_lock = Some(n);
+                    g.speed_param = 0.0;
+                    g.blend.speed_param = 0.0;
+                    g.play_oneshot(b);
+                    continue;
+                }
             }
         }
 
@@ -249,6 +449,22 @@ pub fn update_ground(
             let step = [d[0] - os.applied[0], d[1] - os.applied[1]];
             os.applied = d;
             g.oneshot = (os.t < os.duration).then_some(os);
+            if g.oneshot.is_none() {
+                if let Some(next) = g.oneshot_next.take() {
+                    g.play_oneshot(next);
+                }
+                if let Some(h) = g.face_next.take() {
+                    body.heading = h;
+                }
+                if let Some(mut ls) = g.ledge_stop.filter(|l| !l.ending) {
+                    // start done → end action, same frame (HumanGround__LedgeStop_PlayEnd 0xD7D9D0)
+                    ls.ending = true;
+                    g.ledge_stop = Some(ls);
+                    if let Some(b) = super::ledge_moves::single_item(super::ledge_moves::LEDGE_STOP_END, 0) {
+                        g.play_oneshot(b);
+                    }
+                }
+            }
             let right = super::right_of(forward);
             let delta = right * step[0] + forward * step[1];
             (delta, delta.length() / dt.max(1e-4))
@@ -256,7 +472,43 @@ pub fn update_ground(
             let speed = if g.speed_param > 0.0 { g.blend.advance(dt) } else { 0.0 };
             (forward * speed * dt, speed)
         };
-        let r = collision.move_capsule(body.feet, delta, true);
+        // PORT: after a ledge stop, still pushing into the same edge holds the character at it (the game re-sends
+        // event 69 from its untraced sender; the port does not loop stop / step back)
+        let held = g.oneshot.is_none()
+            && g.ledge_stop_lock.is_some()
+            && edge_report(body.feet, forward, LEDGE_STOP_REACH, FRONT_COS, &guidance, &collision).is_some();
+        let (delta, speed) = if held {
+            g.speed_param = 0.0;
+            g.blend.speed_param = 0.0;
+            (Vec3::ZERO, 0.0)
+        } else {
+            (delta, speed)
+        };
+        let before = body.feet;
+        let mut r = collision.move_capsule(body.feet, delta, true);
+        // event 42 (0xB25230): blocked by an obstacle ≥ 0.5 m high within 45° of the facing → ObstacleCollision
+        if moving && !busy && r.hit_wall && g.ledge_stop.is_none() {
+            if let Some((contact, n, height)) = super::collide::obstacle_ahead(r.position, forward, &collision) {
+                if let Some(c) = super::collide::enter(r.position, contact, n, height, g.pose_seq) {
+                    g.pose_seq = c.seq;
+                    g.collide = Some(c);
+                    g.speed_param = 0.0;
+                    g.blend.speed_param = 0.0;
+                    body.feet = r.position;
+                    body.velocity = Vec3::ZERO;
+                    let _ = before;
+                    continue;
+                }
+            }
+        }
+        if let Some(ls) = g.ledge_stop {
+            // PORT: the stop clip's root motion may not carry the feet past the edge (the game places the edge
+            // report so the clip ends on it; its sender is not traced)
+            let past = (r.position - ls.point).dot(ls.normal) + LEDGE_STOP_MARGIN;
+            if past > 0.0 {
+                r.position -= Vec3::new(ls.normal.x, 0.0, ls.normal.z) * past;
+            }
+        }
         body.velocity = forward * speed;
         body.feet = r.position;
 
@@ -281,12 +533,13 @@ pub fn update_ground(
 /// 2. a ledge with the hands 0.7–3.0 m up → the standing straight jump at it (0xB21DA0 bands: knee / waist
 ///    heights pull straight up onto the top, higher ones end hanging).
 fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<TransitionSetup> {
-    // a wall must be right in front
-    let wall_close = (0.4..=0.9).any_hit(|d| collision.point_inside(feet + forward * d + Vec3::Y * 1.0));
-    if !wall_close {
-        return None;
-    }
-    let reach = |h: f32| guidance.probe(feet + forward * 0.5 + Vec3::Y * h, 0.6, 0.31, Some(forward), 0.785);
+    // The game's probe (input handler 0xEE65A0 → IHuman vt132 / vt136): guidance within 0.75 m of the character's
+    // position (box height 0.45), front hemisphere (cone π about the facing). The edge must face the character.
+    let reach = |h: f32| {
+        guidance
+            .probe(feet + Vec3::Y * h, GRAB_PROBE_RADIUS, 0.225, Some(forward), std::f32::consts::FRAC_PI_2)
+            .filter(|hit| (hit.point - feet).dot(forward) > 0.0)
+    };
     // 1. climb start
     for h in [1.8f32, 2.4] {
         if let Some(hand) = reach(h) {
@@ -307,41 +560,85 @@ fn try_wall_grab(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision:
             }
         }
     }
-    // 2. a ledge whose hands are 0.7–3.0 m above the feet: the standing straight jump at it
+    // 2. a ledge whose hands are 0.53–3.0 m above the feet (guard 0xD84190): the standing straight jump at it
     //    (HumanGround 0xD85550 → Human__SetupJumpToHandTarget 0xB21DA0), band by the hand height
-    let hand = [0.9f32, 1.3, 1.7, 2.1, 2.5, 2.9]
+    let target = straight_hand_target(feet, forward, guidance, collision, false)?;
+    Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }))
+}
+
+/// The hand target of a standing straight jump (0xB21DA0): a ledge in the 0.75 m grab probe whose hands are
+/// 0.53–3.0 m above the feet; `beam` selects the `beam_jumpstraight_*` flights (jump from the beam impulsion).
+pub fn straight_hand_target(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld, beam: bool) -> Option<JumpTarget> {
+    let reach = |h: f32| {
+        guidance
+            .probe(feet + Vec3::Y * h, GRAB_PROBE_RADIUS, 0.225, Some(forward), std::f32::consts::FRAC_PI_2)
+            .filter(|hit| (hit.point - feet).dot(forward) > 0.0)
+    };
+    let hand = [0.6f32, 0.9, 1.3, 1.7, 2.1, 2.5, 2.9]
         .into_iter()
         .filter_map(reach)
-        .find(|h| (0.7..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)));
-    if let Some(hand) = hand {
-        let n = hand.wall_normal;
-        let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
-        let j = super::ledge_moves::hang_jump_in(hand.point.y - feet.y, wall)?;
-        let target = JumpTarget {
-            position: hand.point + n * j.out - Vec3::Y * j.down,
-            type_flags: j.flags,
-            hang: Some((hand.point, n)),
-            straight: Some(j),
-        };
-        return Some(TransitionSetup::ToInAir(InAirEntry::JumpToTarget { from: feet, target, speed_param: 0.0, foot_left: true }));
-    }
-    None
+        .find(|h| (GRAB_MIN_HEIGHT..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)))?;
+    let n = hand.wall_normal;
+    let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
+    let dz = hand.point.y - feet.y;
+    let j = if beam { super::ledge_moves::hang_jump_in_beam(dz, wall)? } else { super::ledge_moves::hang_jump_in(dz, wall)? };
+    Some(JumpTarget { position: hand.point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((hand.point, n)), straight: Some(j), pass: None })
 }
 
 /// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a
 /// LedgeGrab edge at the feet within 0.8 m ahead whose outward normal points along the facing (dot > 0),
 /// with more than 2.0 m of drop below it (edge report +48).
 fn try_pulldown(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<super::ledge::LedgeEntry> {
-    let hit = guidance.probe(feet + forward * 0.5, 0.5, 0.2, None, std::f32::consts::PI)?;
+    let (p, n) = edge_report(feet, forward, 0.5, 0.0, guidance, collision)?;
+    pulldown_entry(p, n, feet, true, guidance, collision)
+}
+
+/// Grab / climb probe radius around the character (0xEE65A0: IHuman vt136 radius 0.75).
+const GRAB_PROBE_RADIUS: f32 = 0.75;
+/// Event 68 guard 0xD84190: the edge must be at least 0.53 m above the feet.
+const GRAB_MIN_HEIGHT: f32 = 0.53;
+
+/// How far ahead of the feet an edge stops a walk (PORT: the edge report's distance limit +64 is set by the
+/// untraced sender; `ClassifyEdgeSide` compares it with the squared horizontal distance).
+const LEDGE_STOP_REACH: f32 = 0.45;
+/// PORT: the feet stay this far behind the edge during the ledge stop.
+const LEDGE_STOP_MARGIN: f32 = 0.2;
+/// ClassifyEdgeSide 0xD9D7F0: front = within 60° (120° with the report flag +68).
+const FRONT_COS: f32 = 0.5;
+
+/// An edge report for a front edge (`HumanGround__ClassifyEdgeSide` 0xD9D7F0 → 1): a LedgeGrab edge within
+/// `reach` ahead whose outward normal is within 60° of the facing, with more than 2.0 m of drop
+/// (guards 0xDA5DE0 / 0xD9D6C0; the classifier itself needs > 1.3 m). Returns (point, outward normal).
+fn edge_report(feet: Vec3, forward: Vec3, reach: f32, min_cos: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(Vec3, Vec3)> {
+    let hit = guidance.probe(feet + forward * reach, reach, 0.2, None, std::f32::consts::PI)?;
     let n = hit.wall_normal;
-    if n.dot(forward) <= 0.0 {
+    let nf = Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    if nf.dot(forward) <= min_cos {
         return None;
     }
     let below = collision.ground_height(hit.point + n * 0.6 - Vec3::Y * 0.05, 50.0).unwrap_or(hit.point.y - 100.0);
     if hit.point.y - below <= 2.0 {
         return None;
     }
-    let [orient, descent, reception] = super::ledge_moves::pulldown(hit.point, n, feet, true, guidance, collision)?;
+    Some((hit.point, n))
+}
+
+/// An edge to look down at while standing: a LedgeGrab edge within 0.6 m of the feet, not behind the character
+/// (|angle| ≤ 90°), with more than 2 m of drop beyond it (the ledge stop's report rules).
+fn look_down_edge(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(Vec3, Vec3)> {
+    let hit = guidance.probe(feet, 0.6, 0.2, None, std::f32::consts::PI)?;
+    let n = hit.wall_normal;
+    let nf = Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
+    if nf.dot(forward) < -0.05 {
+        return None;
+    }
+    let below = collision.ground_height(hit.point + n * 0.6 - Vec3::Y * 0.05, 50.0).unwrap_or(hit.point.y - 100.0);
+    (hit.point.y - below > 2.0).then_some((hit.point, n))
+}
+
+/// Pull-down from the ground at edge `p` / normal `n`: type Wait (from Movement) or EdgeStop (from the ledge stop).
+fn pulldown_entry(p: Vec3, n: Vec3, feet: Vec3, wait: bool, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<super::ledge::LedgeEntry> {
+    let [orient, descent, reception] = super::ledge_moves::pulldown(p, n, feet, wait, guidance, collision)?;
     let mut e = super::ledge::LedgeEntry::at((orient.hand_l + orient.hand_r) * 0.5, n, feet, super::ledge::LedgeSubState::PullDown);
     e.hand_l = orient.hand_l;
     e.hand_r = orient.hand_r;

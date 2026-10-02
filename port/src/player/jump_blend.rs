@@ -12,9 +12,12 @@ use super::jump_clips::{ClipRoot, ACTIONS, CLIPS};
 // ---------------------------------------------------------------- action ids (verified in the graph dump)
 /// Ground running takeoff (jump kind 0), [footl, footr] (0xB1EC40: 172788750 + (foot != 1)).
 pub const TAKEOFF_RUN: [u32; 2] = [0x0A4C_8C0E, 0x0A4C_8C0F];
+/// Free-step takeoff (jump kind 1: from a beam / pilotis / roof edge), [footl, footr]: same 40-clip layout,
+/// `xx_h_freestep_front_*_foot{l,r}_to_air` (0xB1EC40; pilotis jumps pass kind 1 to 0xB20200, 0xE4D950).
+pub const TAKEOFF_FREESTEP: [u32; 2] = [0x0112_B589, 0x0112_B5AC];
 /// Flights by target type, [footl, footr].
 pub const FLIGHT_FREESTEP: [u32; 2] = [0x010D_DAFA, 0x010D_F0D8]; // 1, 0x10000, 0x100, 0x200, 0x400, haystack
-pub const FLIGHT_PASSOVER: [u32; 2] = [0x09A0_A58D, 0x09A0_A58E]; // 2
+pub const FLIGHT_PASSOVER: [u32; 2] = super::passover::FLIGHT_PASSOVER; // 2
 pub const FLIGHT_ASSASSINATE: [u32; 2] = [0x21B4_DC3D, 0x21B4_DC3E]; // 0x8000
 pub const FLIGHT_SURFACE: [u32; 2] = [0x011E_555B, 0x011E_555C]; // 0x40, 0x1000, 0x2000, 0x4000
 pub const FLIGHT_SWING: [u32; 2] = [0x0121_A149, 0x0121_A151]; // every other type
@@ -34,12 +37,54 @@ pub const LAND_DAMAGE: u32 = 0x010D_D707;
 pub const LAND_DAMAGE_ROLL: u32 = 0x010D_D70B;
 
 pub const DUMPED_ACTIONS: &[u32] = &[
-    TAKEOFF_RUN[0], TAKEOFF_RUN[1],
+    TAKEOFF_RUN[0], TAKEOFF_RUN[1], TAKEOFF_FREESTEP[0], TAKEOFF_FREESTEP[1],
     FLIGHT_FREESTEP[0], FLIGHT_FREESTEP[1],
     RECEPTION_FREESTEP[0], RECEPTION_FREESTEP[1],
     LAND_FORWARD_MOVE[0], LAND_FORWARD_MOVE[1], LAND_FORWARD_STOP[0], LAND_FORWARD_STOP[1],
     LAND_STRAIGHT_MOVE, LAND_STRAIGHT_STOP, LAND_DAMAGE, LAND_DAMAGE_ROLL,
+    // climb start from the ground: wait → climbing (HumanGround block)
+    super::climb::CLIMB_FROM_GROUND[0], super::climb::CLIMB_FROM_GROUND[1],
+    // run stop (RE/02 §3: RunStop 0xD98E30) and its settle into the wait
+    RUN_STOP[0], RUN_STOP[1], RUN_STOP_TO_WAIT[0], RUN_STOP_TO_WAIT[1],
+    // Leap of Faith and the haystack (RE/04 §4.1.12)
+    TAKEOFF_FAITH[0], TAKEOFF_FAITH[1], FLIGHT_FAITH, FALL_FAITH,
+    super::hay::HAYSTACK_FAITH_LANDING, super::hay::HAYSTACK_WAIT, super::hay::HAYSTACK_FROM_AIR, super::hay::HAYSTACK_HOP_OUT,
 ];
+
+/// Run stop (HumanGround state 18, enter 0xD98E30): [left-foot item playing, right] = `xx_h_{jog,run,sprint}stop_foot{l,r}`
+/// (0.2 / 0.2 / 0.4 s); then `xx_h_runstop_foot{l,r}_tr_h_wait_hipm_foot{r,l}` (0.47 s), the stop's own transition.
+pub const RUN_STOP: [u32; 2] = [0x00D8_37AE, 0x00D8_37F1];
+pub const RUN_STOP_TO_WAIT: [u32; 2] = [0x00D8_38BA, 0x00D8_38FD];
+
+/// RunStop weights (0xD98E30, locomotion action playing): [jog 0, run 1 − f, sprint f], f = clamp((s − 0.75)·4).
+pub fn run_stop_weights(speed_param: f32) -> [f32; 3] {
+    let f = if speed_param < 0.75 { 0.0 } else { ((speed_param - 0.75) * 4.0).min(1.0) };
+    [0.0, 1.0 - f, f]
+}
+
+/// Leap of Faith (0xB1EC40, target type 0x800 with the target ≥ 3 m below, jump kinds 0 / 1): takeoff
+/// `freestep_footr_to_faith_jump_*` [foot 1, other], flight `faith_jump_*` (4 clips: 100 / 800 cm long ×
+/// 300 / 3000 cm down), and `faith_jump_fall` (FROMPHYSICS) for the free-fall tail.
+pub const TAKEOFF_FAITH: [u32; 2] = [0x23A9_49B1, 0x23A9_49B7];
+pub const FLIGHT_FAITH: u32 = 0x23A9_49B2;
+pub const FALL_FAITH: u32 = 0x23A9_49B5;
+/// Haystack target type (HumanInAirData+0x290).
+pub const TARGET_HAYSTACK: u32 = 0x800;
+/// A haystack target this far below (or more) is a Leap of Faith (0xB1EC40: target z − start z ≤ −3).
+pub const FAITH_MIN_DROP: f32 = 3.0;
+/// Faith jump bands (0xB1EC40 case 0x800, v26 == 2): max down −30 m, near 7.5 m.
+pub const FAITH_DOWN: f32 = 30.0;
+pub const FAITH_NEAR: f32 = 7.5;
+
+/// 0xB1EC40 tail for the faith jump: l = clamp(dist / 7.5), d = clamp(−dz / 27) (−dz over (−3) − (−30));
+/// weights [(1−l)(1−d), l(1−d), d(1−l), d·l]. The takeoff item gets the same weights (**hypothesis**: the
+/// function returns before writing the takeoff array; its item default is [0, 0, 1, 0]).
+pub fn faith(dz: f32, dist: f32, foot_left: bool) -> JumpBlend {
+    let l = (dist / FAITH_NEAR).clamp(0.0, 1.0);
+    let d = (-dz / (FAITH_DOWN - FAITH_MIN_DROP)).clamp(0.0, 1.0);
+    let w = vec![(1.0 - l) * (1.0 - d), l * (1.0 - d), d * (1.0 - l), d * l];
+    JumpBlend { takeoff: TAKEOFF_FAITH[(!foot_left) as usize], flight: FLIGHT_FAITH, takeoff_w: w.clone(), flight_w: w, h: d, d: l, class: 2, down: true }
+}
 
 /// Target types (HumanInAirData+0x290) used by the port.
 pub const TARGET_FREESTEP: u32 = 1;
@@ -47,6 +92,7 @@ pub const TARGET_FREESTEP: u32 = 1;
 /// Height/distance bands per target type (0xB1EC40 switch). (max up, max down, near, mid, far).
 pub fn bands(target_type: u32) -> (f32, f32, f32, f32, f32) {
     match target_type {
+        0x800 => (1.3, -3.0, 2.5, 5.0, 6.0),
         0x2 | 0x8000 | 0x10000 | 0x1 | 0x100 | 0x200 | 0x400 => (1.3, -3.0, 2.5, 5.0, 7.0),
         0x40 | 0x1000 | 0x2000 | 0x4000 => (2.5, -3.0, 2.5, 5.5, 7.5),
         _ => (3.0, -3.0, 2.5, 6.0, 8.0),
@@ -58,7 +104,7 @@ pub fn flight_action(target_type: u32, foot_left: bool) -> u32 {
     match target_type {
         0x2 => FLIGHT_PASSOVER[f],
         0x8000 => FLIGHT_ASSASSINATE[f],
-        0x10000 | 0x1 | 0x100 | 0x200 | 0x400 => FLIGHT_FREESTEP[f],
+        0x10000 | 0x1 | 0x100 | 0x200 | 0x400 | 0x800 => FLIGHT_FREESTEP[f],
         0x40 | 0x1000 | 0x2000 | 0x4000 => FLIGHT_SURFACE[f],
         _ => FLIGHT_SWING[f],
     }
@@ -86,9 +132,20 @@ pub struct JumpBlend {
 
 /// `dz` = target − start height, `dist` = horizontal distance (m). `scale` = entity+0x7C
 /// (hypothesis: character scale, 1 for Altaïr).
+#[allow(dead_code)]
 pub fn compute(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32) -> JumpBlend {
+    compute_kind(dz, dist, target_type, foot_left, scale, 0)
+}
+
+/// `compute` for a jump kind (0 run, 1 free step): only the takeoff action differs for kinds 0 / 1 (both
+/// force the side angle to 0 and use the same band offset `o`, 0xB1EC40).
+pub fn compute_kind(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32, kind: u8) -> JumpBlend {
+    if target_type == TARGET_HAYSTACK && dz <= -FAITH_MIN_DROP {
+        return faith(dz, dist, foot_left);
+    }
     let (up, down_max, near, mid, far) = bands(target_type);
-    let o = 0.0; // kinds 0, 1, 2, 4
+    // kinds 0, 1, 2, 4: no offset; other kinds (3, the swing jump) shift the bands by -0.7 m (0xB1EC40 v29)
+    let o = if kind == 3 { -0.7 } else { 0.0 };
     let (range_up, range_down) = (up - o, down_max - o);
     let v56 = -0.5 - o;
     let v51 = dz.max(-3.0);
@@ -110,10 +167,24 @@ pub fn compute(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32
     let n_flight = action_items(flight).and_then(|i| i.first().map(|c| c.len())).unwrap_or(16);
     let deep = has_deep(target_type);
     let mut fw = vec![0.0f32; n_flight.max(16)];
-    flight_weights(&mut fw, d, h, down, class, deep);
-    let takeoff = TAKEOFF_RUN[(!foot_left) as usize];
+    let takeoff = match kind {
+        1 => TAKEOFF_FREESTEP[(!foot_left) as usize],
+        3 => super::swing::TAKEOFF_SWING,
+        _ => TAKEOFF_RUN[(!foot_left) as usize],
+    };
     let mut tw = vec![0.0f32; 40];
+    if target_type == 2 {
+        passover_flight_weights(&mut fw, d, h, class);
+        passover_takeoff_weights(&mut tw, &fw, class);
+        fw.truncate(n_flight);
+        return JumpBlend { takeoff, flight, takeoff_w: tw, flight_w: fw, h, d, class, down };
+    }
+    flight_weights(&mut fw, d, h, down, class, deep);
     takeoff_weights(&mut tw, &fw, down, 0.0, class, deep);
+    if kind == 3 {
+        // the swing takeoff is one 8-clip group (0xB1EC40 kind 3 maps both side groups onto the front one)
+        tw.truncate(8);
+    }
     // > 3 m drop: move weight into the deep flight variants (0xB1EC40 tail, after the takeoff used them)
     if deep && dz < -3.0 {
         let k = ((-dz - 3.0) / 5.0).clamp(0.0, 1.0);
@@ -127,6 +198,45 @@ pub fn compute(dz: f32, dist: f32, target_type: u32, foot_left: bool, scale: f32
     }
     fw.truncate(n_flight);
     JumpBlend { takeoff, flight, takeoff_w: tw, flight_w: fw, h, d, class, down }
+}
+
+/// `Human__ComputeJumpFlightWeightsPassOver` 0xB142A0: the 5-clip pass-over flight [front 050/300/550, up 050/300].
+pub fn passover_flight_weights(w: &mut [f32], d: f32, h: f32, class: u8) {
+    if class == 0 {
+        w[0] = (1.0 - d) * (1.0 - h);
+        w[1] = d * (1.0 - h);
+        w[3] = (1.0 - d) * h;
+        w[4] = d * h;
+    } else {
+        w[1] = (1.0 - d) * (1.0 - h);
+        w[2] = d * (1.0 - h);
+        w[4] = h;
+    }
+}
+
+/// 0xB13E20 for a pass-over target with the side angle 0 (jump kinds 0 / 4): the front takeoff group's slots
+/// (0xB1EC40 picks 0, 1, up 6 / 7 for the near class; 1, 2, up 7 for class 1; 1, 2, down 4 / 5 otherwise).
+pub fn passover_takeoff_weights(t: &mut [f32], f: &[f32], class: u8) {
+    t.iter_mut().for_each(|x| *x = 0.0);
+    match class {
+        0 => {
+            t[0] = f[0];
+            t[1] = f[1];
+            t[6] = f[3];
+            t[7] = f[4];
+        }
+        1 => {
+            t[1] = f[1];
+            t[2] = f[2];
+            t[7] = f[4];
+        }
+        _ => {
+            t[1] = f[1];
+            t[2] = f[2];
+            t[4] = f[4];
+            t[5] = f[4];
+        }
+    }
 }
 
 /// 0xB140B0: flight weights from distance blend `d`, height blend `h`, class and going-down flag.

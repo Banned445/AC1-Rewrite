@@ -86,6 +86,52 @@ Push-off direction = stick direction, clamped to within ±89° (1.5533 rad) of t
 ### 1.7 Constants
 1/30 dt; 0.0005 stick dead-zone; ±45° fan (0.785398); −75°/+135° search fan (−1.308997/2.356194); 0.42 query param (`flt_19BA818`); 0.27, −0.23 box offsets; 0.05/0.3/0.1/0.7/1.05/1.5/1.2/0.8/2.0/2.4/2.7 multipliers above; 7.0 / 3.0 rebound fallback; −3.5 / 5.6 rebound distances; 0.13 s warp.
 
+### 1.8 Entry request, wall test and the port (verified 2026-10-02)
+**Request:**
+- **Input handler 0xEE65A0:** tested before the guidance jumps and the grab. It needs: no lock; the stick > 0.35 and within 45° of the facing; high profile; the Legs buffer; ability Walling (0xD32580); and IHumanGround **vt112** = `CanStartWalling` 0xDB5FB0.
+- **Events:** vt112 is `CanHandleEvent(49)`, and vt116 0xDBBD40 posts event **49**.
+- **Movement event 49:** guard 0xDA54F0 (the playing item allows a mode exit, 0xD80010) → `FindWallingWall` 0xDA2B10, then action 0xDA7B90 → context 11 → `StartWalling` 0xDA2C30.
+
+**Wall test `Human__WallingWallTest` 0xE18390** (h = entity+0x7C):
+- **Ray:** from feet + 1.3·h, along the facing, 1.5·h long.
+- **Hit:** the normal must be within 45° of facing back.
+- **`WallingWidthCheck` 0xE149E0:** capsule sweeps rotated ±45°, 0.5 m long; the wall must extend to both sides.
+- **`WallingSlopeDir` 0xE14590 + `WallingSlopeLimit` 0xE14FB0:** a probe 1 m higher measures the slope, which must be within 45° (clamped −10°…+20°). A wall that ends lower is not rejected.
+- **Output:** contact = hit + 0.5·h out, at feet + h; normal = into the wall.
+- **h = 1.0** for Altaïr: the EntryA clip `entry_footl_a` raises its root exactly 1.0 m (and 0.44 m forward), which is the warp target.
+
+**Start 0xDA2C30:** SubState 1, Vertical; action **68** = `xx_h_wallingfront_entry_footl_a` (0x00D82C5C); the root is warped to the contact over the action's length.
+
+**Actions** (HumanWalling block, matched by name; only `wallingfront_*` exists, so there is no horizontal wall run):
+
+| Action | Id | Clips |
+|---|---|---|
+| EntryB | `0x01004122` | `entry_footl_b` |
+| Vertical (69) | `0x00D82C9F` | `step1_footr`, +0.5 m |
+| VerticalEnd | `0x0121847A` | `step1_footr_tr_rebound` a, b |
+| Fall | `0x00FF7CA1` / `0x00D82CE2` | `entry_footl_tr_fall` / `step1_footr_tr_fall` |
+| Probe A | `0x0100759B` | `entry_tr_hangknee_{131,200}cm` |
+| Probe A (pass-over) | `0x0109B6CF` | `entry_tr_passover_{131,200}cm` |
+| Probe B | `0x0564BB1D` | `entry_tr_hangfree_{250,350}cm_swingback_{min,max}` |
+| Probe C | `0x0564BB1E` | `step1_tr_hangfree_{350,400}` |
+| Probe D | `0x0106CFC2` | `step1_tr_hangknee_{201,250}cm` |
+| Probe D | `0x0106CFC5` | `step1_tr_hangwall_{251,430}cm_{000,050}cm` (a, b) |
+| Pass-over | `0x0109BB50` | |
+| Rebound | `0x01157E35` / `0x01157E36` | |
+
+The clip heights (from the ground) match the probe bands with h = 1, measured from the root at 1.0 m (entry) or 1.5 m (after the step).
+
+**Port** (`player/walling.rs`):
+- The entry test, EntryA → EntryB → Vertical → VerticalEnd, and probes A–D with the exit clips, handed to Ledge (pull-up to standing, free / wall-free / wall hang).
+- **Root:** the actions' displacement plus the warp correction.
+- **PORT:**
+  - Command 0 (`+0x38`) = Legs held; releasing Legs falls off.
+  - Rebound = the stick pushed away from the wall, toward the fallback target pos + 7·dir − 3·up (the landing query is not ported), with the free-step jump.
+  - The ledge probe box and classification are reduced.
+  - The pass-over exits and post-run state 4 are not ported.
+  - The wall normal comes from the greybox faces.
+- `AC_AUTOPILOT=wallrun`.
+
 ## 2. HumanNarrowObject (+ HumanNarrowObjectBeam)
 
 ### 2.1 Summary
@@ -129,6 +175,163 @@ Movement-state tick (`0xE534B0`):
 ### 2.6 Beam constants (from scan of 0xF6E000–0xF81000)
 0.16, 0.25, 0.3, 0.31, 0.4, 0.5, 0.6, 0.8, 1.2, 1.5, 2.5, 7, −7, −12, 15, angles 30°/45°/60°/75°/90°/120°/135°/58° (1.0123), cos 80° (0.17365).
 
+### 2.7 Movement exits, beam mount from Ground, beam actions and the port (verified 2026-10-02)
+**Movement state** (`StateMovement_Update` 0xE534B0) runs `CheckSupportAndFall` 0xE51190 every tick. From half of the playing action onward it reads the support classification (Human+0xFC vt276):
+- bit 1 → flag 2;
+- bit 2 → flag 8.
+
+Then:
+- **flags 0xC** → `ToGround` 0xE51DD0 (context 4);
+- **flags 3** → `ToInAir` 0xE4DFE0 (context 8);
+- **flag 0x10** → `ToHayStack` 0xE4E010.
+
+With no support it builds a fall/jump setup (0xB0FB70, types 0/1/3/4/6 by stick, move mode and a 120° check), or plays the recover clips 250441553/4.
+
+So a roof-edge free-step arrival is a **transient** NarrowObject stay that returns to Ground once the support under the feet is wide. The port keeps such landings in Ground, the same end state.
+
+**Beam mount from Ground:** Movement event **72**.
+- **Guard** `Guard_Event72_MountBeam` 0xD9F4C0: a guidance query (`sub_116E1A0`, cone 90°) in the box x ±0.75 (sideways), y 0…1.0 (ahead), z ±0.53, then a clearance capsule. The height blend is (beam z − feet z)/0.53, and the beam must lie within radius + 0.5·(1 − blend).
+- **Action** 0xD898A0 → fill 0xD84A40 → context 12.
+
+**Beam actions** (HumanNarrowObject block, by clip name):
+
+| Purpose | Ids | Clips |
+|---|---|---|
+| Waits | `0x28A3A8E2` / `0x28A3A8E3` | `xx_l_beam_crouchwait_foot{l,r}` (2 s) |
+| Walk | `0x28A3A8E4` | items foot l / foot r, each [`crouchwalk`, `crouchjog`]; walk 1.01 m per 0.733 s, jog 1.74 m / 0.467 s |
+| Starts | `0x34662CB4` / `0x34662CB5` | |
+| Jog stops | `0x3466339D` / `0x3466339E` | |
+| Turn 180° | `0x28A3A8EE` / `0x28A3A8EF` | `crouchwait_foot{l,r}_turn180` (0.33 s) |
+| 90° waits / turns, air landings, pilotis | `0x02E4A9DF`, `0x048185EB`, … | |
+
+**Port** (`player/narrow.rs`):
+- Straight beam entry (|facing · axis| ≥ 0.866) from the event-72 box.
+- **Main:** wait → start → walk (feet alternating), stop, turn 180°. The root is the actions' forward root motion projected onto the beam line (0xF7C3A0); it stops 0.3 m before an end, or steps off within 0.16 m when there is floor and room beyond (0xF77C00) → Ground.
+- **PORT:**
+  - The event-72 trigger is walking at the beam.
+  - Walk vs jog is set by the profile.
+  - The entry alignment takes 0.25 s.
+- **Not ported:** 90° waits, corner hops, edges and leans (side entries, air landings, beam jumps and pilotis: §2.8).
+- `AC_AUTOPILOT=beam`.
+
+### 2.8 Beams and pilotis from the air, beam jumps, pilotis (verified 2026-10-02)
+**Free-step arrival** (`CheckJumpTargetArrival` 0xE07D00, target types 1 / 0x10000):
+- It plays the free-step reception, sets NarrowObjectData SubState 6, and enters context 12. `SelectInitialState` 0xE528C0 maps 6 to the Movement state (+456).
+- The Movement state then tries, in order:
+  1. `TryPilotisFreeStep` 0xE50190;
+  2. `TryMountBeam` 0xE52AD0;
+  3. otherwise it falls back to Ground on wide support (§2.7).
+- **Correction:** target type **0x100** is not a beam. Its arrival sets SubState 8, which maps to state 2 (`StateCrowdRun_Update` 0xE4E610). That state switches back to InAir as soon as the reception ends, so it is a step-on-and-keep-going target. RE/04 §2 is wrong to call it "beam". Beams reached by jumping are ordinary free-step targets.
+
+**`TryMountBeam` entry modes** (0xE52AD0; beam axis flipped toward the character's right):
+
+| Mode | Condition | Enter (`HumanNarrowObjectBeam__EnterByMode` 0xF7AAA0) |
+|---|---|---|
+| 4 | stick > 0.25, back-to-axis angle 80°–150°, stick within 45° of the axis | walk `0x28A3A8E4` with its item swapped to the side entry `0xE6E0E9B9` / `0xE6E0E9BB` by foot. Clips are [walk 30°, walk 90°, jog 30°, jog 90°], blended by the angle: a = clamp(angle + 30°, 120°, 180°), w90 = (60° − (a − 120°)) / 60°. Then Main. |
+| 5 | stick > 0.25, angle 30°–100°, stick > 135° from the axis | `0xE6E0E9B8` / `0xE6E0E9BA`, w90 = clamp(angle − 30°, 0, 90°) / 60° |
+| 2 | \|axis · forward\| ≥ 0.866 | speed 0: the beam wait by foot (table 0x1A353C0 = `0x28A3A8E2/E3`, filled by 0xF703C0); moving: Main |
+| 3 | otherwise | state +79 (`StateSideEntry_Update` 0xF80390): keeps warping until the warp and the playing action end, then Main |
+
+**Air catch** (`HumanInAir__CheckAirCatch` 0xE0BB70): runs with fall height < 9 m. It is skipped while a free-step / pass-over jump target is still ahead (`HumanInAir__IsJumpTargetAhead` 0xE044D0).
+1. **Pilotis first.** If a support is found within 0.5 m (Human+252 vt104) and `Human__FindPilotisTop` 0xB2B600 (from-air box) succeeds:
+   - play `0x2F3E9E0C` `beam_landing_soft_tr_pilotis_wait` (items a, b);
+   - warp 0.2 s;
+   - SubState 4 (PilotisReception) → pilotis inner state, PilotisEntryType 1.
+2. **Then a beam** (`HumanInAir__FindBeamCatch` 0xE0B890). Guidance box x ±0.55, y ±0.4, z ±0.35 around the feet + 0.15 m, forward = facing, cone π. The root goes to the closest point of the beam (0x946AC0) when a capsule fits (0x116D960). Then:
+   - play `0x010DD707` `xx_h_landing_damage_footl`;
+   - warp 0.2 s;
+   - SubState 3 → beam mode 7 → state +85 (`StateReception_Update` 0xF804A0: warp until the action ends) → Main.
+
+**Pilotis** (`Human__FindPilotisTop` 0xB2B600):
+- **Box query** at the support point, forward = the given direction, vertical ±0.5 m:
+  - from the air: x ±0.6, y −0.3…1.1;
+  - otherwise: x ±0.6, y ±0.6.
+- **Four LedgeGrab edges** (0xB1C550, cones 30° / 45°):
+  - outward normal −dir, within 0.3 m;
+  - normal +dir, within 1.3 m;
+  - the two sides, each within 0.6 m of the midpoint of the first two.
+- **Accept** when:
+  - the character is within 0.375 m of one of the four edge points;
+  - front–back and left–right spans are each ≤ 0.7 m;
+  - the top centre (the mean of the four points) is free for a 0.4 m capsule from 0.6 to 1.4 m above it (0xB2A290).
+- **Free-step entry** (0xE50190): plays `0x39193BBF` / `0x39193BC0` (`freestep_entry_foot{l,r}_tr_beam_pilotis_wait_a`), with the root interpolated to the top over that action's duration. Sets PilotisEntryType 0.
+- **Pilotis state** (`StatePilotis_Update` 0xE52170): the entries (sub 4 / 5) warp until their action ends, then `PilotisPlayWait` 0xE4CFA0 plays `0x388E97DA` = [wait, wait_left, wait_right].
+- **Wait lean** (`PilotisWait_Update` 0xE51960):
+  - target = signed angle (stick vs facing) / 120°, clamped to ±1;
+  - smoothed at 3/s (NarrowObject+372);
+  - weights l ≥ 0 → [1 − l, 0, l], else [1 + l, −l, 0].
+- **Events** (`StatePilotis_HandleEvent` 0xE53850):
+  - **4:** `SetupPilotisJumpToTarget` 0xE4D950 → `Human__SetupJumpToTarget` with **jump kind 1** (free-step takeoff `0x0112B589` / `0x0112B5AC`, 40 clips);
+  - **9:** another InAir setup (0xE4F2D0, not decoded);
+  - **2:** `PilotisToBeam` 0xE53680 → beam mode 8 → the impulsion.
+
+**Beam jumps** (`HumanNarrowObjectBeam__HandleEvent` 0xF80A30):
+- **Impulsion** (state +145, `ImpulseWait_Enter` 0xF738A0): a transition into `0x5288EF5C` `beam_impultionstraight_wait`. The transition clip depends on where it starts:
+  - from a pilotis: `0x5288D630`;
+  - from the 90° wait: `0x5288EF4F`;
+  - otherwise by foot: `0x516D4D0A` / `0x516D4D0B` (table 0x1A35420).
+- **Jump on the spot** (state +148, event 5, `PlayJumpOnPlace` 0xF717D0):
+  - with a hand target: `0x516D521A` `impultionstraight_to_jumpstraight`;
+  - otherwise: `0x516D52EB` `…_tr_jumpstraight_clear`;
+  - ActorState 25.
+- **Leaving the jump** (`StateJumpOnPlace_Update` 0xF751E0): at the action's release point (sub_5017B0) it switches to InAir with `SetupJumpFromBeam` 0xF73B80:
+  - **hand target:** `Human__SetupJumpToHandTarget` 0xB21DA0. Since the playing action is neither 89 nor 0x1099C96, the ≥ 1.5 m bands fly the `beam_jumpstraight_*` flights:
+
+    | Band | Flight |
+    |---|---|
+    | hangknee | `0x516D52DF` |
+    | hangwall | `0x516D52DD` |
+    | hangwaist | `0x516D52DE` |
+    | hangwallfree | `0x516D52DC` |
+    | hangfree | `0x516D52DB` |
+
+  - **no target:** `0x516D52E7` `beam_jumpstraight_clear` (rises 1.0 m in 0.4 s), then InAir+416 = `0x516D52E8` `…_clear_tr_fall`. The descent is caught back on the beam / pilotis by the air catch.
+- **Free-step descents:** `Human__UseBeamFreestepJumpVariants` 0xB145B0 swaps a descending free-step jump (start − 0.4 m above the target, clear sweep) to the `beam_freestep_*` / `beam_air_*` variants (`0x118DA41A…1D`). The condition is sub_4FDBA0, an action-availability test (hypothesis). Not ported.
+
+**Port** (`player/narrow.rs`, `air.rs`, `targets.rs`):
+- Free-step arrivals mount pilotis, then beams, with modes 2 / 3 / 4 / 5.
+- The air catch handles pilotis, then beams, before the ground contact.
+- Pilotis entries, wait and lean.
+- The impulsion, the jump on the spot (to a hand target with the beam flights, or the clear jump and the catch back).
+- Free-step jumps (kind 1) to targets from beams / pilotis.
+
+**PORT:**
+- **Targets:** beams (the beam line, 0.3 m in from the ends) and pilotis tops (0xB2B600) are offered as free-step targets. The game's guidance candidate builder (IHuman vt56/64/68) is not traced.
+- **Triggers:** the jump trigger is high profile + Legs:
+  - with the stick and a target in the cone → event 4;
+  - without the stick → impulsion;
+  - in the impulsion → the jump on the spot.
+- **Impulsion exit:** the stick leaves the impulsion; the game's exit event is not traced.
+- **Jump release:** the jump on the spot leaves at its action's end, not at the release point.
+- **Item choices:** the transition items a/b and the pilotis landing item a are picked (hypothesis). The foot index of table 0x1A35420 is read as "the clip of the current foot" (hypothesis).
+- **Mode 3:** keeps the free-step reception playing while the root moves onto the beam, turning to the nearest beam direction.
+
+**Not ported:**
+- pilotis event 9 and the `beam_pilotis_to_pulldown_*` clips;
+- 90° waits and turns;
+- corner hops / walks;
+- crouch attacks;
+- the beam edge stop;
+- obstacle mode 6;
+- free-step descent variants (0xB145B0).
+
+**Autopilot:** `AC_AUTOPILOT=pilotis`, `AC_AUTOPILOT=beamjump`.
+
+### 2.9 Edge and Lean in this build (verified 2026-10-02)
+NarrowObject's **Edge** (inner state 8) and **Lean** (inner state 12) are effectively unused in v1.02:
+- **Lean:**
+  - Ground event 71 → `HumanGround__ToNarrowObject_Lean` 0xD89960 (fill 0xD7DAB0: SubState 7).
+  - `HumanGround__Movement_CanHandleEvent` 0xDAF610 always returns 1 (rejected) for event 71, and its guard 0xD7DAA0 is a stub.
+  - The narrow Lean state's vectors (+0xA0/+0xB0, CurrentLeanHeight/Width) have no other writer, and the HumanNarrowObject animation block has no lean clips.
+  - The game's leaning is Ground's obstacle collision (RE/02 §4.2).
+- **Edge:**
+  - Ground event 69, when `ClassifyEdgeSide` 0xD9D7F0 says the edge is to the side (3 left / 4 right: the normal 60°–120° from the facing, drop > 1.3 m), goes through `HumanGround__Guard_LedgeStopSide` 0xDA5D90 → `HumanGround__ToNarrowObject_Edge` 0xD8E5B0.
+  - Fill 0xD8A620: SubState 5, EdgeState 3 / 2, CurrentEdgeDir = cross(normal, up), +0x90 = −normal.
+  - The Edge sub-states (`StateEdge_Sub9` 0xE52540, `Sub10` 0xE51C70) set NarrowObject+185 bit 7 on their first tick. `StateEdge_Update` 0xE52720 sees that bit on the next tick and switches back to Ground (`SetupToGround` 0xE4D400, a movement mode from the stick flags).
+  - So a side ledge stop is a one-frame NarrowObject stay. The character keeps walking along the edge in Ground.
+  - No Edge clips exist. The visible edge behaviour is the look-down (RE/03 §7.8a, ported in RE/02 §4.2).
+- **Port:** walking along an edge stays in Ground (the same end state); no Edge / Lean narrow states are needed.
+
 ## 3. HumanPole (lighter)
 
 ### 3.1 Summary
@@ -158,11 +361,75 @@ Constants (scan 0xE28600–0xE2DF00): 0.2 attach offset, 0.25 input threshold, 0
 PoleData layout: +0x10 DestHeading (input), +0x20 PoleJumpDirection, +0x30 GrabPosition, +0x40 EntryType, +0x44 InclinationType, +0x48 MvtDivision, +0x4C MvtAnimState, +0x50 segment index (u32), +0x54 DestSpeedRatio, +0x58 Pole (objref), +0x5C ReachedTop, +0x5D ReachedBottom; unreflected +0x130..+0x188 anim-id tables, +0x1F0 byte "high grip/swing" **(hypothesis)**, +0x1F4 pole object.
 Swinging (ActorState 44, SwingEventMonitor) is handled by HumanLedge (`LedgeSubState 8 SwingReception`), not by HumanPole **(hypothesis; not traced)**.
 
+### 3.5 Poles are cut content in v1.02 (verified 2026-10-02)
+- **No pole data ships.**
+  - DataPC.forge "Game Fix" holds 51 ActionBlocks and **none is HumanPole**.
+  - The actions `HumanPole__StateEntry_Enter` 0xE2AFB0 plays (`0x010D74B0`, `0x010D7A7A`, `0x010D7A7F`, `0x010D7A78`, `0x010D7A7E`) are neither actions nor resources there.
+  - The only pole clips are the 9 `xx_h_air_surface_tr_pole_verti_{up,down,long}_{a,b,c}`. They form action `0x02927226` in the HumanInAir block, which the arrival on a type 0x2000 target plays (0xE07D00).
+- **Conclusion:** pole climbing (vertical / inclined, ClimbMovement 0xE2C610) has code but no animations, so it cannot be played as shipped.
+- **What plays instead:** the poles players use are horizontal **swing bars**, handled by HumanLedge's SwingReception (RE/03 §7.10).
+- **Port:** no Pole context.
+
 ## 4. HumanLadder (light)
 - Data: +0x20 DestHeading, +0x30 EntryType {FromGround, FromAirStraight, FromAirInclined, FromWalling, FromClimb}, +0x34 InclinationType {Vertical, Horizontal}, +0x38 MvtDivision, +0x3C MvtAnimState (20 values: Wait/Climb Low/High Up/Down, Revolve, Enter/Exit Ground/Top Low/High, Release, Jump), +0x48 Ladder (objref), +0x4C LadderHeight, +0x50 HeightInLadder, +0x54 ReachedTop, +0x55 ReachedBottom.
 - FSM: 12 states (`SetupFSMStates 0xE1EDE0`), `UpdateFSM 0xE27D30`: if the ladder object reference becomes invalid → leave (event 8). State 1 = entry (`sub_E25240`), then state 5 = main (`StateMain_Update 0xE278E0`, sub-states 6/7/8); states 9..12 = exits (`0xE1F6C0`, `0xE21D60`, `0xE1F710`, `0xE21E20`). Big helpers `sub_E228E0`, `sub_E266D0` not analysed.
 - Same structure as pole: root-motion climb anims selected by MvtAnimState; enter-from-top / exit-to-top use TopOfLadderEventMonitor (ActorState 60 LadderTop). Entry from Walling (EntryType 3) exists.
 - Constants in 0xE1C000–0xE28500 include 0.35, 0.45, 0.55, 0.65, 0.85, 0.9, 0.95, 1.05, 1.55, 1.6, 1.8, 2.35, 2.85, 3.5, −3.5, 5 — likely rung spacing / top-exit heights **(hypothesis, not mapped to code)**.
+
+### 4.1 Ladder actions, entries and the port (verified 2026-10-02)
+**Animation table** (`HumanLadderData__ctor` 0xC7CAC0): dword index 98 + 4·MvtAnimState + 2·foot + inclination (+392 bytes). Low / High are the **low / high profile** (`xx_l_` / `xx_h_` clips); [foot l, foot r]; the inclination column only differs for the top entries.
+
+| MvtAnimState | Low | High |
+|---|---|---|
+| 0 / 1 Wait | `0x01068FF7` / `F8` | `0x0106902E` / `2F` |
+| 2 / 4 Climb up (items l, r) | `0x01068FFF`: 0.5 m per 0.4 s | `0x01068FF9`: 1.0 m per 0.4 s |
+| 3 / 5 Climb down | `0x01069001`: 0.5 m | `0x010C9CEE`: 1.0 m |
+| 6 Revolve | (empty) | |
+| 7 / 8 Enter from the ground, 3 clips [straight, left, right] | `0x010A34A7` / `A6` | `0x010A251E` / `20` |
+| 9 / 10 Enter from the top (pull-down onto it) | `0x010A396B` / `6C` | `0x010A251C` / `0x010A3493` |
+| 11 / 12 Exit to the ground | `0x010A2F5B` / `5C` | `0x010CA51A` / `0x010CA6C3` |
+| 13 / 14 Exit to the top | `0x010A349C` / `9D`: 1 m up, 1 m forward | `0x010A37FC` / `FD`: a 1 m up, b 0.5 m up, 1.05 m forward |
+| 15 / 16 Release (→ falling) | `0x010A3485` / `86` | `0x010A3483` / `84` |
+| 17 / 18 Jump (`wait_tr_rebound`) | `0x044933FE` / `FF` | same |
+
+The top entry's transition into the wait is `0x010A250E` / `0x010A250F` (items a: the drop 1.1 / 1.27 m, b; `HumanLadder__StateEntry_Update` 0xE25240). A back approach turns with `0x0A64400C` / `D`.
+
+**Ground entry** (event 38):
+- **Guard** `HumanGround__Guard_Event38_Ladder` 0xD83970 → `Human__CanGrabLadder` 0xB239D0:
+  - the ladder segment is base … base + H·up (H from a settings object, default 3.0);
+  - the feet must be within the caller's reach of it;
+  - the character must be on its front side within 90°;
+  - |feet.z − top.z| > 1.5 → from the ground, else from the top.
+- **Action:** `HumanGround__ToLadder` 0xD91E60 (fill 0xD8E8F0 binds the ladder, EntryType 0).
+
+**Entry** (`HumanLadder__StateEntry_Enter` 0xE266D0):
+- **From the ground:** the [straight, left, right] blend by the signed approach angle / 90°. The root goes to the ladder point − 0.5 along the ladder direction, with an interpolation in 0xE25240.
+- **From the top:** the pull-down with the root interpolated to top − 0.7 m, ± 0.5 m along the front, over the action.
+
+**Main** (`HumanLadder__UpdateFSM_Main` 0xE27D30, `HumanLadder__StateClimb_Update` 0xE27540): climb / wait by MvtAnimState from the table. The climb clips' displacement moves the root along the ladder (`HumanLadder__ClimbMovement` 0xE25ED0); the revolve is sub-state 7.
+
+**Port** (`player/ladder.rs`):
+- the guard, both entries, the waits, climbing up / down by profile with the clips' displacement;
+- the exit to the top when the remaining height fits the exit's rise, and to the ground at the bottom;
+- release (InAir with the release action as the fall animation) and the jump (`wait_tr_rebound`, then a jump away).
+
+**PORT:**
+- **Triggers:**
+  - walking into the ladder's foot facing it (reach 0.8 m) mounts it;
+  - from the top, low profile + Legs facing out over it;
+  - the stick toward / away from the ladder climbs up / down;
+  - Legs releases;
+  - high profile + Legs + the stick away jumps.
+  The game's event senders and MvtAnimState decision (0xE24540 / 0xE226D0) are not traced.
+- **Attach point:** the root sits 0.5 m out from the ladder line (hypothesis on the sign of 0xE266D0's offset).
+- **Not ported:**
+  - the back-approach turn;
+  - the revolve;
+  - inclined ladders;
+  - entries from the air, Walling and Climb;
+  - the TopOfLadder monitor (ActorState 60).
+
+**Test geometry:** a 5 m wall at (50, 64) with the ladder on its −Z face at x 50. `AC_AUTOPILOT=ladder`.
 
 ## 5. HumanRope (light)
 - Data: +0x10 DestHeading, +0x20 vec4, +0x30 Rope (objref), +0x34 DestSpeedRatio, +0x38 ReachedTop, +0x39 ReachedBottom.

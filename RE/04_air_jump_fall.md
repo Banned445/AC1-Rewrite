@@ -121,9 +121,9 @@ Target-type flags (Data+0x290), from the switch in 0xE07D00:
 | flag | meaning |
 |---|---|
 | 1, 0x10000 | free step / narrow object / pilotis — roof-edge jumps land here (§4.1.7) |
-| 2 | pass-over vault (flight `…_to_passover`; arrival still uses the ledge path) — see §4.1.2 |
+| 2 | pass-over vault (flight `…_to_passover`, arrival → Ledge HandPassOver) — §4.1.13 |
 | 0x40, 0x80, 4…0x20 | ledge / hang variants |
-| 0x100 | beam |
+| 0x100 | step-on target (arrival SubState 8 → NarrowObject state 2, `StateCrowdRun_Update` 0xE4E610, back to InAir when the reception ends). **Not a beam** (RE/05 §2.8 correction) |
 | 0x200 | horse |
 | 0x400 | swing (225 \| 8) |
 | 0x800 | **haystack (Leap of Faith)** |
@@ -395,6 +395,53 @@ The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget
   - knee / waist pull-ups end in Ground instead of NarrowObject;
   - the trigger (high profile + Legs into a wall) is the port's: the game's straight jump comes from the static-jump path, and running into a wall is Walling (RE/12 §3.1).
 
+### 4.1.13 Pass-over vault (verified 2026-10-02)
+A running jump at a **type 2** target vaults a thin wall with one hand.
+
+**Jump** (`Human__ComputeJumpAnimBlend` 0xB1EC40):
+- The bands are the free-step ones: up 1.3, down −3, near / mid / far 2.5 / 5.0 / 7.0 m. "Going down" is never set for type 2.
+- **Flight** `0x09A0A58D` / `0x09A0A58E` (`xx_h_air_{front_050,300,550, up_050,300}cm_foot{l,r}_to_passover`). Weights from `Human__ComputeJumpFlightWeightsPassOver` 0xB142A0:
+  - near class: [(1−d)(1−h), d(1−h), 0, (1−d)h, dh];
+  - other classes: [0, (1−d)(1−h), d(1−h), 0, h].
+- **Takeoff** (`Human__ComputeJumpTakeoffWeightsPassOver` 0xB13E20; side angle 0 for kind 0). Weights go into the front group:
+  - near: slots 0, 1, 6, 7 = f0, f1, f3, f4;
+  - class 1: slots 1, 2, 7 = f1, f2, f4;
+  - classes 2 / 3: slots 1, 2, 4, 5 = f1, f2, f4, f4.
+
+**Arrival** (`CheckJumpTargetArrival` 0xE07D00 case 2):
+- **Reception:** `0x0A4C9776` after the footl flight (`…_to_passover_tr_passover_handr`), else `0x0B5640DB` (`…_handl`).
+- **Root:** interpolated to target + 0.5·forward over 0.067 s. The reception clips also move 0.5 m forward: the target sits 0.5 m before the edge.
+- **Ledge data:** +304 = 1 − (w_front050 + w_up050); the target is copied to LedgeData.
+- **Hand-off:** Ledge SubState **12** HandPassOver.
+
+**HandPassOver** (`HumanLedge__HandPassOver_Update` 0xDDB800, `HumanLedge__StateHandPassOver_Update` 0xDE0720):
+- **SubState 0:** the reception's interpolation runs. When it completes, the vault starts.
+- **The vault:**
+  - Action `0x09A0A7E1` (`xx_h_passover_handl_{030,100}cm`) when the reception's item ends left foot ahead (flags & 0xC == 4), else `0x09A0A7E2` (hand r).
+  - Weights [1 − w, w], w = min(thickness, 1). `Human__ProbeWallTopThickness` 0xB18FB0 measures the thickness: guidance edges crossed by the forward line from the edge − 0.3·fwd − 0.25 up; near and far edge; midpoint, direction and distance.
+  - Clip root motion: 030cm moves 0.3 m flat in 0.067 s; 100cm moves 1.0 m in 0.2 s.
+  - The root is interpolated over the vault to the probe's point + 0.3·(1 − w)·fwd. With no wall top found: edge + 0.3·fwd, w = 0.
+  - Then SubState 1, and +308 = w.
+- **At the vault's release point (sub_5017B0):**
+  - +328 == 0 → **Ground** (`SetupPassOverToGround` 0xDCFA40: move mode from the stick, entry 12);
+  - otherwise, with a drop ≥ 3 m beyond (`PassOverWantsPullDown` 0xDD2BD0 → `PassOverToPullDown` 0xDE0220) → pull-down type 4. Clips `0x09A0B647` / `49` orientation, then `0x09A0B648` / `4A`, blended by +308.
+  - otherwise (`PassOverWantsInAir` 0xDCC0E0 → `PassOverToInAir` 0xDE0280) → **InAir**: `SetupPassOverToInAir` 0xDDBC60 plays `0x0109B7C8` / `0x0109BB53` `passover_hand{l,r}_{030,100}cm_tr_fall` [1 − w, w].
+  - The meaning of +328 is unknown (hypothesis: a chained-jump request; jump kind 4 takes off from the pass-over with `0x0A4C8B07` / `06`, its weights from +308).
+
+**Port** (`player/passover.rs`):
+- The flight and takeoff weights.
+- The reception and its interpolation.
+- The thickness probe (the far LedgeGrab edge along the facing) and the vault blend and root.
+- Then Ground when there is support under the root, else InAir with the `tr_fall` action.
+
+**PORT:**
+- **Targets:** type 2 targets are wall tops ≤ 1 m thick within the free-step up band. The target is 0.5 m before the edge at the top's height. The game's type 2 guidance candidates are not traced.
+- **Probe point:** the far edge is taken as the probe's point (hypothesis for sub_B0FC50).
+- **Release:** the release point is the vault's end.
+- **Not ported:** the pass-over pull-down (≥ 3 m drop), chained jumps from the pass-over (kind 4), and `passover_*_to_roll_ending`.
+
+**Test geometry:** a 1 m railing, 0.3 m thick, at (40, 4). `AC_AUTOPILOT=passover`.
+
 ### 4.1.10 Port (`port/src/player/jump_blend.rs`, `air.rs`, `ground.rs`)
 - §4.1.2–4.1.8 are ported exactly for running jumps to roof edges (type 1) and for ground landings.
 - The clips' durations and displacement (9 samples) come from `player/jump_clips.rs`. It is generated from the install by `cargo test probe_dump_jump_clips -- --ignored` and holds derived numbers only.
@@ -403,6 +450,43 @@ The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget
   - **free-step arrival:** it continues in Ground with the reception playing, since NarrowObject is not ported;
   - **no target in range:** the port still jumps `FREE_JUMP_DISTANCE` ahead (PORT);
   - **leading foot:** taken from the playing locomotion item (**hypothesis** on the bit meaning).
+
+### 4.1.12 Leap of Faith and the haystack (verified 2026-10-02)
+**Jump** (`Human__ComputeJumpAnimBlend` 0xB1EC40, target type **0x800**):
+- **Faith mode** when the jump kind is 0 or 1 and target z − start z ≤ **−3 m** (internal mode v26 = 2).
+- **Actions:**
+  - takeoff `0x23A949B1` (foot 1) / `0x23A949B7`, `xx_h_freestep_footr_to_faith_jump_{100,800}cm_long_{300,3000}cm_down`;
+  - flight `0x23A949B2`, `xx_h_faith_jump_*` with the same four clips;
+  - third action `0x23A949B5`, `xx_h_faith_jump_fall` (FROMPHYSICS), used for the free-fall tail.
+- **Bands:** max down −30 m, near 7.5 m. The over-drop threshold (0xB1B8C0) is therefore −30 m instead of −3 m.
+- **Flight weights** (the end of 0xB1EC40): l = clamp(dist / 7.5), d = clamp(−dz / 27). Weights are [(1−l)(1−d), l(1−d), d(1−l), d·l] for 100/300, 800/300, 100/3000 and 800/3000.
+- **Takeoff weights:** the function returns before writing them. The port uses the same weights (**hypothesis**; the item's default is [0, 0, 1, 0]).
+- **Shallower haystacks** (dz > −3) use the free-step flight with bands 1.3 / −3 / 2.5 / 5.0 / 6.0.
+- **Clip lengths:** the takeoffs run 0.87–1.67 s and move 0.9–4.2 m forward. The flights run 0.47 s (1.3 m down) to 1.07 s (10.4 m down).
+
+**HayStack context (21)** (`HumanHayStack__Enter` 0xE43140):
+- **Entry:**
+  - From a faith jump, `EnterTop_FaithLanding` 0xE41D50 plays `0x23A9666C` `xx_h_faith_jump_landing` (blend 0.3 s).
+  - Other air entries go through `EnterFromAir` 0xE42700, which plays `0x7750D212` `xx_h_air_to_haystack` (blend 0.1 s).
+  - Both interpolate the root (`sub_711130`) to the haystack entity's position over clamp(distance / speed, 0.1, 0.4) s.
+- **Wait:** `ChooseWait` 0xE416B0, then `PlayWaitHigh` 0xE408C0, plays `0x23A9666D` `xx_h_haystack_wait` (5 s loop). The low wait is `0x23A96674`.
+- **Hop out:**
+  - Trigger: event **3** in `Wait_HandleEvent` 0xE43BD0.
+  - Guard `Guard_HopOut` 0xE434E0: a ray along the wanted direction must cross the haystack's footprint edge. The exit point is that edge + 0.5·dir, 1.25 m up, and must have room for the body (`sub_B2D2A0`, 0.35 / 0.5 / 0.75).
+  - Then `ToHopOut` 0xE41D00 → `PlayHopOut` 0xE41890 faces that direction and plays `0x2C4C2431` `xx_l_haystack_hop_out` (0.53 s, 0.8 m forward). Its transitions go to the low or high wait.
+- Events 2, 4 and 5 in the wait handler lead to other actions, not traced.
+
+**Port** (`jump_blend::faith`, `targets.rs` haystacks, `hay.rs`):
+- Running (high profile + Legs) off an edge toward a haystack 3–30 m below and ≤ 7.5 m away plays the faith takeoff and dive.
+- Arrival enters the HayStack context: the landing action and root interpolation, then the wait.
+- Pushing the stick hops out into Ground, with the hop-out action's root motion.
+- No landing damage.
+- **PORT:**
+  - A haystack in the jump cone wins over roof targets. The game's LeapOfFaith ability path (IHuman vt1540/1544) is not traced.
+  - Hop out is triggered by the stick (event 3's sender is not traced).
+  - Haystacks are not solid.
+  - Entry by a ballistic fall (`CheckHayStackEntry` 0xE05490) is not ported.
+- `AC_AUTOPILOT=faith`.
 
 ## 5. Constants
 

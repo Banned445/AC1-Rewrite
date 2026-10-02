@@ -252,6 +252,30 @@ pub fn load_altair(game_dir: &Path) -> Result<AltairModel, String> {
         // skin: palette-local bone → mesh bone → BoneID → skeleton joint; bones the body skeleton
         // lacks (face, tags) fall back to the part's attach bone (or the root)
         let fallback = attach_bone.get(&name).and_then(|b| joint_of.get(b)).copied().unwrap_or(0);
+        // Bones the 90-bone skeleton lacks (the hood / robe cloth bones and the sword bone, driven by the game's
+        // cloth and attachment systems) take the skeleton joint nearest to their bind position, never the root
+        // (`Reference`): with the root, the hood and robe tore off whenever an animation moved the root away
+        // from the body (jump takeoffs). PORT: no cloth simulation, so they follow that joint rigidly.
+        let missing_joint = |bone: &super::ac_formats::MeshBone| -> u16 {
+            if let Some(j) = attach_bone.get(&name).and_then(|b| joint_of.get(b)) {
+                return *j;
+            }
+            // bind position in body space (bone-space parts were mapped through the body's bind of that bone)
+            let bind = rigid_inverse(body_bones.get(&bone.bone_id).unwrap_or(&bone.inv_bind));
+            let p = [bind[12], bind[13], bind[14]];
+            let mut best = (f32::MAX, fallback);
+            for (j, sb) in skeleton.iter().enumerate() {
+                if sb.parent.is_none() {
+                    continue;
+                }
+                let q = skeleton_to_model(sb.global_pos);
+                let d = (0..3).map(|k| (q[k] - p[k]).powi(2)).sum::<f32>();
+                if d < best.0 {
+                    best = (d, j as u16);
+                }
+            }
+            best.1
+        };
         let mut joints = vec![[0u16; 4]; m.positions.len()];
         let mut weights = vec![[1.0f32, 0.0, 0.0, 0.0]; m.positions.len()];
         for s in &m.submeshes {
@@ -262,7 +286,10 @@ pub fn load_altair(game_dir: &Path) -> Result<AltairModel, String> {
                     let local = m.bone_idx[v][k] as usize;
                     w[k] = m.bone_w[v][k] as f32 / 255.0;
                     let mesh_bone = s.palette.get(local).and_then(|&mb| m.bones.get(mb as usize));
-                    j[k] = mesh_bone.and_then(|b| joint_of.get(&b.bone_id)).copied().unwrap_or(fallback);
+                    j[k] = match mesh_bone {
+                        Some(b) => joint_of.get(&b.bone_id).copied().unwrap_or_else(|| missing_joint(b)),
+                        None => fallback,
+                    };
                 }
                 let sum: f32 = w.iter().sum();
                 if sum > 1e-4 {

@@ -33,6 +33,28 @@ enum Scenario {
     HangSwitch,
     /// Stand at roof A's +X edge, press Legs in low profile: pull-down into a wall hang (0xDDE4D0).
     PullDown,
+    /// Walk (low profile) into roof A's edge: ledge stop, step back.
+    LedgeStop,
+    /// Walk across the beam between the two 4 m platforms.
+    Beam,
+    /// Wall run at the 3.8 m wall: entry, vertical step, hang from the top edge.
+    WallRun,
+    /// Run off the high block's +X edge into the haystack (Leap of Faith), wait, hop out.
+    Faith,
+    /// Free-run onto the first pilotis, hop along the posts, land on the far platform.
+    Pilotis,
+    /// Running jump onto the free beam, walk under the slab, impulsion, jump at its ledge.
+    BeamJump,
+    /// Walk into the 1.1 m wall, lean on it, then walk off to the left.
+    Lean,
+    /// Stand at roof A's +X edge facing along it: the look-down to the side.
+    LookDown,
+    /// Run at the 1 m railing and jump: pass-over vault.
+    PassOver,
+    /// Jump at the first swing bar and swing from bar to bar onto the far platform.
+    Swing,
+    /// Walk to the ladder and climb it onto the wall top.
+    Ladder,
     /// Walk off the 6 m block and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
@@ -54,6 +76,17 @@ impl Plugin for DebugCapturePlugin {
                 "ledgemoves" => Scenario::LedgeMoves,
                 "hangswitch" => Scenario::HangSwitch,
                 "pulldown" => Scenario::PullDown,
+                "ledgestop" => Scenario::LedgeStop,
+                "faith" => Scenario::Faith,
+                "wallrun" => Scenario::WallRun,
+                "beam" => Scenario::Beam,
+                "pilotis" => Scenario::Pilotis,
+                "lean" => Scenario::Lean,
+                "passover" => Scenario::PassOver,
+                "swing" => Scenario::Swing,
+                "ladder" => Scenario::Ladder,
+                "lookdown" => Scenario::LookDown,
+                "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
                 _ => Scenario::Roofs,
@@ -109,6 +142,72 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
             }
+            Scenario::Beam => {
+                b.feet = Vec3::new(71.0, 4.0, 70.0);
+                b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, toward the beam
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::Ladder => {
+                b.feet = Vec3::new(50.0, 0.0, 61.0);
+                b.heading = std::f32::consts::PI;
+                rig.yaw = std::f32::consts::FRAC_PI_2 + 0.5;
+                rig.distance = 7.0;
+            }
+            Scenario::Swing => {
+                b.feet = Vec3::new(60.0, 1.2, 85.0);
+                b.heading = std::f32::consts::PI;
+                rig.yaw = std::f32::consts::FRAC_PI_2;
+                rig.distance = 8.0;
+            }
+            Scenario::PassOver => {
+                b.feet = Vec3::new(40.0, 0.0, 9.5);
+                b.heading = 0.0;
+                rig.yaw = -1.2;
+                rig.distance = 6.0;
+            }
+            Scenario::Lean => {
+                b.feet = Vec3::new(30.0, 0.0, -1.0);
+                b.heading = 0.0;
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
+            Scenario::LookDown => {
+                b.feet = Vec3::new(2.7, 3.0, 12.0);
+                b.heading = 0.0;
+                rig.yaw = -0.6;
+                rig.distance = 6.0;
+            }
+            Scenario::Pilotis => {
+                b.feet = Vec3::new(69.0, 3.0, 80.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
+            }
+            Scenario::BeamJump => {
+                b.feet = Vec3::new(79.0, 4.0, 70.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
+            }
+            Scenario::WallRun => {
+                b.feet = Vec3::new(76.0, 0.0, 57.9);
+                b.heading = std::f32::consts::PI; // facing +Z, at the wall
+                rig.yaw = std::f32::consts::FRAC_PI_2;
+                rig.distance = 6.0;
+            }
+            Scenario::Faith => {
+                b.feet = Vec3::new(30.5, 9.5, 26.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
+            }
+            Scenario::LedgeStop => {
+                b.feet = Vec3::new(8.5, 3.5, 12.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 6.0;
+            }
             Scenario::HangSwitch => {
                 b.feet = Vec3::new(61.5, 0.0, 48.6);
                 b.heading = std::f32::consts::PI;
@@ -147,8 +246,25 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
     }
 }
 
-fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
+fn autopilot(
+    time: Res<Time>,
+    sc: Res<Scenario>,
+    mut pad: ResMut<PadInput>,
+    q: Query<(&crate::player::Locomotion, &crate::player::HumanDataBundle, &Body), With<Player>>,
+    mut since: Local<(u32, f32)>,
+) {
     let t = time.elapsed_secs();
+    // seconds the narrow-object state has stayed the same (`since` = (state seq, time))
+    let narrow = q.single().ok().map(|(l, d, b)| (l.current, d.narrow.seq, d.narrow.state, b.feet));
+    let held = match narrow {
+        Some((crate::player::ActorContextId::NarrowObject, seq, _, _)) => {
+            if since.0 != seq {
+                *since = (seq, t);
+            }
+            t - since.1
+        }
+        _ => 0.0,
+    };
     pad.magnitude = 1.0;
     pad.speed01 = 1.0;
     match *sc {
@@ -178,6 +294,115 @@ fn autopilot(time: Res<Time>, sc: Res<Scenario>, mut pad: ResMut<PadInput>) {
             if (0.5..0.52).contains(&t) {
                 pad.legs_pressed_ago = 0.0;
             }
+        }
+        Scenario::Beam => {
+            pad.dir = Vec3::X;
+            pad.high_profile = false;
+            if t < 1.0 {
+                pad.magnitude = 0.0;
+                pad.speed01 = 0.0;
+            }
+        }
+        Scenario::Ladder => {
+            // up the ladder onto the wall top, then stand
+            pad.high_profile = false;
+            pad.dir = Vec3::Z;
+            let on_top = q.single().ok().is_some_and(|(l, _, b)| l.current == crate::player::ActorContextId::Ground && b.feet.y > 4.9);
+            pad.magnitude = if t > 1.0 && !on_top { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::Swing => {
+            pad.dir = Vec3::Z;
+            pad.high_profile = true;
+            let swinging = q.single().ok().is_some_and(|(_, d, _)| d.ledge.swing.is_some_and(|w| matches!(w.phase, crate::player::swing::SwingPhase::Cycle(_))));
+            let run = t > 1.0 && t < 1.6;
+            pad.magnitude = if run || swinging { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if (1.35..1.37).contains(&t) || swinging {
+                pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::PassOver => {
+            pad.dir = Vec3::NEG_Z;
+            pad.high_profile = true;
+            pad.magnitude = if t > 1.0 && t < 3.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if (1.6..1.62).contains(&t) {
+                pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::Lean => {
+            // 1 s still, walk into the wall and keep pushing, then the stick to the left
+            pad.high_profile = false;
+            pad.dir = if t < 4.5 { Vec3::NEG_Z } else { Vec3::NEG_X };
+            pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::LookDown => {
+            pad.magnitude = 0.0;
+            pad.speed01 = 0.0;
+        }
+        Scenario::Pilotis => {
+            use crate::player::narrow::BeamState;
+            pad.dir = Vec3::X;
+            pad.high_profile = true;
+            let on_post = matches!(narrow, Some((crate::player::ActorContextId::NarrowObject, ..)));
+            let wait = matches!(narrow, Some((_, _, BeamState::PilotisWait, _)));
+            // run off P with Legs held (1 s still first); on a post: wait 0.8 s, then high profile + Legs + stick
+            let go = (t > 1.0 && !on_post && narrow.is_some_and(|n| n.0 == crate::player::ActorContextId::Ground) && narrow.is_some_and(|n| n.3.x < 72.5)) || (wait && held > 0.8);
+            pad.legs_held = go && !on_post;
+            if wait && held > 0.8 && held < 0.82 {
+                pad.legs_pressed_ago = 0.0;
+            }
+            pad.magnitude = if go || matches!(narrow, Some((crate::player::ActorContextId::InAir, ..))) { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::BeamJump => {
+            use crate::player::narrow::BeamState;
+            pad.dir = Vec3::X;
+            let ctx = narrow.map(|n| n.0);
+            let x = narrow.map(|n| n.3.x).unwrap_or(0.0);
+            let st = narrow.map(|n| n.2);
+            let on = ctx == Some(crate::player::ActorContextId::NarrowObject);
+            // run + Legs off platform B onto the beam, walk to x 87.4, then impulsion and the jump
+            let run = t > 1.0 && ctx == Some(crate::player::ActorContextId::Ground) && x < 83.0;
+            let walk = on && x < 87.3 && !matches!(st, Some(BeamState::ImpulseIn | BeamState::ImpulseWait | BeamState::JumpOnPlace));
+            pad.high_profile = run || (on && !walk);
+            pad.legs_held = run;
+            pad.magnitude = if run || walk || ctx == Some(crate::player::ActorContextId::InAir) && x < 84.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            if on && !walk && ((st == Some(BeamState::Wait) && held > 0.5 && held < 0.52) || (st == Some(BeamState::ImpulseWait) && held > 0.6 && held < 0.62)) {
+                pad.legs_pressed_ago = 0.0;
+            }
+        }
+        Scenario::WallRun => {
+            // stand for 1 s first (the renderer's pipelines finish compiling), then go
+            let t = t - 1.0;
+            pad.dir = Vec3::Z;
+            pad.high_profile = true;
+            pad.legs_held = t > 0.2;
+            if (0.2..0.22).contains(&t) {
+                pad.legs_pressed_ago = 0.0;
+            }
+            if !(0.0..=0.85).contains(&t) {
+                pad.magnitude = 0.0;
+                pad.speed01 = 0.0;
+            }
+        }
+        Scenario::Faith => {
+            pad.dir = Vec3::X;
+            let run = t < 1.2;
+            let hop = t > 6.0;
+            pad.magnitude = if run || hop { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            pad.high_profile = run;
+            pad.legs_held = run;
+        }
+        Scenario::LedgeStop => {
+            pad.dir = Vec3::X;
+            pad.magnitude = if t < 2.5 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+            pad.high_profile = false;
         }
         Scenario::HangSwitch | Scenario::LedgeMoves => {
             // grab C (jump up), then hold the stick toward +X (the player's left): side jump to D, shimmy
@@ -338,6 +563,9 @@ fn shots(
     // focus: the hips joint (falls back to the body root)
     let hips = rig.single().ok().and_then(|r| r.bone_ids.iter().position(|b| *b == 0xded1_0611).and_then(|i| globals.get(r.joints[i]).ok()));
     let focus = hips.map(|g| g.translation()).unwrap_or(body.feet + Vec3::Y * 1.0);
+    if std::env::var_os("AC_SHOT_LOG").is_some() {
+        info!("shot t={t:.2} feet {:?} hips {:?}", body.feet, hips.map(|g| g.translation()));
+    }
     let name = shots.views[vi].clone();
     let (target, eye) = match name.as_str() {
         "left" => (focus, focus - right * 3.0 + Vec3::Y * 0.3),

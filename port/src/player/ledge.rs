@@ -98,6 +98,10 @@ enum After {
 /// Runtime data of the Ledge context (subset of reflected HumanLedgeData, RE/07 / RE/03 Â§2.3).
 #[derive(Debug, Default)]
 pub struct HumanLedgeData {
+    /// HandPassOver (SubState 12): the pass-over vault (`passover`).
+    pub pass_over: Option<super::passover::HandPassOver>,
+    /// SwingReception (SubState 8): swinging on a bar (`swing`).
+    pub swing: Option<super::swing::Swing>,
     pub sub_state: LedgeSubState,
     pub hang_type: LedgeHangType,
     pub hand_l: Vec3,
@@ -132,6 +136,8 @@ impl HumanLedgeData {
         self.hand_r = e.hand_r;
         self.normal = e.normal;
         self.sub_state = e.sub_state;
+        self.pass_over = None;
+        self.swing = None;
         self.alt_flag = false; // EnterCommon 0xDE26D0 clears +0x85
         self.blocked_up = false;
         self.moves.clear();
@@ -174,6 +180,11 @@ pub fn feet_on_wall(mid: Vec3, n: Vec3, collision: &CollisionWorld) -> (bool, bo
     (hit(start - r * 0.1), hit(start + r * 0.1))
 }
 
+/// A wall under the hands within leg length (the free hang becomes WallFree: legs held off the wall).
+pub fn wall_below_hands(mid: Vec3, n: Vec3, collision: &CollisionWorld) -> bool {
+    [0.6f32, 1.2, 1.8].iter().any(|&d| collision.point_inside(mid - n * 0.15 - Vec3::Y * d))
+}
+
 /// Hang type a hang at `mid` gets: wall if a foot finds support (the free → wall rule of 0xDE1060).
 pub fn hang_type_at(mid: Vec3, n: Vec3, collision: &CollisionWorld) -> LedgeHangType {
     let (a, b) = feet_on_wall(mid, n, collision);
@@ -205,6 +216,19 @@ pub fn hang_root(hand_l: Vec3, hand_r: Vec3, n: Vec3, hang: LedgeHangType) -> Ve
         LedgeHangType::Free => {
             Vec3::new(mid.x, hand_l.y.max(hand_r.y) - FREE_HANG_DROP, mid.z) + n * FREE_HANG_OUT
         }
+    }
+}
+
+/// Root for a hang, with the WallFree case (LedgeHangType 2): a free hang with a wall under the hands plays
+/// `xx_h_hangwallfree_wait`, whose hands are 0.46 m in front of the root (fingertips 0.52 m, 2.41 m up), so its
+/// root sits 0.5 m out from the wall and 2.4 m below the hands, as the game's band offsets for the jump into it
+/// (+0.5·n, −2.4 m, 0xB21DA0). `hangfree_wait` has the hands right above the root (FREE_HANG_OUT).
+pub fn hang_root_at(hand_l: Vec3, hand_r: Vec3, n: Vec3, hang: LedgeHangType, collision: &CollisionWorld) -> Vec3 {
+    let mid = (hand_l + hand_r) * 0.5;
+    if hang == LedgeHangType::Free && wall_below_hands(mid, n, collision) {
+        Vec3::new(mid.x, hand_l.y.max(hand_r.y) - FREE_HANG_DROP, mid.z) + n * WALLFREE_HANG_OUT
+    } else {
+        hang_root(hand_l, hand_r, n, hang)
     }
 }
 
@@ -266,6 +290,64 @@ pub fn update_ledge(
         if loco.just_switched {
             loco.just_switched = false;
             limbs.feet = None;
+            continue;
+        }
+        // ---------------------------------------------------------------- SwingReception (SubState 8)
+        if let Some(mut s) = data.ledge.swing {
+            limbs.hands = Some((data.ledge.hand_l, data.ledge.hand_r));
+            limbs.feet = None;
+            body.velocity = Vec3::ZERO;
+            body.heading = heading_of(s.fwd);
+            let mut feet = body.feet;
+            let jump = pad.high_profile && pad.jump_buffered();
+            if jump {
+                pad.consume_jump();
+            }
+            let stick = pad.speed01 > 0.0;
+            let out = super::swing::update(&mut s, dt, stick, jump, &mut feet, &collision, |p, f| super::targets::find_jump_target(p, f, &guidance, &collision));
+            body.feet = feet;
+            match out {
+                super::swing::SwingOut::Stay => data.ledge.swing = Some(s),
+                super::swing::SwingOut::Hang => {
+                    data.ledge.swing = None;
+                    // the swing replaced the plain grab: the hang starts here
+                    data.ledge.moves.clear();
+                    data.ledge.after = None;
+                    data.ledge.sub_state = LedgeSubState::Movement;
+                    data.ledge.hang_type = LedgeHangType::Free;
+                    data.ledge.hang_set = true;
+                }
+                super::swing::SwingOut::Jump(target) => {
+                    data.ledge.swing = None;
+                    let from = body.feet;
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(super::air::InAirEntry::SwingJump { from, target }));
+                }
+            }
+            continue;
+        }
+        // ---------------------------------------------------------------- HandPassOver (SubState 12)
+        if let Some(mut p) = data.ledge.pass_over {
+            limbs.hands = None;
+            limbs.feet = None;
+            body.velocity = Vec3::ZERO;
+            body.heading = heading_of(p.fwd);
+            let mut feet = body.feet;
+            let out = super::passover::update(&mut p, dt, &mut feet, &guidance, &collision);
+            body.feet = feet;
+            match out {
+                super::passover::PassOverOut::Stay => data.ledge.pass_over = Some(p),
+                super::passover::PassOverOut::Ground => {
+                    data.ledge.pass_over = None;
+                    body.grounded = true;
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToMovement { landing: None });
+                }
+                super::passover::PassOverOut::Fall(action) => {
+                    data.ledge.pass_over = None;
+                    let entry = super::air::InAirEntry::Fall { from: body.feet, velocity: Vec3::ZERO, origin: super::air::FallOrigin::Ground, speed_param: 0.0 };
+                    switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
+                    data.air.fall_action = Some(action);
+                }
+            }
             continue;
         }
         let d = &mut data.ledge;
@@ -337,7 +419,7 @@ pub fn update_ledge(
         if let Some(m) = d.moves.first_mut() {
             if m.to.is_nan() {
                 // deferred target (entry): the hang root for the current hands
-                m.to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
+                m.to = hang_root_at(d.hand_l, d.hand_r, n, d.hang_type, &collision);
             }
             let (p, _) = m.advance(dt);
             body.feet = p;
@@ -359,7 +441,7 @@ pub fn update_ledge(
                 Some(After::SecondHand(i, target)) => {
                     // ContinuePendingVerticalStep 0xDCF3C0: the second hand follows next
                     if i == 0 { d.hand_l = target } else { d.hand_r = target }
-                    let to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
+                    let to = hang_root_at(d.hand_l, d.hand_r, n, d.hang_type, &collision);
                     d.vstep = Some((i == 1, true));
                     d.moves.push(RootInterp::new(body.feet, to, VSTEP_SECOND_TIME));
                     d.step_seq += 1;
@@ -442,7 +524,7 @@ pub fn update_ledge(
                     // the destination needs the other hang type: the switch replaces the hand step (0xDE29E0 order:
                     // TrySwitchHangType before StartHandStep)
                     if let Some(nt) = needs_switch(d.hang_type, (tl + tr) * 0.5, n, &collision) {
-                        let mv = ledge_moves::switch_move(if sign > 0.0 { 0 } else { 1 }, nt == LedgeHangType::Wall, body.feet, tl, tr, n);
+                        let mv = ledge_moves::switch_move(if sign > 0.0 { 0 } else { 1 }, nt == LedgeHangType::Wall, body.feet, tl, tr, n, &collision);
                         start_move(d, mv, if nt == LedgeHangType::Wall { "switch to wall hang" } else { "switch to free hang" });
                         continue;
                     }
@@ -450,7 +532,7 @@ pub fn update_ledge(
                     let first_left = !d.alt_flag;
                     d.alt_flag = !d.alt_flag;
                     if first_left { d.hand_l = tl } else { d.hand_r = tr }
-                    let mid_root = (body.feet + hang_root(tl, tr, n, d.hang_type)) * 0.5;
+                    let mid_root = (body.feet + hang_root_at(tl, tr, n, d.hang_type, &collision)) * 0.5;
                     d.vstep = Some((first_left, false));
                     let first_time = match (d.hang_type, sign > 0.0) {
                         (LedgeHangType::Wall, true) => VSTEP_TIME,
@@ -482,15 +564,13 @@ pub fn update_ledge(
                         .filter(|h| (h - mid.y).abs() < 0.25)
                         .is_some();
                     if standable && collision.capsule_fits(Vec3::new(top.x, mid.y, top.z)) {
-                        // root: onto the top, 0.5 m in (Pullup_Start 0xDDBE80), over the pull-up clip chain;
-                        // the clip's root motion shapes the path (up, then in)
+                        // root: onto the top, 0.5 m in (Pullup_Start 0xDDBE80), along the pull-up clips' own
+                        // displacement (up, then in over the lip) plus a correction onto that point
                         let top_feet = Vec3::new(top.x, mid.y, top.z);
-                        let time = if d.hang_type == LedgeHangType::Wall { PULLUP_WALL_TIME } else { PULLUP_FREE_TIME };
-                        d.moves.push(RootInterp::new(body.feet, top_feet, time));
-                        d.step_seq += 1;
-                        d.after = Some(After::StandOnTop);
+                        let (mv, rest) = ledge_moves::pullup_move(d.hang_type, body.feet, d.hand_l, d.hand_r, n, top_feet);
+                        start_move(d, mv, "pull-up");
+                        d.queue = rest.into_iter().collect();
                         d.sub_state = LedgeSubState::Pullup;
-                        d.last_action = "pull-up";
                         continue;
                     }
                     d.last_action = "blocked up";
@@ -551,7 +631,7 @@ pub fn update_ledge(
                 };
                 let (nl, nr) = if move_right_hand { (d.hand_l, t) } else { (t, d.hand_r) };
                 if let Some(nt) = needs_switch(d.hang_type, (nl + nr) * 0.5, n, &collision) {
-                    let mv = ledge_moves::switch_move(if dir == LedgeDir::Right { 3 } else { 2 }, nt == LedgeHangType::Wall, body.feet, nl, nr, n);
+                    let mv = ledge_moves::switch_move(if dir == LedgeDir::Right { 3 } else { 2 }, nt == LedgeHangType::Wall, body.feet, nl, nr, n, &collision);
                     // the switch carries this shimmy step's hand move: the alternation advances as for the step
                     d.alt_flag = !d.alt_flag;
                     start_move(d, mv, if nt == LedgeHangType::Wall { "switch to wall hang" } else { "switch to free hang" });
@@ -560,7 +640,7 @@ pub fn update_ledge(
                 if move_right_hand { d.hand_r = t } else { d.hand_l = t }
                 d.alt_flag = !d.alt_flag;
                 d.force_free = false;
-                let to = hang_root(d.hand_l, d.hand_r, n, d.hang_type);
+                let to = hang_root_at(d.hand_l, d.hand_r, n, d.hang_type, &collision);
                 // after the toggle: alt_flag set = this was the lead hand's reach (open), clear = closing step
                 d.moves.push(RootInterp::new(body.feet, to, if d.alt_flag { SHIMMY_OPEN_TIME } else { SHIMMY_CLOSE_TIME }));
                 d.step_seq += 1;

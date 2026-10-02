@@ -334,6 +334,12 @@ IHumanGround vt128/vt120, and Y-button adds/removes `dt` (dword_192DDA8 = frame 
   * vt112/116 wall-run ("walling") check & start, requires ability bit (D32580) and |stick angle| < 60°
   * vt736/740 climb/grab wall (`740(target, highProfile?1:0)`), vt744/748 high obstacle (min height 5.0)
   * vt764/768 climb-start (requires ability D325C0), vt840/844 (button 3 action)
+  * **Correction (2026-10-02):** IHumanGround vtable 0x16FFEFC.
+    - The edge for vt736 and vt764 comes from IHuman vt132 / vt136: a box of radius **0.75 m**, height 0.45, ±180° about the facing, around the actor position.
+    - **vt736** 0xDB62B0 = `CanHandleEvent(68)`. Its guard 0xD84190: edge ≥ **0.53 m** above the feet, room above (or a step-up check). **vt740** sends event 68, which switches to InAir (0xDA7A10 → context 8): the standing straight jump at the edge, not a climb start.
+    - **vt764** 0xDB63D0 = `CanHandleEvent(70)`, i.e. the **pull-down** (RE/03 §7.8b). vt768 sends it when either:
+      - vt752 0xD8A990 (the ledge-stop state 38 is active) holds, the stick is > 0.35 and within 70° of the edge; or
+      - pad button 3 was pressed within 0.2 s (Wait type).
   * vt848/852, 856/860 interactions with nearby humans (gentle push / shove) using +0x1270 dir
   * vt1540/1544 look-down/leap-of-faith edge (ability D32AD0), vt1592/1596 step/vault
 * AbilitySet bit tests 0xD32480.. (one tiny getter per bit: +0x8 u64 bits, +0x10 MaxSpeed,
