@@ -376,8 +376,7 @@ and the obstacle ahead is not a target.
      (`Human__MeasureDropBeyondEdge`, 0.85 m probe), then capsule-casts toward it. Returns the contact, the normal and
      the height (edge z − feet z), or 1.7 m when something else blocks the cast. Out flag 0.
   2. **Else 0xB25C80:** obstacles without guidance. Out flag 1.
-- **The event is sent only when** the scorer's out-flag `v140` (0xE96BF0) is set although it returned no candidate.
-  That flag's meaning isn't decoded. The guard 0xB25230 then still needs a real controller contact within 45°.
+- **The event is sent only when** the scorer's out-flag `v140` (0xE96BF0 arg 3) is set. **0xE96BF0 always writes 0 there** (verified 2026-10-03), so the interpreter's event-42 path never runs for the player in v1.02. The lean is effectively unreachable from player input (hypothesis: other senders, e.g. NPC decision code, untraced). The guard 0xB25230 then still needs a real controller contact within 45°.
 - **Port:** keeps the PORT trigger (a contact while moving) until `v140` is decoded. Rewiring it now would change the
   wall grab and knee-jump behaviour too.
 
