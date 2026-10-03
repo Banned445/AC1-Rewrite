@@ -97,6 +97,8 @@ pub struct HumanGroundData {
     pub face_next: Option<f32>,
     /// Side of the turn in progress (+1 / -1, 0 = none): the 180 deg tie-break.
     pub turn_sign: f32,
+    /// Stick-to-ground residual of the last frame (controller +384, 0x57D240): how far the support was from the feet.
+    pub snap_residual: f32,
 }
 
 /// `HumanGround__LookDown_Enter` 0xD9FC80: `xx_l_ledge_lookdown_{front,left,right}_foot{l,r}` (by the leading foot)
@@ -598,7 +600,8 @@ pub fn update_ground(
             r.position = before;
         }
         // event 42 (0xB25230): blocked by an obstacle ≥ 0.5 m high within 45° of the facing → ObstacleCollision
-        if moving && !busy && r.hit_wall && g.ledge_stop.is_none() {
+        // guard 0xB25230: also |controller +384| (the stick-to-ground residual) <= 0.2 m, i.e. standing on snapped ground
+        if moving && !busy && r.hit_wall && g.ledge_stop.is_none() && g.snap_residual.abs() <= 0.2 {
             if let Some((contact, n, height)) = super::collide::obstacle_ahead(r.position, forward, &collision) {
                 if let Some(c) = super::collide::enter(r.position, body.heading, contact, n, height, g.pose_seq) {
                     g.pose_seq = c.seq;
@@ -631,6 +634,7 @@ pub fn update_ground(
         let lost = ground_loss(body.feet, body.velocity, &guidance, &collision);
         match collision.ground_support(body.feet).filter(|_| !lost) {
             Some(s) => {
+                g.snap_residual = body.feet.y - s.y;
                 body.feet.y = s.y;
                 body.grounded = true;
             }

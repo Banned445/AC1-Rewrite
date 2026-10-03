@@ -207,7 +207,8 @@ This is what the player sees as "leaning": running into a wall or a low obstacle
 
 **Trigger:** Movement event **42**, the character controller's collision event (sender not traced).
 - **Guard** `HumanGround__Guard_Event42_Collision` 0xD838F0 → `Human__GetObstacleContact` 0xB25230:
-  - vertical speed |v.z| ≤ 0.2 m/s;
+  - |controller +384| ≤ 0.2: the stick-to-ground residual of 0x57D240 (verified 2026-10-03; earlier read as the vertical speed);
+  - the contact comes from the proxy's manifold (0x4F8EA0, within π/4 of the direction, query mode 4); world contacts only (two entity types excluded, one only when its +212 < 30);
   - a contact within 45° of the facing (sub_4F8EA0);
   - the contact point ≥ 0.5 m above the feet;
   - not certain entity classes.
