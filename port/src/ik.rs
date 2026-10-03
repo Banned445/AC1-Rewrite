@@ -224,8 +224,21 @@ fn contact_of(limb: usize, p: Vec3, normal: Vec3) -> Vec3 {
     p - (effector_goal(limb, Vec3::ZERO, normal))
 }
 
+/// PORT: ankle height above the sole (xx_h_wait_hipm: ankles ~0.09 m above the animation origin).
+const ANKLE_HEIGHT: f32 = 0.09;
+
+/// PORT stand-in for the game's ground foot IK (`GroundIKState` delay / fade in / running / fade out, RE/11 §2.4, not
+/// reversed): a foot the animation puts below the surface under it is lifted onto it. Without it the flight clips'
+/// reaching leg went through the roof on landings (and any clip played over a step or a lip clipped).
+fn ground_foot_target(ankle: Vec3, collision: &crate::collision::CollisionWorld) -> Option<Vec3> {
+    let h = collision.ground_height(Vec3::new(ankle.x, ankle.y + 0.5, ankle.z), 1.0)?;
+    let want = h + ANKLE_HEIGHT;
+    (ankle.y < want - 1e-3).then_some(Vec3::new(ankle.x, want, ankle.z))
+}
+
 fn solve_limbs(
     time: Res<Time>,
+    collision: Option<Res<crate::collision::CollisionWorld>>,
     mut q: Query<(&Rig, &Body, &LimbTargets, &mut LimbIk, Option<&crate::anim::AnimPlayer>)>,
     mut joints: Query<&mut Transform>,
 ) {
@@ -283,7 +296,16 @@ fn solve_limbs(
             };
             goals[i] = g.map(|g| (g, ik.limbs[i].weight));
         }
-        if goals.iter().all(|g| g.is_none()) {
+        // feet without a hold: kept above the surface under them
+        let mut ground_fix: [Option<Vec3>; 4] = [None; 4];
+        if let Some(c) = collision.as_deref() {
+            for limb in 2..4 {
+                if goals[limb].is_none() {
+                    ground_fix[limb] = ground_foot_target(global[chains[limb][2]].pos, c);
+                }
+            }
+        }
+        if goals.iter().all(|g| g.is_none()) && ground_fix.iter().all(|g| g.is_none()) {
             ik.fit = Vec3::ZERO;
             continue;
         }
@@ -328,11 +350,18 @@ fn solve_limbs(
 
         // ---------------------------------------------------------------- per-limb two-bone solve
         let forward = body_forward(body.heading);
-        for (limb, goal) in goals.iter().enumerate() {
-            let Some((contact, w)) = *goal else { continue };
+        for limb in 0..4 {
             let [ia, ib, ic] = chains[limb];
             let (a, b, c) = (global[ia].pos, global[ib].pos, global[ic].pos);
-            let target = c.lerp(effector_goal(limb, contact, n), w);
+            let (target, w) = match (goals[limb], ground_fix[limb]) {
+                (Some((contact, w)), _) => (c.lerp(effector_goal(limb, contact, n), w), w),
+                // the fit offset moved the body: re-check the foot against the surface
+                (None, Some(_)) => match collision.as_deref().and_then(|col| ground_foot_target(c, col)) {
+                    Some(t) => (t, 1.0),
+                    None => continue,
+                },
+                _ => continue,
+            };
             // elbows bend back, knees forward (used only when the limb is straight)
             let bend_hint = if limb < 2 { -forward } else { forward };
             let (da, db) = two_bone(a, b, c, target, bend_hint);

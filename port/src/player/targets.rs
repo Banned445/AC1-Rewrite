@@ -140,8 +140,9 @@ pub fn find_jump_target(
             let pos = Vec3::new(landing.x, h, landing.z);
             Some(JumpTarget { position: pos, type_flags: TARGET_GROUND, hang: None, straight: None, pass: None })
         } else if edge_dz <= LEDGE_MAX_UP + WALL_HANG_DROP {
-            // ledge target: hang from the edge (wall hang if there is wall below)
-            let hang = if collision.point_inside(on_edge - e.n1 * 0.15 - Vec3::Y * 0.9) {
+            // ledge target: hang from the edge (wall hang if there is wall below), both hands on the edge
+            let on_edge = guidance.fit_hands(on_edge, e.n1);
+            let hang =if collision.point_inside(on_edge - e.n1 * 0.15 - Vec3::Y * 0.9) {
                 LedgeHangType::Wall
             } else {
                 LedgeHangType::Free
@@ -158,7 +159,11 @@ pub fn find_jump_target(
         let Some(target) = candidate else { continue };
         let flat = Vec3::new(target.position.x - feet.x, 0.0, target.position.z - feet.z);
         let dist = flat.length();
-        let far = if target.hang.is_some() { LEDGE_FAR } else { GROUND_FAR };
+        let far = match target.hang {
+            Some(_) if target.position.y - feet.y > LEDGE_JUMP_UP_RISE => LEDGE_JUMP_FAR_UP,
+            Some(_) => LEDGE_JUMP_FAR,
+            None => GROUND_FAR,
+        };
         if !(0.6..=far).contains(&dist) {
             continue;
         }

@@ -68,6 +68,12 @@ pub struct Collide {
     pub action: ActionBlend,
     pub t: f32,
     pub seq: u32,
+    /// Time since the collision started: the 0.15 s root interpolation runs once (the action timer `t` restarts
+    /// with every item; driving the warp with it re-warped from the first contact point at each item change, a
+    /// visible snap back every ~0.1 s while leaning).
+    pub warp_t: f32,
+    /// Heading when the collision started (turned to face the obstacle over the warp, not in one frame).
+    pub from_heading: f32,
 }
 
 impl Collide {
@@ -103,11 +109,11 @@ pub fn obstacle_ahead(feet: Vec3, forward: Vec3, collision: &CollisionWorld) -> 
 }
 
 /// `HumanGround__ObstacleCollision_Enter` 0xD9CB90.
-pub fn enter(feet: Vec3, contact: Vec3, n: Vec3, height: f32, seq: u32) -> Option<Collide> {
+pub fn enter(feet: Vec3, heading: f32, contact: Vec3, n: Vec3, height: f32, seq: u32) -> Option<Collide> {
     let (kind, lo, hi, id) = if height >= 0.7 * H { (CollideKind::Hand, 0.7 * H, 1.5 * H, COLLIDE_HAND) } else { (CollideKind::Foot, 0.5 * H, 0.7 * H, COLLIDE_FOOT) };
     let h = ((height - lo) / (hi - lo)).clamp(0.0, 1.0);
     let action = blend(id, 0, &[1.0 - h, h])?;
-    Some(Collide { kind, h, normal: n, from: feet, to: contact + n * 0.4 * H, phase: CollidePhase::Entry(0), action, t: 0.0, seq: seq.wrapping_add(1) })
+    Some(Collide { kind, h, normal: n, from: feet, to: contact + n * 0.4 * H, phase: CollidePhase::Entry(0), action, t: 0.0, seq: seq.wrapping_add(1), warp_t: 0.0, from_heading: heading })
 }
 
 /// What `update` asks the ground context to do.
@@ -123,9 +129,17 @@ pub enum CollideOut {
 /// profile (+1504, hypothesis). Moves `feet` / `heading` during the entry interpolation.
 pub fn update(c: &mut Collide, dt: f32, stick: Option<Vec3>, jog: bool, feet: &mut Vec3, heading: &mut f32) -> CollideOut {
     c.t += dt;
-    let k = (c.t / ENTRY_WARP).min(1.0);
+    c.warp_t += dt;
+    let k = (c.warp_t / ENTRY_WARP).min(1.0);
     *feet = c.from.lerp(c.to, k);
-    *heading = super::heading_of(-c.normal);
+    let want = super::heading_of(-c.normal);
+    let mut d = (want - c.from_heading) % std::f32::consts::TAU;
+    if d > std::f32::consts::PI {
+        d -= std::f32::consts::TAU;
+    } else if d < -std::f32::consts::PI {
+        d += std::f32::consts::TAU;
+    }
+    *heading = c.from_heading + d * k;
     let ended = c.t >= c.action.duration();
     let decide = match c.phase {
         CollidePhase::Entry(i) => {

@@ -29,7 +29,7 @@ impl Sim {
             .insert_resource(PadInput { legs_pressed_ago: f32::INFINITY, ..default() })
             .insert_resource(SpawnPoint(SPAWN))
             .init_resource::<CameraRig>()
-            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling, crate::player::narrow::update_narrow, crate::player::ladder::update_ladder).chain());
+            .add_systems(Update, (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, crate::player::hay::update_hay, crate::player::walling::update_walling, crate::player::narrow::update_narrow, crate::player::ladder::update_ladder, crate::player::release_limbs).chain());
         let (c, g) = level::geometry();
         app.insert_resource(c).insert_resource(g);
         let player = app.world_mut().spawn(player_components(feet, heading)).id();
@@ -1157,4 +1157,232 @@ fn letting_go_of_a_ladder_falls() {
     assert!(s.run_until(0.5, |s| s.loco().current == ActorContextId::InAir), "no release");
     assert!(s.data().air.fall_action.is_some_and(|a| RELEASE[0].contains(&a.id)));
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground));
+}
+
+// ---------------------------------------------------------------- per-frame traces (diagnostics, run by hand)
+
+fn trace_frames(s: &mut Sim, label: &str, seconds: f32, mut each: impl FnMut(&mut Sim, usize)) {
+    println!("== {label}");
+    let mut prev = s.body().feet;
+    let mut prev_h = 0.0f32;
+    for i in 0..(seconds * 60.0) as usize {
+        each(s, i);
+        s.run(1.0 / 60.0 + 1e-4);
+        let f = s.body().feet;
+        let v = (f - prev) * 60.0;
+        let h = Vec2::new(v.x, v.z).length();
+        let mode = match s.data().air.mode {
+            air::AirMode::Jump { t, .. } => format!("jump t={t:.2}"),
+            air::AirMode::Fall { .. } => "fall".into(),
+            air::AirMode::Idle => "idle".into(),
+        };
+        let os = s.ground().oneshot.map(|o| format!("os {:08x} {:.2}/{:.2}", o.blend.id, o.t, o.duration)).unwrap_or_default();
+        let flag = if (h - prev_h).abs() > 1.5 { " <<< dh" } else { "" };
+        println!(
+            "{i:3} {:?} {mode:12} feet ({:6.2} {:5.2} {:6.2}) h {h:5.2} vy {:6.2} hd {:5.2} sp {:.2} {os}{flag}",
+            s.loco().current, f.x, f.y, f.z, v.y, s.body().heading, s.ground().speed_param
+        );
+        prev = f;
+        prev_h = h;
+    }
+}
+
+#[test]
+#[ignore]
+fn trace_run_off_a_drop() {
+    let mut s = Sim::new(Vec3::new(-12.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    trace_frames(&mut s, "sprint off the 6 m block", 2.5, |_, _| {});
+}
+
+#[test]
+#[ignore]
+fn trace_roof_gap_jump() {
+    let mut s = Sim::new(Vec3::new(6.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    trace_frames(&mut s, "free-run roof A to B", 3.0, |s, _| {
+        if s.saw_air && s.loco().current == ActorContextId::Ground {
+            s.pad(Vec3::X, 0.0, false, false);
+        }
+    });
+}
+
+#[test]
+#[ignore]
+fn trace_step_up_jump() {
+    // stepped roofs: 3.2 -> 4.4 (1.2 m up, 2 m gap)
+    let mut s = Sim::new(Vec3::new(5.5, 3.2, 24.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    trace_frames(&mut s, "free-run up a step", 3.0, |_, _| {});
+}
+
+#[test]
+#[ignore]
+fn trace_diagonal_run() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    let d = Vec3::new(1.0, 0.0, -0.4);
+    s.pad(d, 1.0, true, false);
+    trace_frames(&mut s, "run at an angle", 2.0, |_, _| {});
+}
+
+#[test]
+#[ignore]
+fn trace_wall_at_an_angle() {
+    // wall x -7..7, z -8.3..-7.7, h 2.4: run into it at 30 degrees
+    let mut s = Sim::new(Vec3::new(-3.0, 0.0, -4.0), 0.0);
+    s.pad(Vec3::new(0.5, 0.0, -0.866), 1.0, true, false);
+    trace_frames(&mut s, "run into the wall at 30 deg", 2.5, |_, _| {});
+}
+
+// ---------------------------------------------------------------- user bug round 2026-10-03 (regressions)
+
+/// Horizontal speed of the feet over the last frame.
+fn hspeed(prev: Vec3, now: Vec3) -> f32 {
+    Vec2::new(now.x - prev.x, now.z - prev.z).length() * 60.0
+}
+
+#[test]
+fn landing_with_the_stick_released_plays_no_run_stop() {
+    use crate::player::jump_blend::{RUN_STOP, RUN_STOP_TO_WAIT};
+    let mut s = Sim::new(Vec3::new(7.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(4.0, |s| s.saw_air && s.loco().current == ActorContextId::Ground), "never landed");
+    s.pad(Vec3::X, 0.0, false, false);
+    let landed_x = s.body().feet.x;
+    for _ in 0..120 {
+        s.run(1.0 / 60.0 + 1e-4);
+        let os = s.ground().oneshot.map(|o| o.blend.id);
+        assert!(!os.is_some_and(|id| RUN_STOP.contains(&id) || RUN_STOP_TO_WAIT.contains(&id)), "a run stop followed the landing");
+    }
+    assert_eq!(s.ground().speed_param, 0.0);
+    // only the reception's own root motion moved the feet
+    assert!(s.body().feet.x - landed_x < 0.8, "slid on after the landing: {} -> {}", landed_x, s.body().feet.x);
+}
+
+#[test]
+fn pull_up_ends_standing_still() {
+    let mut s = hang_on_jump_up_wall();
+    assert!(s.run_until(3.0, |s| s.data().ledge.mv.is_none()));
+    s.pad(Vec3::Z, 1.0, false, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground));
+    assert_eq!(s.ground().speed_param, 0.0, "the speed from before the climb must not carry over");
+    s.pad(Vec3::Z, 0.0, false, false);
+    let f = s.body().feet;
+    s.run(1.0);
+    assert!((s.body().feet - f).length() < 0.05, "moved after the pull-up: {f:?} -> {:?}", s.body().feet);
+}
+
+#[test]
+fn a_jump_that_clips_a_higher_roof_lip_steps_onto_it() {
+    // stepped roofs 3.2 -> 4.4 (2 m gap): the jump's foot catches the lip
+    let mut s = Sim::new(Vec3::new(5.5, 3.2, 24.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "no jump");
+    let mut prev = s.body().feet;
+    for _ in 0..90 {
+        s.run(1.0 / 60.0 + 1e-4);
+        let f = s.body().feet;
+        assert!((f.y - prev.y) * 60.0 < 7.0, "flung up: {prev:?} -> {f:?}");
+        assert!(!matches!(s.data().air.mode, air::AirMode::Fall { .. }), "the jump aborted into a fall at {f:?}");
+        prev = f;
+        if s.loco().current == ActorContextId::Ground {
+            break;
+        }
+    }
+    assert_eq!(s.loco().current, ActorContextId::Ground);
+    assert!((s.body().feet.y - 4.4).abs() < 0.05 && s.body().feet.x > 11.5, "on the upper roof: {:?}", s.body().feet);
+}
+
+#[test]
+fn a_free_jump_keeps_its_speed_and_falls_on_smoothly() {
+    // sprint off the 6 m block with nothing to land on
+    let mut s = Sim::new(Vec3::new(-12.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
+    let mut prev = s.body().feet;
+    let mut last_h: Option<f32> = None;
+    while s.loco().current == ActorContextId::InAir {
+        s.run(1.0 / 60.0 + 1e-4);
+        let h = hspeed(prev, s.body().feet);
+        if let Some(l) = last_h {
+            assert!((h - l).abs() < 0.6, "horizontal speed jumped {l:.2} -> {h:.2} at {:?} ({:?})", s.body().feet, s.data().air.mode);
+        }
+        last_h = Some(h);
+        prev = s.body().feet;
+    }
+}
+
+#[test]
+fn leaning_on_a_wall_never_snaps_back() {
+    // run into the 2.4 m wall at 30 degrees: the lean warps onto the wall once
+    let mut s = Sim::new(Vec3::new(-3.0, 0.0, -4.0), 0.0);
+    s.pad(Vec3::new(0.5, 0.0, -0.866), 1.0, true, false);
+    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "no lean");
+    let mut prev = s.body().feet;
+    let mut prev_h = s.body().heading;
+    for _ in 0..90 {
+        s.run(1.0 / 60.0 + 1e-4);
+        let f = s.body().feet;
+        assert!((f - prev).length() < 0.03, "lean snapped: {prev:?} -> {f:?}");
+        assert!((s.body().heading - prev_h).abs() < 0.2, "turned in one frame");
+        prev = f;
+        prev_h = s.body().heading;
+    }
+}
+
+#[test]
+fn the_hands_let_go_of_the_bar_on_a_swing_jump() {
+    let mut s = Sim::new(Vec3::new(60.0, 1.2, 85.0), std::f32::consts::PI);
+    s.pad(Vec3::Z, 1.0, true, false);
+    s.run(0.35);
+    s.press_legs();
+    assert!(s.run_until(4.0, |s| s.data().ledge.swing.is_some_and(|w| matches!(w.phase, crate::player::swing::SwingPhase::Cycle(_)))));
+    assert!(s.app.world().get::<crate::player::LimbTargets>(s.player).unwrap().hands.is_some(), "hands on the bar while swinging");
+    s.press_legs();
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "no swing jump");
+    s.run(1.0 / 60.0 + 1e-4);
+    assert!(s.app.world().get::<crate::player::LimbTargets>(s.player).unwrap().hands.is_none(), "hands still pinned to the bar in the air");
+}
+
+#[test]
+fn grabbing_near_the_end_of_a_ledge_keeps_both_hands_on_it() {
+    // the jump-up wall's edge starts at x 8: stand at its very end and jump at it
+    let mut s = Sim::new(Vec3::new(7.85, 0.0, 40.6), FACE_PZ);
+    s.pad(Vec3::Z, 1.0, true, true);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ledge), "never hung: {:?}", s.body().feet);
+    let d = s.data().ledge.hand_l.x.min(s.data().ledge.hand_r.x);
+    assert!(d >= 8.0 + 0.04, "a hand past the end of the edge: {:?} {:?}", s.data().ledge.hand_l, s.data().ledge.hand_r);
+}
+
+#[test]
+fn ledge_jumps_do_not_reach_across_the_map() {
+    // a 2.6 m ledge 5 m away (the root rises more than 1 m): too far to jump at
+    let (c, g) = level::geometry();
+    let feet = Vec3::new(12.0, 0.0, 36.5);
+    let t = crate::player::targets::find_jump_target(feet, Vec3::Z, &g, &c);
+    assert!(t.is_none_or(|t| t.hang.is_none()), "jumped at a ledge from {:.1} m: {:?}", (t.unwrap().position - feet).length(), t);
+    // within reach it still does
+    let near = Vec3::new(12.0, 0.0, 39.8);
+    assert!(crate::player::targets::find_jump_target(near, Vec3::Z, &g, &c).is_some_and(|t| t.hang.is_some()));
+}
+
+#[test]
+fn reversing_the_stick_turns_one_way() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(1.0);
+    // exactly opposite, with a little noise either side
+    let mut last = 0.0f32;
+    for i in 0..20 {
+        let e = if i % 2 == 0 { 0.01 } else { -0.01 };
+        s.pad(Vec3::new(e, 0.0, 1.0), 1.0, true, false);
+        let h0 = s.body().heading;
+        s.run(1.0 / 60.0 + 1e-4);
+        let mut d = s.body().heading - h0;
+        if d > std::f32::consts::PI { d -= std::f32::consts::TAU } else if d < -std::f32::consts::PI { d += std::f32::consts::TAU }
+        if d.abs() > 1e-3 {
+            assert!(last == 0.0 || d.signum() == last, "turn flipped direction at frame {i}");
+            last = d.signum();
+        }
+    }
 }

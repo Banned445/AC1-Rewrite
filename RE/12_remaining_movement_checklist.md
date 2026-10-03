@@ -249,6 +249,15 @@ free-step jumps (kind 1) from beams and pilotis.**
   - edges generated at runtime for capsules and barrels.
 - [ ] **Real collision geometry** from `.forge` (Havok), so a real city map can be loaded and walked.
 - [ ] **CharacterController** exactly as in the game: kinematic proxy, at most 10 sweep/slide iterations (RE/01 §7); ground probe component Human+0xFC.
+      **This affects gameplay most.** The port's capsule (r 0.3 m, h 1.8 m, step 0.35 m) and its per-box depenetration are
+      stand-ins. Everything else depends on them:
+      - how a jump interacts with a lip;
+      - how wall contact (event 42) is detected;
+      - sliding along walls.
+
+      The port integrates the controller's velocity on a context's skipped first frame (`player::coast`), as the
+      game's proxy keeps running while the context skips. Before that the body froze for one frame at every takeoff
+      and landing.
 - [ ] **NavigationCamera / free-roaming camera:** follow, orbit and collision (FreeRoamingCameraSettings); the activators
       (speed, high profile, buttons); assassin-fall camera shake.
 - [ ] **Input:** the real `DefaultBindings.map` keyboard and gamepad mapping.
@@ -258,6 +267,14 @@ free-step jumps (kind 1) from beams and pilotis.**
       tables, the ledge tables 0x1A2C3F0–0x1A2CB80, the climb pose table 0x1A2CD70).
 - [ ] **Blend and transition rules:** ACTBlendType (roll/stop curves), ACTEndEvent, ACTTargetFlag (auto transit-out etc.),
       blend times per transition.
+      **Port (2026-10-03):**
+      - crossfades start from the pose on screen, frozen, so a transition that starts mid-fade no longer snaps;
+      - the root-motion offset is faded too;
+      - the game keeps the outgoing item playing (not traced). This is the largest remaining source of differences
+        when actions switch quickly.
+- [ ] **Item exits** (`ACTTargetFlag` / the end-of-item transitions): which item follows a landing, stop or lean is
+      chosen by the graph in the game (e.g. a landing with the stick released goes to the wait). The port chooses in
+      code, so a stale choice can play an unfitting clip.
 - [~] **Fixed tracks:** **→ ACUATORCONTACTS decoded and driving the IK (RE/13 §5); STEPPHASES/PIVOT/CENTEROFMASS still open**
   - ACUATORCONTACTS (id 2): limb contact tags. These drive IK attach/detach and the hold-to-hold travel windows (RE/11 §2).
   - STEPPHASES (id 3): foot phase sync between gaits and stops.
@@ -266,6 +283,8 @@ free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **Event tracks:** sound, FX and AI events (footsteps, ContactEventTypeHuman: jump start, land light/medium/heavy,
       roll, slide …).
 - [ ] **Ground foot IK** (GroundIKState: delay, fade in, running, fade out) and the IK pelvis/lean post-adjustments (RE/11 §2.4).
+      **Stand-in (2026-10-03):** a foot the clip puts below the surface under it is lifted onto it (`ik::ground_foot_target`).
+      This fixed landings that put a leg through the roof. Without the real system, feet still don't adapt to slopes or steps.
 - [ ] **Roll bones** (RollBoneModifier: upper arm / forearm twist) and HumanSkeletonStyler hips.
 
 ## 9. Character presentation that moves with the body
@@ -276,6 +295,23 @@ free-step jumps (kind 1) from beams and pilotis.**
 ## 10. Verification against the real game
 - [ ] **Runtime traces** from the real game (offline save, debugger or Cheat Engine): position, context ID (Human slot 1 +0x48) and
       sub-state per frame. Compare frame by frame with the port: speeds, the 9.8 m/s² gravity, jump snapping, ledge/climb timings.
+- [ ] **Live memory checks** (tagged `LIVE:` in the port). Each needs a value or a trace read from the running game
+      (offline save, Cheat Engine / debugger), because static reading did not settle it:
+  - **Jump-link reach:** `WorldArea::JumpLinkRange` Normal / Extended (strings at 0x168B2E8 / 0x168B300, no code
+    xrefs in the unanalysed IDB). Jumps only follow the world's precomputed jump links (`MetaLinkTypeID_JumpLink`),
+    so the reach is level data. The port caps ledge jumps at 5.5 m, or 2.5 m when the root rises more than 1 m
+    (`tuning::LEDGE_JUMP_FAR*`, hypothesis from the floats at 0x1A2EA50). Read both ranges from a loaded WorldArea.
+  - **Speed parameter after a pull-up:** HG+0x5E8 right after a pull-up / beam / ladder exit into Ground. The port
+    zeroes it (`HumanGroundData::enter`), because the stale value slid the character on in a run stop.
+  - **Run stop at an edge:** does the run stop's root motion carry the character off a roof, or does a guard stop it?
+    The port stops the slide at the last supported point.
+  - **Target jump over a lip:** the root path when a target jump's capsule catches the lip of a higher roof (the
+    port lifts it up to 0.5 m; 0xE0B1E0 is only the stuck-in-air nudge).
+  - **Sprint off an edge:** horizontal speed through a fall entered above the 5 m/s drift cap (0x19BA438). The port
+    decays it to the cap at 4 m/s² instead of clamping.
+- [ ] **Static RE still open from the 2026-10-03 bug round:**
+  - `RotateTowards` 0xD94F30: its rule for a ±180° turn (the port keeps the side a turn started on);
+  - the ground foot IK (`GroundIKState`, RE/11 §2.4). The port only lifts feet that would go below the surface.
 - [ ] **Reference captures** from the real game at the same moments and camera angles as the port's `AC_SHOTS` views.
 - [ ] **Field names:** recover the remaining reflected field names (124 of 270 still hashed).
 - [ ] **Open questions:**

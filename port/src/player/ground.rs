@@ -95,6 +95,8 @@ pub struct HumanGroundData {
     pub pose_seq: u32,
     /// Facing applied when the next one-shot starts (the lean exits end turned, `collide`).
     pub face_next: Option<f32>,
+    /// Side of the turn in progress (+1 / -1, 0 = none): the 180 deg tie-break.
+    pub turn_sign: f32,
 }
 
 /// `HumanGround__LookDown_Enter` 0xD9FC80: `xx_l_ledge_lookdown_{front,left,right}_foot{l,r}` (by the leading foot)
@@ -152,6 +154,15 @@ impl HumanGroundData {
         self.collide = None;
         self.look_down = None;
         self.oneshot_next = None;
+        if landing.is_none() {
+            // PORT: entries without a landing (pull-up, beam / ladder / pass-over exits …) start standing. The game's
+            // OnEnterInit 0xDA7D20 leaves HG+0x5E8 alone, but those contexts drive the parameter themselves; the port's
+            // stale value from before the climb made the run stop slide on after the move (off roof edges).
+            // LIVE: read HG+0x5E8 right after a pull-up.
+            self.speed_param = 0.0;
+            self.blend.speed_param = 0.0;
+            self.oneshot = None;
+        }
         if let Some(l) = landing {
             self.landing_seq = self.landing_seq.wrapping_add(1);
             self.oneshot = l.action.map(|b| GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
@@ -163,6 +174,11 @@ impl HumanGroundData {
             self.last_landing = Some(l);
         }
     }
+}
+
+/// Heading kept in (-pi, pi] (it used to grow without bound with every turn).
+fn wrap_angle(a: f32) -> f32 {
+    angle_diff(a, 0.0)
 }
 
 fn angle_diff(a: f32, b: f32) -> f32 {
@@ -205,6 +221,9 @@ pub fn update_ground(
                     body.velocity = Vec3::ZERO;
                 }
             }
+            // the controller keeps integrating the velocity the switch left (no one-frame freeze)
+            body.grounded = true;
+            super::coast(&mut body, &collision, dt);
             continue;
         }
 
@@ -245,6 +264,13 @@ pub fn update_ground(
         // - jog or faster (HG+0x5DC, speed > 0.25) → RunStop 0xD98E30 (guard 0xD7EC90): the run-stop action by the
         //   leading foot, its root motion, then its settle into the wait;
         // - walk band → Idle 0xD8B220 (guard 0xD7ED30): the wait with a 0.2 s blend, i.e. stopped at once.
+        // Stick released while a landing / reception plays: its transition leads into the wait, not into the
+        // locomotion (the action's exits, RE/13), so no run stop follows it. Before, the speed kept from the jump
+        // started a run stop once the landing ended: a second slide after the landing.
+        if pad.speed01 <= 0.0 && g.speed_param > 0.0 && g.oneshot.is_some_and(|o| !jump_blend::RUN_STOP.contains(&o.blend.id) && !jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id)) {
+            g.speed_param = 0.0;
+            g.blend.speed_param = 0.0;
+        }
         if pad.speed01 <= 0.0 && g.speed_param > 0.0 && g.oneshot.is_none() {
             if g.speed_param > 0.25 {
                 let foot = (g.blend.foot != 0) as usize;
@@ -271,9 +297,19 @@ pub fn update_ground(
 
         // heading: rotate toward wanted at the player turn rate (0xD95290)
         if moving {
-            let d = angle_diff(want_heading, body.heading);
+            let mut d = angle_diff(want_heading, body.heading);
+            // PORT: near 180 deg the shorter way flips sign with tiny stick changes, so the character turned back
+            // and forth (jitter when reversing). Keep the side a turn already started on (RotateTowards 0xD94F30's
+            // tie rule is not traced).
+            if d.abs() > 170f32.to_radians() && g.turn_sign != 0.0 && d.signum() != g.turn_sign {
+                d += g.turn_sign * std::f32::consts::TAU;
+            }
             let step = PLAYER_TURN_RATE * dt;
-            body.heading += d.clamp(-step, step);
+            let turn = d.clamp(-step, step);
+            g.turn_sign = if d.abs() > 1e-3 { turn.signum() } else { 0.0 };
+            body.heading = wrap_angle(body.heading + turn);
+        } else {
+            g.turn_sign = 0.0;
         }
 
         // ---------------------------------------------------------------- obstacle collision / lean (sub-state 5)
@@ -442,6 +478,7 @@ pub fn update_ground(
         }
 
         // ---------------------------------------------------------------- move (blended clip root motion)
+        let stopping = g.oneshot.is_some_and(|o| jump_blend::RUN_STOP.contains(&o.blend.id) || jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id));
         let (delta, speed) = if let Some(mut os) = g.oneshot {
             // landing / reception action: its blended root motion (FROMANIM)
             os.t += dt;
@@ -486,10 +523,15 @@ pub fn update_ground(
         };
         let before = body.feet;
         let mut r = collision.move_capsule(body.feet, delta, true);
+        // PORT: the run stop's root motion (≈0.5 m of slide) does not carry the character off a roof edge; it stops at
+        // the last supported position. The game's guard for this is not traced (LIVE: run stop next to an edge).
+        if stopping && collision.ground_height(r.position + Vec3::Y * 0.05, GROUND_PROBE + 0.05 + STEP_HEIGHT).is_none() {
+            r.position = before;
+        }
         // event 42 (0xB25230): blocked by an obstacle ≥ 0.5 m high within 45° of the facing → ObstacleCollision
         if moving && !busy && r.hit_wall && g.ledge_stop.is_none() {
             if let Some((contact, n, height)) = super::collide::obstacle_ahead(r.position, forward, &collision) {
-                if let Some(c) = super::collide::enter(r.position, contact, n, height, g.pose_seq) {
+                if let Some(c) = super::collide::enter(r.position, body.heading, contact, n, height, g.pose_seq) {
                     g.pose_seq = c.seq;
                     g.collide = Some(c);
                     g.speed_param = 0.0;
@@ -509,7 +551,9 @@ pub fn update_ground(
                 r.position -= Vec3::new(ls.normal.x, 0.0, ls.normal.z) * past;
             }
         }
-        body.velocity = forward * speed;
+        // the controller's velocity is what it actually moved (blocked by a wall → slower, sliding → along it)
+        let moved = Vec3::new(r.position.x - before.x, 0.0, r.position.z - before.z) / dt.max(1e-4);
+        body.velocity = if moved.length() < speed { moved } else { forward * speed };
         body.feet = r.position;
 
         // ground probe (0xD87720): stay snapped to the floor, otherwise start falling
@@ -579,10 +623,12 @@ pub fn straight_hand_target(feet: Vec3, forward: Vec3, guidance: &GuidanceWorld,
         .filter_map(reach)
         .find(|h| (GRAB_MIN_HEIGHT..=STRAIGHT_JUMP_MAX).contains(&(h.point.y - feet.y)))?;
     let n = hand.wall_normal;
-    let wall = super::ledge::hang_type_at(hand.point, n, collision) == super::ledge::LedgeHangType::Wall;
-    let dz = hand.point.y - feet.y;
+    // both hands on the edge (not past its end)
+    let point = guidance.fit_hands(hand.point, n);
+    let wall = super::ledge::hang_type_at(point, n, collision) == super::ledge::LedgeHangType::Wall;
+    let dz = point.y - feet.y;
     let j = if beam { super::ledge_moves::hang_jump_in_beam(dz, wall)? } else { super::ledge_moves::hang_jump_in(dz, wall)? };
-    Some(JumpTarget { position: hand.point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((hand.point, n)), straight: Some(j), pass: None })
+    Some(JumpTarget { position: point + n * j.out - Vec3::Y * j.down, type_flags: j.flags, hang: Some((point, n)), straight: Some(j), pass: None })
 }
 
 /// Pull-down type Wait (1) from Movement (0xDB1470 event 70 → fill 0xD843E0 → PullDown_Enter 0xDDE4D0): a

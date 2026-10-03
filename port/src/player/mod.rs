@@ -193,6 +193,23 @@ pub fn switch_context(loco: &mut Locomotion, data: &mut HumanDataBundle, setup: 
     loco.just_switched = true;
 }
 
+/// The skipped first update of a context just switched in (`AIActor::Update`, the `justSwitched` byte): the context's
+/// logic does not run, but the character controller still integrates the velocity it was left with
+/// (`CharacterController__Integrate` 0x57C7C0 runs every frame on +0x90). Without this the body would freeze for a
+/// frame at every switch (a visible hitch at each takeoff and landing).
+pub fn coast(body: &mut Body, collision: &crate::collision::CollisionWorld, dt: f32) {
+    let v = if body.grounded { Vec3::new(body.velocity.x, 0.0, body.velocity.z) } else { body.velocity };
+    if v.length_squared() < 1e-6 {
+        return;
+    }
+    let r = collision.move_capsule(body.feet, v * dt, body.grounded);
+    body.feet = r.position;
+}
+
+/// All player context systems (animation, IK and the camera run after them).
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PlayerSet;
+
 #[derive(Resource)]
 pub struct SpawnPoint(pub Vec3);
 
@@ -204,8 +221,22 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, spawn_player)
             .add_systems(
                 Update,
-                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, walling::update_walling, narrow::update_narrow, ladder::update_ladder, sync_visuals).chain(),
+                (ground::update_ground, air::update_air, ledge::update_ledge, climb::update_climb, hay::update_hay, walling::update_walling, narrow::update_narrow, ladder::update_ladder, release_limbs, sync_visuals)
+                    .chain()
+                    .in_set(PlayerSet),
             );
+    }
+}
+
+/// Limb IK targets belong to the hang / climb contexts only: any other context lets the hands and feet go (the game's
+/// contexts release their limb contacts on exit). Without this a context that never touches the targets (InAir after
+/// a swing jump, Ground after a pass-over …) kept the hands pinned to the last bar or ledge.
+pub fn release_limbs(mut q: Query<(&Locomotion, &mut LimbTargets), With<Player>>) {
+    for (loco, mut limbs) in &mut q {
+        if !matches!(loco.current, ActorContextId::Ledge | ActorContextId::Climb) && (limbs.hands.is_some() || limbs.feet.is_some()) {
+            limbs.hands = None;
+            limbs.feet = None;
+        }
     }
 }
 

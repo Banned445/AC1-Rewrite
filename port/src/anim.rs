@@ -190,7 +190,17 @@ pub struct AnimPlayer {
     pub items: Vec<ItemPlay>,
     pub item: usize,
     pub phase: f32,
-    pub prev: Option<(Vec<(String, f32)>, f32)>,
+    /// The pose on screen when the current transition started (per joint), faded out over `fade_time`.
+    /// PORT: the game's blend tree keeps the outgoing item running; the port freezes the displayed pose, which
+    /// also covers a transition that starts while another is still fading (no snap).
+    pub prev: Option<Vec<(Quat, Vec3)>>,
+    /// Root-joint translation on screen when the transition started (root-motion offset of a FromAnim clip).
+    prev_root: Vec3,
+    /// The last displayed pose and root translation (before IK).
+    last_pose: Vec<(Quat, Vec3)>,
+    last_root: Vec3,
+    /// The last clip key was a locomotion cycle (keeps the phase between gaits).
+    last_cyclic: bool,
     pub fade: f32,
     /// Crossfade length for the current transition (s).
     pub fade_time: f32,
@@ -235,7 +245,7 @@ impl Plugin for AnimPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<AnimLibrary>()
             .add_systems(Startup, load_library)
-            .add_systems(Update, (choose_clip, apply_clip).chain().after(crate::player::ledge::update_ledge).after(crate::player::climb::update_climb));
+            .add_systems(Update, (choose_clip, apply_clip).chain().after(crate::player::PlayerSet));
     }
 }
 
@@ -656,14 +666,15 @@ fn choose_clip(
         if same {
             continue;
         }
-        if p.clip.take().is_some() {
-            let cur = p.items.get(p.item).map(|i| i.layers.clone()).unwrap_or_default();
-            p.prev = Some((cur, p.phase));
+        if p.clip.take().is_some() && !p.last_pose.is_empty() {
+            p.prev = Some(p.last_pose.clone());
+            p.prev_root = p.last_root;
             p.fade = 0.0;
         }
         // locomotion cycles all start on the left foot: keep the phase between gaits
         let cyclic = |n: &str| matches!(n, "walk" | "jog" | "run" | "sprint");
-        let prev_cyclic = p.prev.as_ref().is_some_and(|(l, _)| l.first().is_some_and(|(n, _)| cyclic(n)));
+        let prev_cyclic = p.last_cyclic;
+        p.last_cyclic = cyclic(&req.key);
         if !(cyclic(&req.key) && prev_cyclic) {
             p.phase = 0.0;
         }
@@ -736,7 +747,6 @@ pub fn apply_clip(
     mut q: Query<(&Rig, &mut AnimPlayer, &crate::player::Body)>,
     mut joints: Query<&mut Transform>,
     mut cur: Local<Vec<(Quat, Vec3)>>,
-    mut prev_pose: Local<Vec<(Quat, Vec3)>>,
 ) {
     let dt = time.delta_secs();
     for (rig, mut p, body) in &mut q {
@@ -764,7 +774,10 @@ pub fn apply_clip(
             p.phase = next.fract();
         } else if next >= 1.0 && p.item + 1 < p.items.len() {
             // next item of the action's sequence, blended over its authored blend time
-            p.prev = Some((item.layers.clone(), 1.0));
+            if !p.last_pose.is_empty() {
+                p.prev = Some(p.last_pose.clone());
+                p.prev_root = p.last_root;
+            }
             p.fade = 0.0;
             p.item += 1;
             p.fade_time = p.items[p.item].blend.max(0.01);
@@ -778,6 +791,7 @@ pub fn apply_clip(
         // contact tags of the dominant clip (for the limb IK)
         p.contacts = lib.dominant(&item).map(|c| contact_state(c, p.phase * c.duration)).unwrap_or_default();
 
+        let fading = p.fade < 1.0 && p.prev.is_some();
         if let Ok(mut root) = joints.get_mut(rig.root) {
             *root = anim_root();
             if !p.looping && item.root_motion {
@@ -793,29 +807,33 @@ pub fn apply_clip(
                     root.translation = root.rotation * (off / wsum);
                 }
             }
+            if fading {
+                root.translation = p.prev_root.lerp(root.translation, p.fade);
+            }
+            p.last_root = root.translation;
         }
         sample_layers(&lib, rig, &item.layers, p.phase, &mut cur);
-        let fading = p.fade < 1.0 && p.prev.is_some();
-        if fading {
-            let (pl, pph) = p.prev.clone().unwrap();
-            sample_layers(&lib, rig, &pl, pph, &mut prev_pose);
-        }
+        let prev = if fading { p.prev.take() } else { None };
+        let empty = Vec::new();
+        let prev_pose = prev.as_ref().filter(|v| v.len() == cur.len()).unwrap_or(&empty);
+        let mut shown = std::mem::take(&mut p.last_pose);
+        shown.clear();
         for (i, e) in rig.joints.iter().enumerate() {
-            let Ok(mut tr) = joints.get_mut(*e) else { continue };
             let (mut rot, mut pos) = cur[i];
-            if fading {
-                rot = qinterp(prev_pose[i].0, rot, p.fade);
-                pos = prev_pose[i].1.lerp(pos, p.fade);
+            if let Some(&(r0, p0)) = prev_pose.get(i) {
+                rot = qinterp(r0, rot, p.fade);
+                pos = p0.lerp(pos, p.fade);
             }
+            shown.push((rot, pos));
+            let Ok(mut tr) = joints.get_mut(*e) else { continue };
             if !(rot.is_finite() && pos.is_finite()) && std::env::var_os("AC_NAN_LOG").is_some() {
                 warn!("non-finite joint {i} (bone {:08x}) clip {:?} item {} phase {:.3} fade {:.3} layers {:?}", rig.bone_ids[i], p.clip, p.item, p.phase, p.fade, item.layers);
             }
             tr.rotation = rot;
             tr.translation = pos;
         }
-        if p.fade >= 1.0 {
-            p.prev = None;
-        }
+        p.last_pose = shown;
+        p.prev = if p.fade >= 1.0 { None } else { prev };
     }
 }
 

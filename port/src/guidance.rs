@@ -40,6 +40,9 @@ impl GuidanceEdge {
     }
 }
 
+/// PORT: half a hand's width kept between a hand contact and the end of its edge.
+const HAND_MARGIN: f32 = 0.05;
+
 #[derive(Resource, Default)]
 pub struct GuidanceWorld {
     pub edges: Vec<GuidanceEdge>,
@@ -89,6 +92,23 @@ impl GuidanceWorld {
             }
         }
         best.map(|b| b.1)
+    }
+
+    /// A hang centred at `p` on the edge carrying it, moved along that edge so both hands (`HAND_SPACING` apart, plus
+    /// a hand's width) stay on it. The closest point of an edge is clamped to its ends, so a grab near an end used to
+    /// put one hand past the end, outside the climbable markup. An edge shorter than the hands keeps its middle.
+    pub fn fit_hands(&self, p: Vec3, n: Vec3) -> Vec3 {
+        let Some(hit) = self.on_edge(p, n, 0.15) else { return p };
+        let e = &self.edges[hit.edge];
+        let d = e.p1 - e.p0;
+        let len = d.length();
+        if len < 1e-4 {
+            return p;
+        }
+        let half = crate::tuning::HAND_SPACING * 0.5 + HAND_MARGIN;
+        let t = (hit.point - e.p0).dot(d) / len;
+        let t = if len <= 2.0 * half { len * 0.5 } else { t.clamp(half, len - half) };
+        e.p0 + d * (t / len)
     }
 
     /// Is there a LedgeGrab edge carrying point `p` (within `tol`) with wall normal ≈ `n`?

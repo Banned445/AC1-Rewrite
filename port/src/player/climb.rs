@@ -282,7 +282,11 @@ impl HoldGrid {
                     if (lx - cx).abs() <= CLIMB_COL * 0.5 + 1e-3 && (lz - cz).abs() <= CLIMB_ROW * 0.5 {
                         // snap the hold onto the cell column (bands are continuous; holds are points)
                         let snapped = h.point + right * (cx - lx);
-                        holds[(r * cols + c) as usize] = Some(snapped);
+                        // the snapped hold must still lie on the band: snapping a hit clamped at a band's end
+                        // across the cell put holds (and the character) beyond the climbable area
+                        if g.on_edge(snapped, h.wall_normal, 0.05).is_some() {
+                            holds[(r * cols + c) as usize] = Some(snapped);
+                        }
                     }
                 }
             }

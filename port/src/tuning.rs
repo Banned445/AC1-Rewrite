@@ -153,7 +153,16 @@ pub const LEDGE_MAX_UP: f32 = 3.0;
 /// Highest hand target of the standing straight jump: its top band blends the 250 / 300 cm clips over
 /// 2.5–3.0 m (0xB21DA0). (hypothesis) the target finder's own limit is not traced.
 pub const STRAIGHT_JUMP_MAX: f32 = 3.0;
+#[allow(dead_code)]
 pub const LEDGE_FAR: f32 = 8.0;
+/// PORT: how far a running jump reaches for a ledge (hang target). The game only jumps along the world's precomputed
+/// jump links (`MetaLinkTypeID_JumpLink`, `WorldArea::JumpLinkRange` Normal / Extended), so its reach is level data;
+/// 0xB1EC40's 8 m is only the animation band. The port uses the 5.5 m float of the table at 0x1A2EA50 (hypothesis:
+/// the extended link range) and the 2.5 m near band for ledges the root has to rise more than 1 m to.
+/// LIVE: read JumpLinkRange_Normal / _Extended from a loaded WorldArea.
+pub const LEDGE_JUMP_FAR: f32 = 5.5;
+pub const LEDGE_JUMP_FAR_UP: f32 = 2.5;
+pub const LEDGE_JUMP_UP_RISE: f32 = 1.0;
 
 // ---------------------------------------------------------------- body (PLACEHOLDER until Skeleton decoded)
 pub const CAPSULE_RADIUS: f32 = 0.3;

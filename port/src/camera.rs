@@ -33,7 +33,9 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraRig>()
             .add_systems(Startup, spawn_camera)
-            .add_systems(Update, (grab_cursor, orbit, follow).chain());
+            // after the player has moved this frame (otherwise the camera reads this frame's or last frame's position
+            // depending on the scheduler: a one-frame judder)
+            .add_systems(Update, (grab_cursor, orbit, follow).chain().after(crate::player::PlayerSet));
     }
 }
 

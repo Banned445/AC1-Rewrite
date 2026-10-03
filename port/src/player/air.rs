@@ -136,6 +136,10 @@ pub struct HumanInAirData {
     /// The action played once the jump turns into a fall (HumanInAirData+416), and the time since.
     pub fall_action: Option<ActionBlend>,
     pub fall_t: f32,
+    /// PORT (free jump without a target): the clips' horizontal displacement is spread evenly over the jump. The
+    /// free-step flight is authored to brake onto a landing spot; with nothing to land on that read as a stagger
+    /// in mid-air. The vertical arc stays the clips'.
+    pub flat_horizontal: bool,
 }
 
 impl HumanInAirData {
@@ -148,6 +152,7 @@ impl HumanInAirData {
         self.time_in_air = 0.0;
         self.fall_action = None;
         self.fall_t = 0.0;
+        self.flat_horizontal = false;
         match entry {
             InAirEntry::JumpToTarget { from, target, speed_param, foot_left } => {
                 self.speed_ratio = speed_param;
@@ -233,8 +238,16 @@ impl HumanInAirData {
                 self.foot_left = true;
                 // PORT: the game always jumps to a target (vt28 resolves one, 0xD832F0); with none in
                 // range the port jumps FREE_JUMP_DISTANCE ahead with the free-step blend, then falls.
+                // The blend is weighted for that distance, but no correction pulls the jump onto it: the clips'
+                // own displacement plays out and the fall carries on at their end velocity. (A correction toward a
+                // point closer than the clips' reach braked a running jump in mid-air, 7.8 → 4 m/s.)
                 let aim = from + dir * FREE_JUMP_DISTANCE;
                 self.mode = self.real_jump(from, aim, TARGET_FREESTEP, Some(aim), 0);
+                if let AirMode::Jump { clip_end, aim, then_fall_to, .. } = &mut self.mode {
+                    *aim = *clip_end;
+                    *then_fall_to = Some(*clip_end);
+                }
+                self.flat_horizontal = true;
             }
             InAirEntry::Fall { from, origin, speed_param, .. } => {
                 self.speed_ratio = speed_param;
@@ -292,6 +305,17 @@ fn to_world(d: [f32; 3], fwd: Vec3) -> Vec3 {
 
 /// Blended root displacement of the jump at time `t` (takeoff item, then the flight item from its end).
 fn jump_disp(air: &HumanInAirData, t: f32, t1: f32, duration: f32) -> [f32; 3] {
+    let mut d = jump_disp_clips(air, t, t1, duration);
+    if air.flat_horizontal {
+        let end = jump_disp_clips(air, duration, t1, duration);
+        let u = (t / duration.max(1e-4)).clamp(0.0, 1.0);
+        d[0] = end[0] * u;
+        d[1] = end[1] * u;
+    }
+    d
+}
+
+fn jump_disp_clips(air: &HumanInAirData, t: f32, t1: f32, duration: f32) -> [f32; 3] {
     let Some(fl) = air.flight else { return [0.0; 3] };
     let Some(to) = air.takeoff else { return fl.disp(t / duration.max(1e-4)) };
     if t < t1 {
@@ -357,6 +381,15 @@ pub fn update_air(
         }
         if loco.just_switched {
             loco.just_switched = false;
+            // the controller keeps integrating the take-off velocity; the jump's path shifts with it so the
+            // linear correction (0xE0DEF0) still ends on the target
+            let before = body.feet;
+            super::coast(&mut body, &collision, dt);
+            let d = body.feet - before;
+            if let AirMode::Jump { from, clip_end, .. } = &mut data.air.mode {
+                *from += d;
+                *clip_end += d;
+            }
             continue;
         }
         let air = &mut data.air;
@@ -382,18 +415,40 @@ pub fn update_air(
                     from.lerp(clip_end, s) + Vec3::Y * (4.0 * apex * s * (1.0 - s))
                 };
                 // linear correction toward the real target (0xE0DEF0)
-                let correction = (aim - clip_end) * s;
-                let next = clip_pos + correction;
-                let r = collision.move_capsule(body.feet, next - body.feet, false);
-                body.velocity = (r.position - body.feet) / dt.max(1e-4);
+                let path = |tt: f32| -> Vec3 {
+                    let ss = (tt / duration).clamp(0.0, 1.0);
+                    let cp = if real { from + to_world(jump_disp(air, tt.clamp(0.0, duration), t_takeoff, duration), fwd) } else { from.lerp(clip_end, ss) + Vec3::Y * (4.0 * apex * ss * (1.0 - ss)) };
+                    cp + (aim - clip_end) * ss
+                };
+                let next = clip_pos + (aim - clip_end) * s;
+                // the path's own velocity (not the collision-resolved displacement: a depenetration push is not
+                // a velocity, using it flung the character up when a foot clipped the lip of a higher roof)
+                let path_vel = (next - path(t1 - dt.max(1e-3))) / dt.max(1e-3);
+                let mut r = collision.move_capsule(body.feet, next - body.feet, false);
+                if (r.position - next).length() > 0.05 && next.y > body.feet.y - 0.05 {
+                    // PORT: the capsule caught the lip of what it is jumping onto: lift it over (≤ 0.5 m), as the
+                    // game's proxy slides up its contact planes. The game's world collision during target jumps is
+                    // not traced (LIVE: compare the root path over a lip with the game's).
+                    let up = collision.move_capsule(body.feet + Vec3::Y * 0.5, next - body.feet, false);
+                    if (up.position - next).length() < (r.position - next).length() {
+                        r = up;
+                        r.position.y = r.position.y.min(next.y + 0.5);
+                        if let Some(h) = collision.ground_height(r.position + Vec3::Y * 0.02, 0.6) {
+                            r.position.y = r.position.y.max(h).min(next.y.max(h));
+                        }
+                    }
+                }
+                body.velocity = path_vel;
                 body.heading = super::heading_of(fwd);
                 body.feet = r.position;
-                let blocked = (r.position - next).length() > 0.05;
+                let blocked = (r.position - next).length() > 0.25;
                 if blocked {
-                    // hit something mid-jump (anti-stuck 0xE0B1E0, simplified): fall from here
+                    // hit something mid-jump (anti-stuck 0xE0B1E0, simplified): fall from here with the path's
+                    // horizontal velocity damped and no upward push
                     air.mode = AirMode::Fall { steer_to: None };
                     body.velocity.x *= 0.3;
                     body.velocity.z *= 0.3;
+                    body.velocity.y = body.velocity.y.min(0.0);
                 } else if t1 >= duration {
                     // arrival (0xE07D00): within 0.01 m by construction
                     debug_assert!((body.feet - aim).length() < ARRIVAL_TOLERANCE + 0.05);
@@ -466,8 +521,12 @@ pub fn update_air(
                     }
                     None => {
                         // non-target drift: decays 4 m/s², capped 5 m/s (0x19BA434/438)
+                        // PORT: a fall entered faster than the cap (a free jump at sprint speed, 6.3 m/s) decays onto it
+                        // at the same 4 m/s² instead of being clamped in one frame (a visible lurch). The game reaches
+                        // this path from its own entries only (LIVE: horizontal speed of a sprint off an edge).
                         let len = h.length();
-                        let new_len = (len - DRIFT_DECEL * dt).max(0.0).min(DRIFT_MAX);
+                        let new_len = (len - DRIFT_DECEL * dt).max(0.0);
+                        let new_len = if len > DRIFT_MAX { new_len.max(DRIFT_MAX) } else { new_len.min(DRIFT_MAX) };
                         h = if len > 1e-4 { h * (new_len / len) } else { Vec3::ZERO };
                     }
                 }
@@ -496,7 +555,7 @@ pub fn update_air(
                     // grab requested (SetGrabRequested 0xE102D0) → catch a ledge in reach
                     if let Some(h) = find_air_catch(body.feet, body.forward(), &guidance) {
                         air.long_catch = air.apex_y - body.feet.y >= 3.0;
-                        hang_on = Some(LedgeEntry::at(h.point, h.wall_normal, body.feet, LedgeSubState::HangWallReception));
+                        hang_on = Some(LedgeEntry::at(guidance.fit_hands(h.point, h.wall_normal), h.wall_normal, body.feet, LedgeSubState::HangWallReception));
                     }
                 }
             }
