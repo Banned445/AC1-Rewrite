@@ -370,6 +370,17 @@ where a2 = IHuman and a3 = IHumanGround. Slots found:
 So the game's lean is not "running into a wall" alone (the port's PORT trigger): it happens when a jump is asked for
 and the obstacle ahead is not a target.
 
+- **Obstacle query** (IHuman vt152 → 0xB27900):
+  1. **First, 0xB253D0:** a GuidanceZone ahead (forward = the stick, length the argument 2.0, 1.7 wide). It takes the
+     nearest edge facing the character (normal · dir < −0.7071) with more than 0.45 m of drop behind it
+     (`Human__MeasureDropBeyondEdge`, 0.85 m probe), then capsule-casts toward it. Returns the contact, the normal and
+     the height (edge z − feet z), or 1.7 m when something else blocks the cast. Out flag 0.
+  2. **Else 0xB25C80:** obstacles without guidance. Out flag 1.
+- **The event is sent only when** the scorer's out-flag `v140` (0xE96BF0) is set although it returned no candidate.
+  That flag's meaning isn't decoded. The guard 0xB25230 then still needs a real controller contact within 45°.
+- **Port:** keeps the PORT trigger (a contact while moving) until `v140` is decoded. Rewiring it now would change the
+  wall grab and knee-jump behaviour too.
+
 **Ledge stop, low profile** (0xEE7BDA–0xEE7C85):
 - **Report:** the stick-direction edge report (vt136, 0.75 m, 100° cone).
 - **Condition:** distance (+52) < 0.16, drop (+48) > 2.0, normal within 70° of the facing.
