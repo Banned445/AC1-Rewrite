@@ -199,9 +199,37 @@ impl LedgeMove {
         self.from + right_of(self.facing_from) * d[0] + self.facing_from * d[1] + Vec3::Y * d[2]
     }
 
-    /// Facing during the move (turned from the old wall to the new one).
+    /// Summed root yaw of the sequence up to time `t` (radians, + = left).
+    fn yaw(&self, t: f32) -> f32 {
+        let mut o = 0.0;
+        let mut t0 = 0.0;
+        for (i, a) in self.seq.iter().enumerate() {
+            let Some(a) = a else { continue };
+            let d = self.durations[i];
+            o += a.yaw(((t - t0) / d.max(1e-4)).clamp(0.0, 1.0));
+            t0 += d;
+        }
+        o
+    }
+
+    /// Facing during the move (turned from the old wall to the new one). When the clips' root yaw makes the same turn
+    /// (the corners' ±90°) the facing follows it, with the remainder spread linearly; otherwise it is interpolated.
     pub fn facing(&self) -> Vec3 {
-        let s = (self.t / self.duration()).clamp(0.0, 1.0);
+        let total = self.duration();
+        let s = (self.t / total).clamp(0.0, 1.0);
+        let h0 = super::heading_of(self.facing_from);
+        let mut turn = super::heading_of(self.facing_to) - h0;
+        while turn > std::f32::consts::PI {
+            turn -= std::f32::consts::TAU;
+        }
+        while turn < -std::f32::consts::PI {
+            turn += std::f32::consts::TAU;
+        }
+        let clip_turn = self.yaw(total);
+        if turn.abs() > 0.1 && (clip_turn - turn).abs() < 0.35 {
+            let h = h0 + self.yaw(self.t) + (turn - clip_turn) * s;
+            return Vec3::new(-h.sin(), 0.0, -h.cos());
+        }
         self.facing_from.lerp(self.facing_to, s).normalize_or(self.facing_to)
     }
 }

@@ -303,7 +303,7 @@ smooth. FROMANIM items therefore turn the character by their root yaw.
 - the anim gate of the guards;
 - the second pivot table;
 - the pivot exits' own transition items;
-- root yaw in InAir takeoffs (side free-step jumps) and in ledge corners (which still interpolate the facing).
+- root yaw in InAir takeoffs (the side free-step jumps are not chosen by the port). Ledge moves now follow the clips' yaw when it makes the move's turn (the free-hang corners, ±90°); the wall-hang corners have none and interpolate.
 
 ### 4.4 Start from standing (verified 2026-10-03)
 `HumanGround__PlayStartMove` 0xD98990 (Idle → Move, guard 0xD84AC0) plays the locomotion action `0x05923BDB`, entered
