@@ -637,7 +637,13 @@ pub fn update_ground(
             None => {
                 body.grounded = false;
                 let entry = InAirEntry::Fall { from: body.feet, velocity: body.velocity, origin: FallOrigin::Ground, speed_param: g.speed_param };
+                // the drop sub-state's type and side (0xD8C380 → 0xE064C0): side from the edge normal against the facing
+                let report = drop_report(body.feet, 0.5, &guidance, &collision);
+                let h = report.map_or(7.0, |r| r.2);
+                let ty = super::air::fall_type(h, Vec2::new(body.velocity.x, body.velocity.z).length());
+                let side = report.and_then(|r| r.1).map_or(0, |n| (n.dot(body.forward()) <= 0.0) as usize);
                 switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
+                data.air.drop = Some((ty, side));
             }
         }
     }
@@ -647,9 +653,9 @@ pub fn update_ground(
 /// LedgeGrab edge in a 0.75 m sphere zone around the feet (|dz| < 0.3) whose drop beyond it is at least the minimum,
 /// or, with no such edge, the drop straight under the feet. Returns (signed horizontal distance from the feet to the
 /// edge, negative once past it; the edge's outward normal, `None` when there was no edge).
-pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(f32, Option<Vec3>)> {
+pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(f32, Option<Vec3>, f32)> {
     use crate::guidance::GuidanceSubType;
-    let mut best: Option<(f32, f32, Vec3)> = None; // (distance to the zone centre, signed distance, normal)
+    let mut best: Option<(f32, f32, Vec3, f32)> = None; // (distance to the zone centre, signed distance, normal, drop)
     for e in guidance.edges.iter().filter(|e| e.subtype == GuidanceSubType::LedgeGrab) {
         let q = e.closest_point(feet);
         if (q.y - feet.y).abs() >= 0.3 {
@@ -671,15 +677,15 @@ pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collisio
         }
         let signed = if n.dot(feet - q) > 0.0 { -d } else { d };
         if best.is_none_or(|b| d < b.0) {
-            best = Some((d, signed, n));
+            best = Some((d, signed, n, drop));
         }
     }
-    if let Some((_, s, n)) = best {
-        return Some((s, Some(n)));
+    if let Some((_, s, n, drop)) = best {
+        return Some((s, Some(n), drop));
     }
     // no edge: the drop straight under the feet (flag +56)
     let drop = collision.floor_height_below(feet + Vec3::Y * 0.01, 7.0).map_or(7.0, |h| feet.y - h);
-    (drop >= min_drop).then_some((0.0, None))
+    (drop >= min_drop).then_some((0.0, None, drop))
 }
 
 /// `HumanGround__CheckGroundLoss` 0xD87720: with the drop report (vt104, minimum 0.5 m), the ground is lost once the
@@ -688,7 +694,7 @@ pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collisio
 /// line, not when the capsule's rounded bottom slides off the rim. (The guard 0xC7F150 and the cached report of
 /// Human+2801 are not modelled.)
 pub fn ground_loss(feet: Vec3, velocity: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> bool {
-    let Some((dist, n)) = drop_report(feet, 0.5, guidance, collision) else { return false };
+    let Some((dist, n, _)) = drop_report(feet, 0.5, guidance, collision) else { return false };
     if dist >= 0.01 {
         return false;
     }

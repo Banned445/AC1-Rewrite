@@ -351,8 +351,34 @@ Choice:
   | 4 / 6 | anything else |
 
   The second value of each pair is used when v ≥ 2.5 m/s.
-- The type goes back through probe vt112 to pick the entry, and the result feeds `sub_D88AA0(setup, 2, …, 3)`. That mapping is **not traced**.
-- The port keeps name-based entry clips, but switches on the game's 2.5 m/s.
+- **Correction (verified 2026-10-03):** h is the drop of IHuman vt104's report (`Human__ReportDropAtFeet` 0xB248B0,
+  RE/01 §7.1), not a probe component; vt112 returns the cached report.
+- **InAir setup:** the setup is `TransitionSetupDataToInAir(kind 2 = Drop, report, type, side 3)` (0xD88AA0, pushes at
+  0xD8C4B8–0xD8C4C9). Its Apply (0xC7D270 → 0xC7D1A0) copies the report, the type (+944 +64) and the side (+944 +68)
+  into InAirData.
+- **Drop sub-state** (`HumanInAir__EnterDropState` 0xE064C0):
+  - side 3 means side = (dot(edge normal, facing) ≤ 0): 0 when facing the drop, 1 with the back to it;
+  - it plays `dword_1A2EB30[2·type + side]` entered from `dword_1A2EAE0[2·type + side]` (0.2 s), tables filled by
+    0xDFF680, all in the HumanGround_Hurt block. The table:
+
+  | Type | Entry [front / back] | Phase |
+  |---|---|---|
+  | 0 | `0xC5DD34F3` / `0xBE67B24A` stumble_air medium | 0.3 s |
+  | 1 | `0xC5DD34F6` / `0xBE67B24D` stumble_air strong | 0.3 s |
+  | 2 | `0xC5DD34F7` / `0xBE67B23E` hurt_fall_balanced short | 0.6 s |
+  | 3 | `0xC5DD34FA` / `0xBE67B241` hurt_fall_balanced long | 0.6 s |
+  | 4 | `0x7E5DE556` / `57` hurt_fall_medium | 1.0 s |
+  | 6 | `0x7F4A71E4` / `E5` hurt_fall_dive (a, b) | clip length |
+  | 7 | `0x8111514B` hurt_fall_stumble_dive | clip length |
+  | 8 | `0x81117142` / `41` hurt_fall_railing | 0.1 s |
+
+  - Each type continues into the loop `0x8111514E` / `0x8111514F` (`hurt_fall_front` / `back`).
+  - The phase also sets the human-push delay at this+400: 0.2 / 0.5 / 0.6 / 0.1.
+- **Port:** `air::DROP_ENTRY` / `DROP_LOOP` / `fall_type` / `drop_phase`. Ground loss stores the type and side, and
+  the animator plays the entry and the loop for the phase, then the falling blend. `AC_AUTOPILOT=runoff`.
+- **Consequence:** running off a roof (≥ 1 m, ≥ 2.5 m/s) dives, walking off it stumbles (< 1 m) or falls in the
+  medium hurt fall.
+- **Not ported:** the steer away from the wall (0xE04B60, 3 rad/s for 0.3 s) and the probe type 1 bands.
 
 ### 4.1.11 Jumps at a ledge (verified 2026-10-01)
 **Standing straight jump at a hand target** (`HumanGround__StartStraightJump` 0xD85550).

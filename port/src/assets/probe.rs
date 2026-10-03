@@ -400,3 +400,36 @@ fn probe_clip_yaw() {
         }
     }
 }
+
+/// Find action / item ids (`PROBE_IDS`, comma list of hex) in every ActionBlock: block, items, clips, transitions.
+#[test]
+#[ignore]
+fn probe_find_actions() {
+    use super::ac_actions::{ActionGraph, CLASS_ACTION_BLOCK};
+    let res = game_fix();
+    let mut graph = ActionGraph::default();
+    for r in res.iter().filter(|r| r.class_hash == CLASS_ACTION_BLOCK) {
+        graph.add_block(&r.name, &r.payload).unwrap();
+    }
+    let names: HashMap<u32, &str> = res.iter().filter(|r| r.class_hash == CLASS_ANIMATION).map(|r| (r.id, r.name.as_str())).collect();
+    let ids: Vec<u32> = std::env::var("PROBE_IDS").unwrap_or_default().split(',').filter_map(|s| u32::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok()).collect();
+    for id in ids {
+        let mut found = false;
+        for a in graph.actions.values() {
+            let hit_item = a.items.iter().any(|it| it.id == id);
+            let hit_tr = a.items.iter().any(|it| it.transitions.iter().any(|t| t.0 == id || t.1 == id));
+            if a.id == id || hit_item || hit_tr {
+                found = true;
+                let what = if a.id == id { "action" } else if hit_item { "item of" } else { "transition in" };
+                println!("{id:#010x}: {what} {:#010x} [{}]", a.id, a.block);
+                for it in &a.items {
+                    let clips: Vec<&str> = it.animations.iter().map(|x| names.get(x).copied().unwrap_or("?")).collect();
+                    println!("    item {:#010x} {:?} w {:?} tr {:x?}", it.id, clips, it.weights, it.transitions);
+                }
+            }
+        }
+        if !found {
+            println!("{id:#010x}: not found");
+        }
+    }
+}

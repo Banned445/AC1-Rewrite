@@ -51,6 +51,8 @@ enum Scenario {
     LookDown,
     /// Stand, then push the stick straight behind: the pivot (Movement state 25).
     Pivot,
+    /// Run (high profile, no Legs) off the 6 m block: ground loss into the drop sub-state.
+    RunOff,
     /// Run at the 1 m railing and jump: pass-over vault.
     PassOver,
     /// Jump at the first swing bar and swing from bar to bar onto the far platform.
@@ -89,6 +91,7 @@ impl Plugin for DebugCapturePlugin {
                 "ladder" => Scenario::Ladder,
                 "lookdown" => Scenario::LookDown,
                 "pivot" => Scenario::Pivot,
+                "runoff" => Scenario::RunOff,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
@@ -174,6 +177,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.heading = 0.0;
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
+            }
+            Scenario::RunOff => {
+                b.feet = Vec3::new(-12.5, 6.0, 4.0);
+                b.heading = -std::f32::consts::FRAC_PI_2;
+                rig.yaw = 0.0;
+                rig.distance = 7.0;
             }
             Scenario::Pivot => {
                 b.feet = Vec3::new(-30.0, 0.0, -30.0);
@@ -350,6 +359,13 @@ fn autopilot(
         Scenario::LookDown => {
             pad.magnitude = 0.0;
             pad.speed01 = 0.0;
+        }
+        Scenario::RunOff => {
+            pad.high_profile = true;
+            pad.legs_held = false;
+            pad.dir = Vec3::X;
+            pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
         }
         Scenario::Pivot => {
             pad.high_profile = true;

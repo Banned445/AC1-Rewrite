@@ -46,6 +46,48 @@ pub struct Landing {
     pub action: Option<ActionBlend>,
 }
 
+/// Drop sub-state (4) animations (`HumanInAir__EnterDropState` 0xE064C0, tables 0x1A2EAE0 / 0x1A2EB30 filled by
+/// 0xDFF680; HumanGround_Hurt block): the entry item by [drop type][side 0 front, 1 back], then the falling loop
+/// `hurt_fall_{front,back}`. Ground loss sends types 0..6 (`HumanGround__TransitionToInAirFall` 0xD8C380).
+pub const DROP_ENTRY: [[u32; 2]; 9] = [
+    [0xC5DD_34F3, 0xBE67_B24A], // 0 stumble_air medium
+    [0xC5DD_34F6, 0xBE67_B24D], // 1 stumble_air strong
+    [0xC5DD_34F7, 0xBE67_B23E], // 2 hurt_fall_balanced short
+    [0xC5DD_34FA, 0xBE67_B241], // 3 hurt_fall_balanced long
+    [0x7E5D_E556, 0x7E5D_E557], // 4 hurt_fall_medium
+    [0, 0],                     // 5 (none)
+    [0x7F4A_71E4, 0x7F4A_71E5], // 6 hurt_fall_dive
+    [0x8111_514B, 0x8111_514B], // 7 hurt_fall_stumble_dive
+    [0x8111_7142, 0x8111_7141], // 8 hurt_fall_railing
+];
+pub const DROP_LOOP: [u32; 2] = [0x8111_514E, 0x8111_514F];
+
+/// Drop phase length by type (0xE064C0): < 2 → 0.3 s, 2–3 → 0.6 s, 4–5 → 1.0 s, 6–7 → the animation's length,
+/// 8 → 0.1 s; `None` = the animation's length.
+pub fn drop_phase(ty: usize) -> Option<f32> {
+    match ty {
+        0 | 1 => Some(0.3),
+        2 | 3 => Some(0.6),
+        4 | 5 => Some(1.0),
+        8 => Some(0.1),
+        _ => None,
+    }
+}
+
+/// `HumanGround__TransitionToInAirFall` 0xD8C380: fall type by the drop report's height `h` and the horizontal speed
+/// `v`: h < 1 m (or < 8 m on a type-1 probe, PORT: not modelled) → 0 / 1 (2 / 3 when h ≥ 2 m), else 4 / 6; the second
+/// of each pair at v ≥ 2.5 m/s.
+pub fn fall_type(h: f32, v: f32) -> usize {
+    let fast = v >= 2.5;
+    if h < 1.0 {
+        if h >= 2.0 { 2 + fast as usize } else { fast as usize }
+    } else if fast {
+        6
+    } else {
+        4
+    }
+}
+
 /// `HumanInAirData::FallOrigin` (desc 0x199587C).
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -140,6 +182,8 @@ pub struct HumanInAirData {
     /// free-step flight is authored to brake onto a landing spot; with nothing to land on that read as a stagger
     /// in mid-air. The vertical arc stays the clips'.
     pub flat_horizontal: bool,
+    /// Ground loss: the drop sub-state's (type, side) (InAirData+944 +64 / +68).
+    pub drop: Option<(usize, usize)>,
 }
 
 impl HumanInAirData {
@@ -153,6 +197,7 @@ impl HumanInAirData {
         self.fall_action = None;
         self.fall_t = 0.0;
         self.flat_horizontal = false;
+        self.drop = None;
         match entry {
             InAirEntry::JumpToTarget { from, target, speed_param, foot_left } => {
                 self.speed_ratio = speed_param;

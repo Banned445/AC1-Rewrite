@@ -490,6 +490,17 @@ fn choose_clip(
                     p.sim_phase = Some((data.air.fall_t / b.duration().max(1e-4)).min(1.0));
                     sim_request(&mut p, &lib, &b, 2_600_000 + data.air.seq as u64, 0.1)
                 }
+                // ground loss: the drop sub-state's entry, then the hurt-fall loop, for the drop phase (0xE064C0)
+                AirMode::Fall { .. }
+                    if data.air.drop.is_some_and(|(ty, _)| {
+                        let entry = crate::player::air::DROP_ENTRY[ty][0];
+                        entry != 0 && lib.action_items(entry).is_some() && data.air.fall_t < crate::player::air::drop_phase(ty).unwrap_or_else(|| lib.action_items(entry).map(|it| it.iter().map(|i| lib.item_duration(i)).sum::<f32>()).unwrap_or(0.5))
+                    }) =>
+                {
+                    let (ty, side) = data.air.drop.unwrap();
+                    p.seen_fall = Some(data.air.seq);
+                    action(&lib, &[crate::player::air::DROP_ENTRY[ty][side], crate::player::air::DROP_LOOP[side]], false, 4_200_000 + data.air.seq as u64, Some(0.2), None)
+                }
                 _ => {
                     if p.seen_fall != Some(data.air.seq) {
                         p.seen_fall = Some(data.air.seq);

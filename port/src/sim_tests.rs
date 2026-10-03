@@ -1462,3 +1462,15 @@ fn starting_from_standing_plays_the_start_item() {
     s.run(1.0 / 60.0 + 1e-4);
     assert!(s.ground().oneshot.is_none_or(|o| !START_MOVE.iter().flatten().any(|&i| i == o.blend.id)));
 }
+
+#[test]
+fn running_off_a_roof_enters_the_drop_with_the_fall_type() {
+    // 6 m block: running (>= 2.5 m/s) off a drop >= 1 m -> type 6 (dive), facing the drop -> side 0 (front)
+    let mut s = Sim::new(Vec3::new(-11.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
+    assert_eq!(s.data().air.drop, Some((6, 0)));
+    assert_eq!(air::fall_type(0.7, 1.0), 0);
+    assert_eq!(air::fall_type(0.7, 3.0), 1);
+    assert_eq!(air::fall_type(3.0, 1.0), 4);
+}
