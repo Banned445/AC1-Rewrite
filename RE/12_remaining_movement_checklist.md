@@ -96,10 +96,13 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).
 - [~] **Ground loss → InAir:** **→ Movement falls only by `Human__ShouldFallOffSupport` 0xB23CB0 (ported); the
       edge-line ground loss and its fall-type drop are fight-only (grabbed, RE/01 §7.1). Open: InAir sub-state 3
-      keeping the ground clip (0xE00EF0) instead of the named `*_to_fall` clips; the fight grab itself**
+      keeping the ground clip (0xE00EF0) instead of the named `*_to_fall` clips. Its two animation calls are not
+      decoded yet: `sub_5045F0(1, 0, 0)` acts on the actions of animation slot 1 (calls `sub_726F40(0, 0)` on each),
+      and the timer is `sub_724D50(sub_5014C0(0))`. Also open: the fight grab itself**
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
-- [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. Open: side ledge stop
-      (0xD8E5B0), look-down port (event 119 sender / guard), event 69 sender**
+- [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. The side ledge
+      stop (0xD8E5B0) is a one-frame NarrowObject Edge stay that returns to Ground (RE/05 §2.9), the port's behaviour.
+      Event 69's sender is the interpreter (RE/02 §4.5, ported). Open: event 119's (look-down) sender / guard**
 - [~] **Leap of Faith** from a look-down edge. **→ faith jump + HayStack context ported (RE/04 §4.1.12); open: the ability /
       look-down trigger path (vt1540/1544), fall entry 0xE05490**
 - [~] **PullDown, ground → hang** (§4): **→ type Wait / front ported (RE/03 §7.8b)**
