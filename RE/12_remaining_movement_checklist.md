@@ -139,7 +139,12 @@ the pilotis wait and lean, the beam impulsion, the jump on the spot (clear or to
 free-step jumps (kind 1) from beams and pilotis.**
 - [ ] **Free-step arrival:** roof-edge jumps (type 1) end in NarrowObject after the free-step reception (0xE07D00, RE/04 §4.1.7).
       The port stays in Ground.
-- [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
+- [x] **Standing on the ledge edge after a pull-up.** **→ (2026-10-03) `HumanLedge__Pullup_Tick` 0xDE2EE0: at the
+      release of a hangknee action (every pull-up, the knee / waist straight-jump receptions, the walling pull-ups)
+      the default outcome is flag 0x40 → `SwitchToNarrowObjectContext` 0xDD2A50 → `hangknee_foot{l,r}_tr_freestep_entry`
+      0x248E9730/31 (one-hand: 0x39193BBB), NarrowObject SubState 6. The port plays that clip and returns to Ground
+      (the transient stay's end state). hangknee → wait 0x0106C58B is only a graph exit and is no longer used. The
+      other outcomes belong to the pass-overs: `passover_tr_fall` → InAir (flag 2), `passover_tr_hangwall` → hang (4).**
 - [x] **Edge:** decoded as a one-frame redirect back to Ground in this build (RE/05 §2.9); the side look-down is ported (RE/02 §4.2).
 - [x] **Lean:** NarrowObject's Lean is unreachable (event 71 rejected, RE/05 §2.9). The game's lean is Ground ObstacleCollision (event 42, RE/02 §4.2): the state is ported (hand lean 70/150 cm, foot bump 50/70 cm, exits), but event 42 is unreachable from player input (RE/02 §4.5), so the port no longer enters it when running into a wall (2026-10-03).
 - [ ] **Beam:**

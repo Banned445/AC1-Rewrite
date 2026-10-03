@@ -78,7 +78,7 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     0x0129_0ED0, 0x0127_2A6A, 0x0127_163A, 0x0127_1632, 0x0121_B072, 0x0127_23A5,
     // < 0.7 m band: collide_full → freestep flight and its reception
     0x012B_291B, RECEPTION_STEP_UP,
-    ACT_WAIST_TO_KNEE, ACT_KNEE_TO_WAIT,
+    ACT_WAIST_TO_KNEE, ACT_KNEE_TO_WAIT, ACT_KNEE_TO_FREESTEP[0], ACT_KNEE_TO_FREESTEP[1],
     // running jump onto a ledge: wall reception and free-hang swing (0xE07D00 generic branch)
     RECEPTION_SURFACE_WALL, SWING_RECEPTION,
     // pull-down (0xDDE4D0 / 0xDDE980)
@@ -435,7 +435,15 @@ pub fn try_hop_up(hand_l: Vec3, hand_r: Vec3, n: Vec3, root: Vec3, hang: LedgeHa
 
 /// Pull-up chain pieces: hangwaist → hangknee (`xx_h_hangwaist_tr_hangknee_footl`), hangknee → wait.
 pub const ACT_WAIST_TO_KNEE: u32 = 0x0127_199E;
+/// hangknee → wait (`xx_h_hangknee_footl_tr_h_wait_footr_{a,b}`): only an exit listed in the graph; the game's code
+/// ends the stand-up through `ACT_KNEE_TO_FREESTEP` instead.
+#[allow(dead_code)]
 pub const ACT_KNEE_TO_WAIT: u32 = 0x0106_C58B;
+/// The stand-up's end (`HumanLedge__Pullup_Tick` 0xDE2EE0: at the hangknee action's release, flag 0x40 →
+/// `SwitchToNarrowObjectContext` 0xDD2A50): `xx_h_hangknee_foot{l,r}_tr_freestep_entry_foot{l,r}`, by the playing
+/// item's leading foot (+60 & 0xC == 4 → left), then NarrowObject SubState 6 (the transient free-step stay, back to
+/// Ground on wide support). [footl, footr].
+pub const ACT_KNEE_TO_FREESTEP: [u32; 2] = [0x248E_9730, 0x248E_9731];
 /// Running jump onto a wall-hang ledge (target type 0x40): `air_surface_tr_hangwall_reception_{straight,
 /// 30_out,45_in}_{min,max}` then `hangwall_reception_*_{a,b}` (3 items × 6 clips; 0xE07D00 → 0xE02BA0).
 pub const RECEPTION_SURFACE_WALL: u32 = 0x011F_F16A;
@@ -538,13 +546,13 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
                     let to = hang_root_at(hand_l, hand_r, n, if h == LedgeHangType::Free || hang_type_at(mid, n, collision) == LedgeHangType::Free { LedgeHangType::Free } else { LedgeHangType::Wall }, collision);
                     ([item(j.reception, 0, &w), item(j.reception, 1, &w), None, None], to, h == LedgeHangType::Free, false)
                 }
-                HangEnd::StandFromKnee => ([item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_KNEE_TO_WAIT, 0, &[1.0]), None], top, false, true),
+                HangEnd::StandFromKnee => ([item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_KNEE_TO_FREESTEP[0], 0, &[1.0]), None], top, false, true),
                 // PORT: the reception's root (FROMANIM) is corrected onto the pull-up's stand point; where the game's
                 // free-step stay leaves the root is not traced. Its exit transitions (low / high wait 0x69C24BB2 /
                 // 0x0D9971F9, jog 0x0D9971FB) are chosen by the animation graph; the port hands back to Ground.
                 HangEnd::FreeStep => ([item(j.reception, 0, &w), None, None, None], top, false, true),
                 HangEnd::StandFromWaist => (
-                    [item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_WAIST_TO_KNEE, 0, &[1.0]), item(ACT_KNEE_TO_WAIT, 0, &[1.0])],
+                    [item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_WAIST_TO_KNEE, 0, &[1.0]), item(ACT_KNEE_TO_FREESTEP[0], 0, &[1.0])],
                     top,
                     false,
                     true,
@@ -629,17 +637,18 @@ pub fn pullup_move(hang: LedgeHangType, from: Vec3, hand_l: Vec3, hand_r: Vec3, 
             normal: n,
         }
     };
-    let knee_to_wait = [first_clip(ACT_KNEE_TO_WAIT, 0), first_clip(ACT_KNEE_TO_WAIT, 1)];
+    // the pull-up's hangknee clips are all footl
+    let stand = first_clip(ACT_KNEE_TO_FREESTEP[0], 0);
     match hang {
         LedgeHangType::Wall => (
-            mk([first_clip(ACT_PULLUP_WALL, 0), first_clip(ACT_PULLUP_WALL, 1), knee_to_wait[0], knee_to_wait[1]], from, top_feet, true),
+            mk([first_clip(ACT_PULLUP_WALL, 0), first_clip(ACT_PULLUP_WALL, 1), stand, None], from, top_feet, true),
             None,
         ),
         LedgeHangType::Free => {
             let mut a = mk([first_clip(ACT_PULLUP_FREE, 0), first_clip(ACT_PULLUP_FREE, 1), first_clip(ACT_WAIST_TO_KNEE, 0), None], from, from, false);
             // first part: the clips' path, corrected only by the second part
             a.to = a.natural_end();
-            let b = mk([knee_to_wait[0], knee_to_wait[1], None, None], a.to, top_feet, true);
+            let b = mk([stand, None, None, None], a.to, top_feet, true);
             (a, Some(b))
         }
     }

@@ -328,8 +328,8 @@ const ACT_HANG_FREE: u32 = 0x0127_19F1;
 const ACT_HANG_WALLFREE: u32 = 0x0106_F2E9;
 const ACT_PULLUP_WALL: u32 = 0x0106_D2C5;
 const ACT_PULLUP_FREE: u32 = 0x0127_19F2;
-/// Pull-up outcome "stand": hangknee → wait (transition target of the pull-up's last item).
-const ACT_HANGKNEE_TO_WAIT: u32 = 0x0106_C58B;
+/// Pull-up outcome "stand": hangknee → free-step entry (0xDE2EE0 → 0xDD2A50).
+const ACT_HANGKNEE_TO_WAIT: u32 = crate::player::ledge_moves::ACT_KNEE_TO_FREESTEP[0];
 /// [wall, free] × [left open, left close, right open, right close].
 const ACT_SHIMMY: [[u32; 4]; 2] = [[0x01B7_0B35, 0x01B7_0B36, 0x01B7_0B37, 0x01B7_0B38], [0x01A2_490A, 0x01A2_490B, 0x01A2_490C, 0x01A2_490D]];
 /// [wall, free] × [up: 1m_u_1lu, 1m_u_1ru, 1lu_u_1m, 1ru_u_1m, down: 1m_d_1lu, 1m_d_1ru, 1lu_d_1m, 1ru_d_1m].

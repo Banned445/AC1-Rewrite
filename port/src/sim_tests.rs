@@ -495,13 +495,13 @@ fn straight_jump_at(feet: Vec3) -> Sim {
 
 #[test]
 fn knee_height_block_jumps_and_stands_on_top() {
-    use crate::player::ledge_moves::{HangEnd, ACT_KNEE_TO_WAIT};
+    use crate::player::ledge_moves::{HangEnd, ACT_KNEE_TO_FREESTEP};
     let mut s = straight_jump_at(Vec3::new(50.0, 0.0, 49.0));
     let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
     assert_eq!((j.flight, j.end), (0x0127_2A69, HangEnd::StandFromKnee), "1.6 m: jumpstraight_to_hangknee");
     assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
     let mv = s.data().ledge.mv.expect("reception");
-    assert_eq!(mv.seq[2].map(|a| a.id), Some(ACT_KNEE_TO_WAIT));
+    assert_eq!(mv.seq[2].map(|a| a.id), Some(ACT_KNEE_TO_FREESTEP[0]), "hangknee -> free-step entry (0xDE2EE0)");
     assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::Ground), "never stood up");
     assert!((s.body().feet.y - 1.6).abs() < 0.05, "on top of the block: {:?}", s.body().feet);
 }

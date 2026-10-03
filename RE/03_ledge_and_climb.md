@@ -567,8 +567,29 @@ The root is interpolated over the action (`sub_711130`, flag 0). SubState 3.
 
 ### 7.7b Pull-up root path (2026-10-02)
 The pull-up actions are FROMANIM:
-- **Wall:** `0x0106D2C5` hangwall → hangknee (a, b), then `0x0106C58B` hangknee → wait (a, b).
-- **Free:** `0x012719F2` hangfree → hangwaist (a, b), then `0x0127199E` waist → knee, then `0x0106C58B`.
+- **Wall:** `0x0106D2C5` hangwall → hangknee (a, b), then the stand-up below.
+- **Free:** `0x012719F2` hangfree → hangwaist (a, b), then `0x0127199E` waist → knee, then the stand-up below.
+
+**Stand-up and outcomes (corrected 2026-10-03, `HumanLedge__StatePullup_Update` 0xDE39D0 / `Pullup_Tick` 0xDE2EE0).**
+Earlier versions ended on `0x0106C58B` hangknee → wait (a, b), which is only an exit listed on the hangknee items in
+the animation graph. The code decides at the playing action's release (`sub_5017B0`: the action's done flag):
+- **Default (any hangknee action: the pull-ups above, the straight-jump knee / waist receptions 0x01290ED0 /
+  0x01272A6A / 0x0127163A, the walling → hangknee exits 0x0100759B / 0x0106CFC2):** flag 0x40 →
+  `HumanLedge__SwitchToNarrowObjectContext` 0xDD2A50. It plays `0x248E9730` / `0x248E9731`
+  `xx_h_hangknee_foot{l,r}_tr_freestep_entry_foot{l,r}` by the playing item's leading foot (+60 & 0xC == 4 → left),
+  or `0x39193BBB` (one-hand) after the one-hand pull-ups 0x39193BBA / 0x39955506. It stores the current root and
+  facing in NarrowObjectData+240 (no warp) and sets SubState 6: standing on the edge in NarrowObject, the transient
+  free-step stay that returns to Ground on wide support (RE/05 §2.7).
+- **Pass-over → fall:** `0x0109B6CF` (walling entry → passover) and `0x0109BB50` / `0x0109BBBD` play
+  `passover_hand{l,r}_tr_fall` (0x0109B7C8 / 0x0109BB53), set the InAir timer to 0.2 s and flag 2 → InAir.
+- **Back to hang:** the same pass-overs with Ledge+134 set and `sub_DD6DC0` == 2 play `passover_hand{l,r}_tr_hangwall`
+  (0x0109BB58 / 0x0109BB59); at their release, and for `hangwallfree_tr_hangwall` 0x0106F2EA, the wall hang
+  0x0106F2E8 plays with flag 4 → hang.
+- Waist receptions first chain `0x0127199E` waist → knee (one-hand: 0x39955506), with the root interpolated
+  (sub_711130) to the edge + 0.6 n + 1 up.
+
+**Port:** the stand-up plays `0x248E9730` (`0x248E9731` after the walling step1) and returns to Ground; the
+pass-over outcomes are not ported.
 
 Their root rises first and moves in over the lip once the hips reach the edge. The port follows the clips' displacement plus a linear correction onto the stand point 0.5 m inside the edge (Pullup_Start 0xDDBE80); see `ledge_moves::pullup_move`. The earlier straight-line root interpolation cut through the wall.
 

@@ -275,10 +275,13 @@ fn exit(seq: [Option<ActionBlend>; 4], from: Vec3, to: Vec3, c: &LedgeCandidate,
     e
 }
 
-/// Pull-up from the wall run: `…_tr_hangknee_{low,high}` blended by `b`, then hangknee → wait, ending on top.
+/// Pull-up from the wall run: `…_tr_hangknee_{low,high}` blended by `b`, then hangknee → free-step entry (the
+/// Ledge pull-up state's stand-up, 0xDE2EE0 lists both walling → hangknee actions), ending on top. The entry ends
+/// on footl, step1 on footr.
 fn pullup_exit(id: u32, b: f32, root: Vec3, c: &LedgeCandidate) -> LedgeEntry {
     let top = c.point - c.normal * PULLUP_IN;
-    let seq = [blended(id, 0, &[1.0 - b, b]), single(ledge_moves::ACT_KNEE_TO_WAIT, 0), single(ledge_moves::ACT_KNEE_TO_WAIT, 1), None];
+    let stand = ledge_moves::ACT_KNEE_TO_FREESTEP[(id == STEP1_TO_KNEE) as usize];
+    let seq = [blended(id, 0, &[1.0 - b, b]), single(stand, 0), None, None];
     exit(seq, root, Vec3::new(top.x, c.point.y, top.z), c, (false, false, true))
 }
 
