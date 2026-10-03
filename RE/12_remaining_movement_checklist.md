@@ -126,7 +126,7 @@ free-step jumps (kind 1) from beams and pilotis.**
       The port stays in Ground.
 - [ ] **Standing on the ledge edge after a pull-up.** Currently the pull-up goes straight to Ground.
 - [x] **Edge:** decoded as a one-frame redirect back to Ground in this build (RE/05 §2.9); the side look-down is ported (RE/02 §4.2).
-- [x] **Lean:** NarrowObject's Lean is unreachable (event 71 rejected, RE/05 §2.9). The game's lean is Ground ObstacleCollision (event 42, RE/02 §4.2): ported (hand lean 70/150 cm, foot bump 50/70 cm, exits).
+- [x] **Lean:** NarrowObject's Lean is unreachable (event 71 rejected, RE/05 §2.9). The game's lean is Ground ObstacleCollision (event 42, RE/02 §4.2): the state is ported (hand lean 70/150 cm, foot bump 50/70 cm, exits), but event 42 is unreachable from player input (RE/02 §4.5), so the port no longer enters it when running into a wall (2026-10-03).
 - [ ] **Beam:**
   - ~~entry modes and BeamReception from the air~~ (done, §2.8); 90° waits / turns, corner hops / walks, edge stop, crouch attacks;
   - segment detection (±2 × ±0.5 m box, 60° cone);

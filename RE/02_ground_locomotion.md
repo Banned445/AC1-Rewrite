@@ -263,11 +263,14 @@ The root is interpolated over 0.15 s to contact + 0.4·h·normal, facing −norm
 
 **Port** (`player/collide.rs`):
 - The enter / update rules above, with the game's actions, weights and root motion.
-- **PORT:**
-  - **Trigger:** the capsule is blocked within 45° of the facing by a box at least 0.5 m high. The box's top is the obstacle height.
+- **No trigger (2026-10-03):** event 42 is unreachable from player input (§4.5), so running into a wall only blocks
+  the run, as in the game. The port's earlier stand-in trigger (blocked by a box ≥ 0.5 m high within 45° of the
+  facing) was removed. The state stays for completeness; the tests enter it through `collide::obstacle_ahead` +
+  `collide::enter`.
+- **PORT** (inside the state):
   - **Exit facing:** the stick direction, clamped to along the obstacle. The clips' root yaw is not dumped (hypothesis).
   - **Speed after the exit:** 0.25 walk, 0.5 jog, 0.75 foot exits.
-- A 1.1 m wall at (30, −4). `AC_AUTOPILOT=lean`.
+- A 1.1 m wall at (30, −4). `AC_AUTOPILOT=lean` now shows the walk being blocked by it, with no lean.
 
 **Look-down** (event 119, `HumanGround__LookDown_Enter` 0xD9FC80, RE/03 §7.8a) is ported in `ground.rs`:
 - the front/left/right blend toward a LedgeGrab edge within 0.6 m that is not behind the character and has more than 2 m of drop;

@@ -45,7 +45,8 @@ enum Scenario {
     Pilotis,
     /// Running jump onto the free beam, walk under the slab, impulsion, jump at its ledge.
     BeamJump,
-    /// Walk into the 1.1 m wall, lean on it, then walk off to the left.
+    /// Walk into the 1.1 m wall and keep pushing (blocked, no lean: event 42 is unreachable, RE/02 §4.5), then walk
+    /// off to the left.
     Lean,
     /// Stand at roof A's +X edge facing along it: the look-down to the side.
     LookDown,

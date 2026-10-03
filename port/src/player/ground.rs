@@ -632,22 +632,9 @@ pub fn update_ground(
         if stopping && collision.ground_support(r.position).is_none() {
             r.position = before;
         }
-        // event 42 (0xB25230): blocked by an obstacle ≥ 0.5 m high within 45° of the facing → ObstacleCollision
-        // guard 0xB25230: also |controller +384| (the stick-to-ground residual) <= 0.2 m, i.e. standing on snapped ground
-        if moving && !busy && r.hit_wall && g.ledge_stop.is_none() && g.snap_residual.abs() <= 0.2 {
-            if let Some((contact, n, height)) = super::collide::obstacle_ahead(r.position, forward, &collision) {
-                if let Some(c) = super::collide::enter(r.position, body.heading, contact, n, height, g.pose_seq) {
-                    g.pose_seq = c.seq;
-                    g.collide = Some(c);
-                    g.speed_param = 0.0;
-                    g.blend.speed_param = 0.0;
-                    body.feet = r.position;
-                    body.velocity = Vec3::ZERO;
-                    let _ = before;
-                    continue;
-                }
-            }
-        }
+        // Running into a wall does not lean: ObstacleCollision (event 42) is only sent from the interpreter's jump
+        // branch behind a flag the jump-target scorer never sets, so the player cannot reach it in v1.02 (RE/02 §4.5).
+        // The state itself (`collide`) is kept as decoded; nothing in the port enters it.
         if let Some(ls) = g.ledge_stop {
             // PORT: the stop clip's root motion may not carry the feet past the edge (the game places the edge
             // report so the clip ends on it; its sender is not traced)

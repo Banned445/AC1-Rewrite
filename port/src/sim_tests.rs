@@ -949,13 +949,44 @@ fn beam_jump_at_a_ledge_above() {
 
 // ---------------------------------------------------------------- obstacle collision / lean, look-down (RE/02 §4.2)
 
+/// Send event 42 the way the game's (player-unreachable) sender would: the obstacle just ahead of the character →
+/// `HumanGround__ObstacleCollision_Enter` 0xD9CB90.
+fn send_obstacle_collision(s: &mut Sim) -> bool {
+    let (feet, heading, fwd) = (s.body().feet, s.body().heading, s.body().forward());
+    let Some((contact, n, height)) = crate::player::collide::obstacle_ahead(feet, fwd, s.app.world().resource::<crate::collision::CollisionWorld>()) else { return false };
+    let seq = s.ground().pose_seq;
+    let Some(c) = crate::player::collide::enter(feet, heading, contact, n, height, seq) else { return false };
+    let mut data = s.app.world_mut().get_mut::<HumanDataBundle>(s.player).unwrap();
+    data.ground.pose_seq = c.seq;
+    data.ground.collide = Some(c);
+    data.ground.speed_param = 0.0;
+    data.ground.blend.speed_param = 0.0;
+    true
+}
+
 #[test]
-fn running_into_a_low_wall_leans_on_it_and_releasing_stands_up() {
+fn running_into_walls_does_not_lean() {
+    // event 42 is unreachable from player input (RE/02 §4.5): the 1.1 m wall, the 0.6 m box and the 2.4 m wall at
+    // 30 deg only block the run
+    for (from, dir) in [(Vec3::new(30.0, 0.0, -1.0), Vec3::NEG_Z), (Vec3::new(9.0, 0.0, 3.0), Vec3::NEG_Z), (Vec3::new(-3.0, 0.0, -4.0), Vec3::new(0.5, 0.0, -0.866))] {
+        let mut s = Sim::new(from, 0.0);
+        s.pad(dir, 1.0, true, false);
+        for _ in 0..180 {
+            s.run(1.0 / 60.0 + 1e-4);
+            assert!(s.ground().collide.is_none(), "leaned at {:?}", s.body().feet);
+        }
+        assert_eq!(s.loco().current, ActorContextId::Ground);
+    }
+}
+
+#[test]
+fn obstacle_collision_leans_on_a_low_wall_and_releasing_stands_up() {
     use crate::player::collide::{CollideKind, CollidePhase, LEAN_TO_WAIT};
-    // the 1.1 m wall at z -4 (x 28..32, 0.4 thick): walk at it along -Z
-    let mut s = Sim::new(Vec3::new(30.0, 0.0, -1.0), 0.0);
+    // the 1.1 m wall at z -4 (x 28..32, 0.4 thick, face at z -3.8): standing against it facing -Z, event 42
+    let mut s = Sim::new(Vec3::new(30.0, 0.0, -3.38), 0.0);
+    s.run(0.2);
+    assert!(send_obstacle_collision(&mut s), "no obstacle ahead: {:?}", s.body().feet);
     s.pad(Vec3::NEG_Z, 1.0, false, false);
-    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "never collided: {:?}", s.body().feet);
     let c = s.ground().collide.unwrap();
     assert_eq!(c.kind, CollideKind::Hand);
     assert!((c.h - 0.5).abs() < 0.02, "1.1 m → halfway between the 70 and 150 cm clips: {}", c.h);
@@ -974,9 +1005,11 @@ fn running_into_a_low_wall_leans_on_it_and_releasing_stands_up() {
 }
 
 #[test]
-fn leaning_then_pushing_sideways_walks_off_through_the_exit() {
+fn obstacle_collision_then_pushing_sideways_walks_off_through_the_exit() {
     use crate::player::collide::{CollidePhase, LEAN_EXIT, LEAN_EXIT_TR};
-    let mut s = Sim::new(Vec3::new(30.0, 0.0, -1.0), 0.0);
+    let mut s = Sim::new(Vec3::new(30.0, 0.0, -3.38), 0.0);
+    s.run(0.2);
+    assert!(send_obstacle_collision(&mut s));
     s.pad(Vec3::NEG_Z, 1.0, false, false);
     assert!(s.run_until(4.0, |s| s.ground().collide.is_some_and(|c| c.phase == CollidePhase::Wait)));
     // stick to the character's left (facing -Z, left = -X)
@@ -993,12 +1026,12 @@ fn leaning_then_pushing_sideways_walks_off_through_the_exit() {
 }
 
 #[test]
-fn bumping_a_knee_high_obstacle_is_the_foot_collide() {
+fn obstacle_collision_with_a_knee_high_obstacle_is_the_foot_collide() {
     use crate::player::collide::CollideKind;
-    // the 0.6 m box at (9, 0): too high to step onto (0.35 m)
-    let mut s = Sim::new(Vec3::new(9.0, 0.0, 3.0), 0.0);
-    s.pad(Vec3::NEG_Z, 1.0, false, false);
-    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "never collided: {:?}", s.body().feet);
+    // the 0.6 m box at (9, 0), 1.5 m square (face at z 0.75): too high to step onto (0.35 m)
+    let mut s = Sim::new(Vec3::new(9.0, 0.0, 1.17), 0.0);
+    s.run(0.2);
+    assert!(send_obstacle_collision(&mut s), "no obstacle ahead: {:?}", s.body().feet);
     let c = s.ground().collide.unwrap();
     assert_eq!(c.kind, CollideKind::Foot);
     assert!((c.h - 0.5).abs() < 0.02, "0.6 m → halfway between the 50 and 70 cm clips: {}", c.h);
@@ -1333,11 +1366,12 @@ fn a_free_jump_keeps_its_speed_and_falls_on_smoothly() {
 }
 
 #[test]
-fn leaning_on_a_wall_never_snaps_back() {
-    // run into the 2.4 m wall at 30 degrees: the lean warps onto the wall once
-    let mut s = Sim::new(Vec3::new(-3.0, 0.0, -4.0), 0.0);
+fn obstacle_collision_never_snaps_back() {
+    // against the 2.4 m wall (z -8.3..-7.7, face at -7.7) facing 30 degrees off it: the lean warps onto the wall once
+    let mut s = Sim::new(Vec3::new(-3.0, 0.0, -7.3), crate::player::heading_of(Vec3::new(0.5, 0.0, -0.866)));
+    s.run(0.2);
+    assert!(send_obstacle_collision(&mut s), "no obstacle ahead: {:?}", s.body().feet);
     s.pad(Vec3::new(0.5, 0.0, -0.866), 1.0, true, false);
-    assert!(s.run_until(3.0, |s| s.ground().collide.is_some()), "no lean");
     let mut prev = s.body().feet;
     let mut prev_h = s.body().heading;
     for _ in 0..90 {
