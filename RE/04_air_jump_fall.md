@@ -378,7 +378,15 @@ Choice:
   the animator plays the entry and the loop for the phase, then the falling blend. `AC_AUTOPILOT=runoff`.
 - **Consequence:** running off a roof (≥ 1 m, ≥ 2.5 m/s) dives, walking off it stumbles (< 1 m) or falls in the
   medium hurt fall.
-- **Not ported:** the steer away from the wall (0xE04B60, 3 rad/s for 0.3 s) and the probe type 1 bands.
+- **Drop steer** (`HumanInAir__DropSteerAwayFromWall` 0xE04B60, from `UpdateDropMotion` 0xE0DCD0), during the first
+  0.3 s:
+  - the facing turns toward the edge normal (its opposite with side 1) at 3 rad/s until it is within 30°, or fully
+    with no edge (+56);
+  - a position pull toward the report point at ≤ 2 m/s runs only for a side given explicitly (≠ 3) on types 0 / 2 / 4,
+    so ground loss skips it.
+
+  Ported (`air.rs` Fall).
+- **Not ported:** the probe type 1 bands.
 
 ### 4.1.11 Jumps at a ledge (verified 2026-10-01)
 **Standing straight jump at a hand target** (`HumanGround__StartStraightJump` 0xD85550).

@@ -1469,8 +1469,21 @@ fn running_off_a_roof_enters_the_drop_with_the_fall_type() {
     let mut s = Sim::new(Vec3::new(-11.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
-    assert_eq!(s.data().air.drop, Some((6, 0)));
+    assert_eq!(s.data().air.drop.map(|d| (d.0, d.1)), Some((6, 0)));
     assert_eq!(air::fall_type(0.7, 1.0), 0);
     assert_eq!(air::fall_type(0.7, 3.0), 1);
     assert_eq!(air::fall_type(3.0, 1.0), 4);
+}
+
+#[test]
+fn a_drop_turns_the_facing_toward_the_edge_normal() {
+    // run off the 6 m block's +X edge at 60 deg: the drop steer (0xE04B60) turns the facing to within 30 deg of +X
+    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    let d = Vec3::new(0.5, 0.0, 0.866);
+    s.pad(d, 1.0, true, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
+    let a0 = s.body().forward().dot(Vec3::X).acos().to_degrees();
+    s.run(0.35);
+    let a1 = s.body().forward().dot(Vec3::X).acos().to_degrees();
+    assert!(a0 > 40.0 && a1 <= 30.5, "facing vs the edge normal: {a0:.1} -> {a1:.1} deg");
 }

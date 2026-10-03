@@ -492,12 +492,12 @@ fn choose_clip(
                 }
                 // ground loss: the drop sub-state's entry, then the hurt-fall loop, for the drop phase (0xE064C0)
                 AirMode::Fall { .. }
-                    if data.air.drop.is_some_and(|(ty, _)| {
+                    if data.air.drop.is_some_and(|(ty, _, _)| {
                         let entry = crate::player::air::DROP_ENTRY[ty][0];
                         entry != 0 && lib.action_items(entry).is_some() && data.air.fall_t < crate::player::air::drop_phase(ty).unwrap_or_else(|| lib.action_items(entry).map(|it| it.iter().map(|i| lib.item_duration(i)).sum::<f32>()).unwrap_or(0.5))
                     }) =>
                 {
-                    let (ty, side) = data.air.drop.unwrap();
+                    let (ty, side, _) = data.air.drop.unwrap();
                     p.seen_fall = Some(data.air.seq);
                     action(&lib, &[crate::player::air::DROP_ENTRY[ty][side], crate::player::air::DROP_LOOP[side]], false, 4_200_000 + data.air.seq as u64, Some(0.2), None)
                 }

@@ -647,7 +647,7 @@ pub fn update_ground(
                 let ty = super::air::fall_type(h, Vec2::new(body.velocity.x, body.velocity.z).length());
                 let side = report.and_then(|r| r.1).map_or(0, |n| (n.dot(body.forward()) <= 0.0) as usize);
                 switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
-                data.air.drop = Some((ty, side));
+                data.air.drop = Some((ty, side, report.and_then(|r| r.1)));
             }
         }
     }

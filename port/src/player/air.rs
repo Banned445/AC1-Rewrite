@@ -182,8 +182,8 @@ pub struct HumanInAirData {
     /// free-step flight is authored to brake onto a landing spot; with nothing to land on that read as a stagger
     /// in mid-air. The vertical arc stays the clips'.
     pub flat_horizontal: bool,
-    /// Ground loss: the drop sub-state's (type, side) (InAirData+944 +64 / +68).
-    pub drop: Option<(usize, usize)>,
+    /// Ground loss: the drop sub-state's (type, side) (InAirData+944 +64 / +68) and the edge's outward normal.
+    pub drop: Option<(usize, usize, Option<Vec3>)>,
 }
 
 impl HumanInAirData {
@@ -342,6 +342,12 @@ impl HumanInAirData {
 /// PORT: how fast a target jump closes a lag behind its path (1/s), and the lag at which it gives up and falls.
 const JUMP_LAG_RECOVERY: f32 = 6.0;
 const JUMP_BLOCKED_LAG: f32 = 0.6;
+
+/// Signed angle from `f` to `to` about up (+ = to the left, the heading's positive sense).
+fn right_of_signed(f: Vec3, to: Vec3) -> f32 {
+    let r = super::right_of(f);
+    (-to.dot(r)).atan2(to.dot(f))
+}
 
 fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
@@ -577,6 +583,19 @@ pub fn update_air(
                 }
                 body.velocity.x = h.x;
                 body.velocity.z = h.z;
+                // `HumanInAir__DropSteerAwayFromWall` 0xE04B60: for the first 0.3 s of a drop the facing turns toward the
+                // edge normal (away from it with the back to the drop) at 3 rad/s until within 30 deg (fully, with no edge)
+                if let Some((_, side, n)) = air.drop.filter(|_| air.fall_t < 0.3) {
+                    let want = n.map(|n| if side == 1 { -n } else { n }).unwrap_or(body.forward());
+                    let want = Vec3::new(want.x, 0.0, want.z).normalize_or(body.forward());
+                    let cone = if n.is_some() { 30f32.to_radians() } else { 0.0 };
+                    let f = body.forward();
+                    let a = right_of_signed(f, want);
+                    if a.abs() > cone {
+                        let step = (a.abs() - cone).min(3.0 * dt) * a.signum();
+                        body.heading += step;
+                    }
+                }
                 air.fall_t += dt;
                 // narrow objects are caught before the ground contact (0xE0BB70 runs before 0xE05200)
                 if body.velocity.y <= 0.0 && air.apex_y - body.feet.y < 9.0 && air.time_in_air > 0.1 {
