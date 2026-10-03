@@ -202,6 +202,25 @@ The deceleration curve (§4.1.1) only runs while the stick still asks for moveme
 
 **Port** (`ground.rs`): the stop rule above, with the run stop played by the leading foot. Moving again during the stop cuts it (PORT).
 
+**Correction and the skid turn (verified 2026-10-03):**
+- **HG+1500** in the guard is the current profile (0 low, 1 high), not the run band. The pivot table uses it as
+  [from profile], §4.3.
+- **Data+0x11F** is set only by the input interpreter, through IHumanGround vt136 (`HumanGround__SetRunStopAllowed`
+  0xDB31B0), in `GoAssassinActionInterpreter__ProcessGroundMovement` 0xEE65A0:
+
+  | Stick (+4720 raw world stick, +4672 magnitude) | Data+0x11F | Where |
+  |---|---|---|
+  | released (below the threshold) | 1 | 0xEE6783 |
+  | held within 135° of the facing | 0 | 0xEE67FC |
+  | held more than 135° from the facing (dot < −0.7071) | 1 | 0xEE67EE |
+
+  The side flag +4312 also clears it.
+- **So:** releasing the stick at a high-profile jog or faster skids (run stop). Pulling the stick back at a run skids
+  too, and the Idle that follows pivots (§4.3): the skid turn.
+- **The run stop doesn't run MoveBlend:** the speed parameter stays 0 while it plays.
+- **Port:** the reversal rule (`reversed` in `ground.rs`); the stop isn't cut while the stick is held back.
+  `AC_AUTOPILOT=skid`.
+
 ### 4.2 Obstacle collision and the lean (sub-state 5, verified 2026-10-02)
 This is what the player sees as "leaning": running into a wall or a low obstacle. It is a **Ground** state (data+176 = 5 = ObstacleCollision, Ground state byte +251), not NarrowObject's Lean (RE/05 §2.9).
 

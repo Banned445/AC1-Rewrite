@@ -305,6 +305,20 @@ pub fn update_ground(
             g.speed_param = 0.0;
             g.blend.speed_param = 0.0;
         }
+        // The run stop is allowed by Data+0x11F, which the input interpreter sets (IHumanGround vt136 0xDB31B0, from
+        // 0xEE6783 / 0xEE67EE / 0xEE67FC): 1 with the stick released, and with the stick held more than 135 deg from the
+        // facing (dot < -0.7071); 0 otherwise. Its guard (0xD7EC90) also needs the high profile (HG+1500). So
+        // pulling the stick back at a run skids (run stop), and the Idle that follows pivots (state 25): the skid turn.
+        let reversed = pad.speed01 > 0.0 && pad.dir.dot(body.forward()) < -std::f32::consts::FRAC_1_SQRT_2;
+        if reversed && g.high_profile && g.speed_param > 0.25 && g.oneshot.is_none() {
+            let foot = (g.blend.foot != 0) as usize;
+            if let Some(b) = jump_blend::action_items(jump_blend::RUN_STOP[foot]).map(|_| ActionBlend::new(jump_blend::RUN_STOP[foot], 0, &jump_blend::run_stop_weights(g.speed_param))) {
+                g.play_oneshot(b);
+                g.oneshot_next = None;
+                g.speed_param = 0.0;
+                g.blend.speed_param = 0.0;
+            }
+        }
         if pad.speed01 <= 0.0 && g.speed_param > 0.0 && g.oneshot.is_none() {
             if g.speed_param > 0.25 {
                 let foot = (g.blend.foot != 0) as usize;
@@ -317,7 +331,8 @@ pub fn update_ground(
             g.blend.speed_param = 0.0;
         }
         // moving again during the run stop: its transitions to walk / jog take over (PORT: the stop is cut)
-        if pad.speed01 > 0.0 && g.oneshot.is_some_and(|o| jump_blend::RUN_STOP.contains(&o.blend.id) || jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id)) {
+        // (not while the stick is pulled back: the skid plays out, then the pivot)
+        if pad.speed01 > 0.0 && !reversed && g.oneshot.is_some_and(|o| jump_blend::RUN_STOP.contains(&o.blend.id) || jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id)) {
             g.oneshot = None;
             g.oneshot_next = None;
         }
@@ -325,7 +340,7 @@ pub fn update_ground(
         // from the current one, from standing (guard 0xD84B10) or from a low-profile walk (Move guard 0xD84F10: the
         // current profile HG+1500 low). The turn action from the table at 0x1A2C120 by side, [from, to] profile and
         // leading foot, blending its 90 / 180 deg clips by (|a| - 90 deg) / 90 deg; the clip's root yaw turns the body.
-        if moving && !busy && g.collide.is_none() && g.ledge_stop.is_none() && off > std::f32::consts::FRAC_PI_2 && (g.speed_param <= 0.0 || (!prev_high && g.speed_param <= BAND_WALK)) {
+        if moving && !busy && g.oneshot.is_none() && g.collide.is_none() && g.ledge_stop.is_none() && off > std::f32::consts::FRAC_PI_2 && (g.speed_param <= 0.0 || (!prev_high && g.speed_param <= BAND_WALK)) {
             let left = pad.dir.dot(super::right_of(body.forward())) < 0.0;
             let id = PIVOT[(!left) as usize][prev_high as usize][g.high_profile as usize][(g.blend.foot != 0) as usize];
             let w = ((off - std::f32::consts::FRAC_PI_2) / std::f32::consts::FRAC_PI_2).clamp(0.0, 1.0);
@@ -339,7 +354,7 @@ pub fn update_ground(
         }
 
         // start from standing (Idle → Move, 0xD84AC0 → `HumanGround__PlayStartMove` 0xD98990)
-        if moving && !busy && !starting && g.speed_param <= 0.0 && g.collide.is_none() && g.ledge_stop.is_none() && g.ledge_stop_lock.is_none() {
+        if moving && !busy && !starting && g.oneshot.is_none() && g.speed_param <= 0.0 && g.collide.is_none() && g.ledge_stop.is_none() && g.ledge_stop_lock.is_none() {
             let id = START_MOVE[g.high_profile as usize][(g.blend.foot != 0) as usize];
             if jump_blend::action_items(id).is_some() {
                 g.play_oneshot(ActionBlend::new(id, 0, if g.high_profile { &[0.0, 0.0, 1.0, 0.0] } else { &[0.0, 1.0, 0.0, 0.0] }));
@@ -355,6 +370,11 @@ pub fn update_ground(
         g.blend.update_angles(body.heading, moving.then_some(want_heading), None, false, dt);
         g.blend.update_weights(target, dt);
         g.speed_param = g.blend.speed_param;
+        // the run stop (state 18) does not run MoveBlend: the parameter stays 0 while it plays
+        if g.oneshot.is_some_and(|o| jump_blend::RUN_STOP.contains(&o.blend.id) || jump_blend::RUN_STOP_TO_WAIT.contains(&o.blend.id)) {
+            g.speed_param = 0.0;
+            g.blend.speed_param = 0.0;
+        }
 
         // heading: rotate toward wanted at the player turn rate (0xD95290)
         if moving {

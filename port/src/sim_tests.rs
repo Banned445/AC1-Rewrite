@@ -1384,7 +1384,8 @@ fn reversing_the_stick_turns_one_way() {
         s.run(1.0 / 60.0 + 1e-4);
         let mut d = s.body().heading - h0;
         if d > std::f32::consts::PI { d -= std::f32::consts::TAU } else if d < -std::f32::consts::PI { d += std::f32::consts::TAU }
-        if d.abs() > 1e-3 {
+        // (the turn itself, not the 0.01 rad of stick noise it follows once it faces the stick)
+        if d.abs() > 0.05 {
             assert!(last == 0.0 || d.signum() == last, "turn flipped direction at frame {i}");
             last = d.signum();
         }
@@ -1421,15 +1422,18 @@ fn reversing_from_standing_pivots_with_the_turn_clip() {
 }
 
 #[test]
-fn reversing_at_a_run_turns_without_a_pivot() {
+fn reversing_at_a_run_skids_then_pivots() {
+    use crate::player::ground::PIVOT_ACTIONS;
+    use crate::player::jump_blend::RUN_STOP;
     let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
     s.pad(Vec3::NEG_Z, 1.0, true, false);
     s.run(1.5);
     s.pad(Vec3::Z, 1.0, true, false);
-    for _ in 0..40 {
-        s.run(1.0 / 60.0 + 1e-4);
-        assert!(s.ground().oneshot.is_none_or(|o| !crate::player::ground::PIVOT_ACTIONS.contains(&o.blend.id)), "pivoted at a run");
-    }
+    s.run(1.0 / 60.0 + 1e-4);
+    assert!(s.ground().oneshot.is_some_and(|o| RUN_STOP.contains(&o.blend.id)), "no skid (run stop) on pulling back");
+    assert!(s.run_until(1.5, |s| s.ground().oneshot.is_some_and(|o| PIVOT_ACTIONS.contains(&o.blend.id))), "no pivot after the skid");
+    assert!(s.run_until(1.0, |s| s.ground().oneshot.is_none_or(|o| !PIVOT_ACTIONS.contains(&o.blend.id))));
+    assert!(s.body().forward().dot(Vec3::Z) > 0.95, "faces the stick: {:?}", s.body().forward());
 }
 
 #[test]
