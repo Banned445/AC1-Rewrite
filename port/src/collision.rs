@@ -155,6 +155,15 @@ impl CollisionWorld {
         best
     }
 
+    /// Height of the floor straight below `p` within `max` (a ray, no footprint).
+    pub fn floor_height_below(&self, p: Vec3, max: f32) -> Option<f32> {
+        self.boxes
+            .iter()
+            .filter(|b| p.x >= b.min.x && p.x <= b.max.x && p.z >= b.min.z && p.z <= b.max.z && b.max.y <= p.y + 0.02 && b.max.y >= p.y - max)
+            .map(|b| b.max.y)
+            .reduce(f32::max)
+    }
+
     /// Is there floor within `max` straight below `p` (a ray, no footprint)?
     pub fn floor_below(&self, p: Vec3, max: f32) -> bool {
         self.boxes.iter().any(|b| {

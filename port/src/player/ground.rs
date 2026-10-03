@@ -559,7 +559,8 @@ pub fn update_ground(
         // stick to ground (0x57D240): the capsule set on the support up to 0.37 m above / 0.58 m below the feet; a rim
         // contact steeper than 45° with no floor 0.8 m below does not hold (0xB23CB0) → fall. PORT: the game's
         // ground-loss poll (0xD87720) asks the probe component Human+252, whose prediction is not decoded.
-        match collision.ground_support(body.feet) {
+        let lost = ground_loss(body.feet, body.velocity, &guidance, &collision);
+        match collision.ground_support(body.feet).filter(|_| !lost) {
             Some(s) => {
                 body.feet.y = s.y;
                 body.grounded = true;
@@ -571,6 +572,59 @@ pub fn update_ground(
             }
         }
     }
+}
+
+/// The drop report of `IHuman` vt104 (`Human__ReportDropAtFeet` 0xB248B0, called with a 0.5 m minimum): the nearest
+/// LedgeGrab edge in a 0.75 m sphere zone around the feet (|dz| < 0.3) whose drop beyond it is at least the minimum,
+/// or, with no such edge, the drop straight under the feet. Returns (signed horizontal distance from the feet to the
+/// edge, negative once past it; the edge's outward normal, `None` when there was no edge).
+pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(f32, Option<Vec3>)> {
+    use crate::guidance::GuidanceSubType;
+    let mut best: Option<(f32, f32, Vec3)> = None; // (distance to the zone centre, signed distance, normal)
+    for e in guidance.edges.iter().filter(|e| e.subtype == GuidanceSubType::LedgeGrab) {
+        let q = e.closest_point(feet);
+        if (q.y - feet.y).abs() >= 0.3 {
+            continue;
+        }
+        let flat = Vec3::new(q.x - feet.x, 0.0, q.z - feet.z);
+        let d = flat.length();
+        if d > 0.75 {
+            continue;
+        }
+        let n = Vec3::new(e.n1.x, 0.0, e.n1.z).normalize_or_zero();
+        if n == Vec3::ZERO {
+            continue;
+        }
+        // drop measure 0xB19620: from just past the edge down to the first floor (≤ 7 m)
+        let drop = collision.floor_height_below(q + n * 0.05 + Vec3::Y * 0.01, 7.0).map_or(7.0, |h| q.y - h);
+        if drop < min_drop {
+            continue;
+        }
+        let signed = if n.dot(feet - q) > 0.0 { -d } else { d };
+        if best.is_none_or(|b| d < b.0) {
+            best = Some((d, signed, n));
+        }
+    }
+    if let Some((_, s, n)) = best {
+        return Some((s, Some(n)));
+    }
+    // no edge: the drop straight under the feet (flag +56)
+    let drop = collision.floor_height_below(feet + Vec3::Y * 0.01, 7.0).map_or(7.0, |h| feet.y - h);
+    (drop >= min_drop).then_some((0.0, None))
+}
+
+/// `HumanGround__CheckGroundLoss` 0xD87720: with the drop report (vt104, minimum 0.5 m), the ground is lost once the
+/// feet are on or past the edge (signed distance < 0.01) and either there was no edge (a drop right under the feet) or
+/// the horizontal velocity does not point back from the edge (dot(normal, v) ≥ 0). So the fall starts at the edge
+/// line, not when the capsule's rounded bottom slides off the rim. (The guard 0xC7F150 and the cached report of
+/// Human+2801 are not modelled.)
+pub fn ground_loss(feet: Vec3, velocity: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> bool {
+    let Some((dist, n)) = drop_report(feet, 0.5, guidance, collision) else { return false };
+    if dist >= 0.01 {
+        return false;
+    }
+    let v = Vec3::new(velocity.x, 0.0, velocity.z).normalize_or_zero();
+    n.is_none_or(|n| n.dot(v) >= 0.0)
 }
 
 /// Ground → Climb / Ledge / jump-to-ledge when pushing into a wall with high profile + Legs.

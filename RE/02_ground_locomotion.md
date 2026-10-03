@@ -24,7 +24,7 @@ All addresses are VAs in `AssassinsCreed_Dx9.exe` (v1.02). Unverified readings a
   Target = `band_base + 0.25 * stick`, with band_base = 0 (low profile), 0.5 (high profile),
   0.75 (high profile + Sprint flag). The parameter moves toward the target at **1.0/s up, and
   down through a deceleration curve** (0xDA0810).
-* Ground loss: a ground probe (Human+0xFC component) is polled every frame; when it reports a fall the module
+* Ground loss: the drop report (IHuman vt104 `Human__ReportDropAtFeet` 0xB248B0, RE/01 §7.1) is polled every frame; when the feet cross an edge with ≥ 0.5 m drop the module
   builds a `TransitionSetupDataToInAir` whose fall type depends on fall height (1 m / 2 m / 8 m) and
   horizontal speed (2.5 m/s) (0xD87720, 0xD8C380). A second "support" test (0xB23CB0) handles standing on
   steep/character surfaces with no floor within 0.8 m.

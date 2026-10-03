@@ -440,8 +440,23 @@ after each integrate):
 - with only steeper contacts, a ray of 0.8 m straight down decides: no hit means fall. Character contacts with
   normal.z > 0.5 also count as support.
 
-The per-frame ground loss (`HumanGround__CheckGroundLoss` 0xD87720) asks the probe component at Human+252 for a 0.5 s
-prediction. That component is not decoded.
+**Ground loss** (`HumanGround__CheckGroundLoss` 0xD87720, verified 2026-10-03). Human+252 is the `IHuman` interface,
+not a probe component. The check calls IHuman vt104, `Human__ReportDropAtFeet` 0xB248B0, with a minimum drop of
+0.5 m:
+1. **Search:** a GuidanceZone sphere of radius 0.75 at the feet. For each LedgeGrab edge within 0.3 m in height, take
+   its closest point and wall normal.
+2. **Drop:** `Human__MeasureDropBeyondEdge` 0xB19620 sweeps down from 0.02 m past the edge, up to 7 m (stairs are
+   refined through IHuman vt132). The result is the edge height minus the floor height.
+3. **Report:** the edge nearest the feet whose drop is at least the minimum gives:
+   - +16 point, +32 normal, +48 drop;
+   - +52 signed horizontal distance, negated when the feet are past the edge;
+   - +56 = 0.
+4. **No such edge:** the drop straight under the feet decides, with +52 = 0 and +56 = 1.
+
+The ground is lost when the signed distance is below 0.01 and either +56 is set or dot(normal, horizontal velocity)
+≥ 0. With Human+2801 set, the report cached by vt112 / vt120 is used instead. The fall therefore starts at the edge
+line; the capsule resting on the rim (above) only matters where no 0.5 m drop is reported.
+**Port:** `ground::drop_report` / `ground_loss`. The guard 0xC7F150 is not modelled.
 
 **Consequences:**
 - on the ground nothing lower than 0.37 m touches the capsule;
@@ -459,7 +474,7 @@ prediction. That component is not decoded.
 **PORT:**
 - box depenetration in place of Havok's cast and simplex solver;
 - recovery from lag behind a jump's path (6/s; the game has none, LIVE: the root path over a lip);
-- the Human+252 ground-loss prediction.
+- the guard 0xC7F150 of the ground-loss check.
 
 ## 7b. Jump-target selection (Human core helpers)
 * **Candidate scoring** — `0xE96BF0` (called by the input interpreter 0xEE65A0 and by modules) chooses

@@ -253,11 +253,11 @@ free-step jumps (kind 1) from beams and pilotis.**
       - lifted 0.37 m on the ground (step offset);
       - stick-to-ground 0.58 m;
       - 45° max slope;
-      - the fall-off-support rule.
+      - the fall-off-support rule;
+      - the ground loss at the edge line (0xD87720 / 0xB248B0).
 
       Still open:
       - the Havok cast + simplex solver itself (the port depenetrates boxes);
-      - the ground-loss predictor at Human+252 (0xD87720);
       - the 1.0 m capsule of Movement sub-states 230/233;
       - the unknown controller fields +80 / +88 / +92 / +84.
 

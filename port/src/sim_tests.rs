@@ -1386,3 +1386,14 @@ fn reversing_the_stick_turns_one_way() {
         }
     }
 }
+
+#[test]
+fn running_off_a_roof_falls_at_the_edge_line() {
+    // 6 m block x -14.5..-9.5: the ground-loss report (0xD87720 / 0xB248B0) fires once the feet cross the edge
+    let mut s = Sim::new(Vec3::new(-11.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, true, false);
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never fell");
+    let x = s.data().air.start.x;
+    assert!((-9.5..-9.5 + 0.15).contains(&x), "fell at x {x} (edge at -9.5)");
+    assert!((s.data().air.start_y - 6.0).abs() < 1e-3, "no sinking on the rim before the fall");
+}
