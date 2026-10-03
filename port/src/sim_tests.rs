@@ -220,7 +220,7 @@ fn six_metre_drop_rolls_without_heavy_damage() {
 
 #[test]
 fn step_up_low_obstacle() {
-    // 0.3 m block at (6, 0): STEP_HEIGHT 0.35 lets the capsule walk over it
+    // 0.3 m block at (6, 0): under the 0.37 m step offset of the lifted capsule (0xDAE6E0)
     let mut s = Sim::new(Vec3::new(3.0, 0.0, 0.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     s.run(2.0);

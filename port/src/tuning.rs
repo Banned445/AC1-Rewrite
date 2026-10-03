@@ -164,11 +164,17 @@ pub const LEDGE_JUMP_FAR: f32 = 5.5;
 pub const LEDGE_JUMP_FAR_UP: f32 = 2.5;
 pub const LEDGE_JUMP_UP_RISE: f32 = 1.0;
 
-// ---------------------------------------------------------------- body (PLACEHOLDER until Skeleton decoded)
-pub const CAPSULE_RADIUS: f32 = 0.3;
+// ---------------------------------------------------------------- character proxy (RE/01 §7, `collision`)
+/// Capsule radius: shape 0.35 + keep distance 0.05 (`HumanGround__OnEnterInit` 0xDA7D20 → 0x52ED40(0.4), 0x52E9C0;
+/// keep distance 0.05 at controller +204, ctor 0x57B4F0).
+pub const CAPSULE_RADIUS: f32 = 0.4;
+/// Capsule height (0xDA7D20 → 0x52ED20(1.8); `HumanInAir__Cleanup` 0xE03DE0 restores it).
 pub const CAPSULE_HEIGHT: f32 = 1.8;
-pub const STEP_HEIGHT: f32 = 0.35;
-pub const GROUND_PROBE: f32 = 0.08;
+/// Step offset on the ground: the capsule floats this high above the feet (controller +100, set by
+/// `HumanGround__OnActivateSetup` 0xDAE6E0 → 0x578290(0.37), applied by 0x579500).
+pub const STEP_HEIGHT: f32 = 0.37;
+/// Stick-to-ground reach below the feet (controller +96, 0xDAE6E0 → 0x5782C0(0.58); cast by 0x57D240).
+pub const SNAP_DOWN: f32 = 0.58;
 
 // ---------------------------------------------------------------- limb IK (RE/11, LimbIK__SolveEffectors 0xE57570)
 /// Limb weight rises at 4/s while the limb has a contact (0.25 s fade-in).

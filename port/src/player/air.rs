@@ -294,6 +294,10 @@ impl HumanInAirData {
     }
 }
 
+/// PORT: how fast a target jump closes a lag behind its path (1/s), and the lag at which it gives up and falls.
+const JUMP_LAG_RECOVERY: f32 = 6.0;
+const JUMP_BLOCKED_LAG: f32 = 0.6;
+
 fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
@@ -424,34 +428,30 @@ pub fn update_air(
                 // the path's own velocity (not the collision-resolved displacement: a depenetration push is not
                 // a velocity, using it flung the character up when a foot clipped the lip of a higher roof)
                 let path_vel = (next - path(t1 - dt.max(1e-3))) / dt.max(1e-3);
-                let mut r = collision.move_capsule(body.feet, next - body.feet, false);
-                if (r.position - next).length() > 0.05 && next.y > body.feet.y - 0.05 {
-                    // PORT: the capsule caught the lip of what it is jumping onto: lift it over (≤ 0.5 m), as the
-                    // game's proxy slides up its contact planes. The game's world collision during target jumps is
-                    // not traced (LIVE: compare the root path over a lip with the game's).
-                    let up = collision.move_capsule(body.feet + Vec3::Y * 0.5, next - body.feet, false);
-                    if (up.position - next).length() < (r.position - next).length() {
-                        r = up;
-                        r.position.y = r.position.y.min(next.y + 0.5);
-                        if let Some(h) = collision.ground_height(r.position + Vec3::Y * 0.02, 0.6) {
-                            r.position.y = r.position.y.max(h).min(next.y.max(h));
-                        }
-                    }
-                }
+                // The game drives the jump as a velocity through the character proxy (0xE0DEF0 → controller +0x90,
+                // 0x57C7C0): the body moves by the path's step and slides along what it touches (a lip's rounded
+                // contact lifts it over). PORT: a lag behind the path (a contact held the body back) is closed at
+                // `JUMP_LAG_RECOVERY`/s so the arrival still lands on the target; driving the absolute position instead
+                // made the body stall on a lip, then jump ahead to catch up.
+                let lag = path(t) - body.feet;
+                let mv = (next - path(t)) + lag * (dt * JUMP_LAG_RECOVERY).min(1.0);
+                let r = collision.move_capsule(body.feet, mv, false);
                 body.velocity = path_vel;
                 body.heading = super::heading_of(fwd);
                 body.feet = r.position;
-                let blocked = (r.position - next).length() > 0.25;
+                let blocked = (r.position - next).length() > JUMP_BLOCKED_LAG;
                 if blocked {
-                    // hit something mid-jump (anti-stuck 0xE0B1E0, simplified): fall from here with the path's
+                    // held back by a wall (anti-stuck 0xE0B1E0, simplified): fall from here with the path's
                     // horizontal velocity damped and no upward push
                     air.mode = AirMode::Fall { steer_to: None };
                     body.velocity.x *= 0.3;
                     body.velocity.z *= 0.3;
                     body.velocity.y = body.velocity.y.min(0.0);
                 } else if t1 >= duration {
-                    // arrival (0xE07D00): within 0.01 m by construction
-                    debug_assert!((body.feet - aim).length() < ARRIVAL_TOLERANCE + 0.05);
+                    // arrival (0xE07D00, within 0.01 m): the rest of a contact's lag is absorbed here
+                    if (body.feet - aim).length() > ARRIVAL_TOLERANCE && collision.capsule_fits(aim) {
+                        body.feet = aim;
+                    }
                     // hand-off by target type (ledge targets → Ledge context)
                     if let Some((mid, normal)) = air.target.and_then(|t| t.hang) {
                         // the reception by the flight that arrived (CheckJumpTargetArrival 0xE07D00)

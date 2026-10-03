@@ -59,7 +59,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
     (Left/RightToePull, Left/RightHandPull = 0.5, `UseIK`) and the hips effector.
   - Then return the grip offset to the game value (wrist 0.10 m below, not 0.08).
 - [ ] **Ground-to-wall grab order:** currently climb, then ledge, then jump-up (hypothesis). Use the interpreter's real request order (RE/01 §6.3).
-- [ ] **Capsule size:** currently 0.3 × 1.8 m. Take the game's CharacterController shape and the `entity+0x7C` height.
+- [x] **Capsule size:** **→ 0.4 × 1.8 m from 0xDA7D20 / 0x52E9C0, step offset 0.37, snap 0.58 (RE/01 §7.1)**
 - [ ] **Camera:** currently a stand-in orbit camera. Reverse the game's NavigationCamera (§7).
 - [~] **Clip selection:** currently by clip **name**. The game selects through **animation-state IDs in the animation graph**, **→ graph decoded (RE/13); climb, ledge, catches and fall use the exe's action ids; ground, jumps and landings are still by name**
       which are not resource IDs (RE/03 IDs). Decode the graph's state → clip mapping and blend trees (§8).
@@ -248,12 +248,18 @@ free-step jumps (kind 1) from beams and pilotis.**
   - **GuidanceChain** and `FindGrabPoint` 0x66E150;
   - edges generated at runtime for capsules and barrels.
 - [ ] **Real collision geometry** from `.forge` (Havok), so a real city map can be loaded and walked.
-- [ ] **CharacterController** exactly as in the game: kinematic proxy, at most 10 sweep/slide iterations (RE/01 §7); ground probe component Human+0xFC.
-      **This affects gameplay most.** The port's capsule (r 0.3 m, h 1.8 m, step 0.35 m) and its per-box depenetration are
-      stand-ins. Everything else depends on them:
-      - how a jump interacts with a lip;
-      - how wall contact (event 42) is detected;
-      - sliding along walls.
+- [~] **CharacterController** **→ shape and ground behaviour decoded (RE/01 §7.1) and ported:**
+      - capsule r 0.4 (0.35 + keep 0.05), h 1.8;
+      - lifted 0.37 m on the ground (step offset);
+      - stick-to-ground 0.58 m;
+      - 45° max slope;
+      - the fall-off-support rule.
+
+      Still open:
+      - the Havok cast + simplex solver itself (the port depenetrates boxes);
+      - the ground-loss predictor at Human+252 (0xD87720);
+      - the 1.0 m capsule of Movement sub-states 230/233;
+      - the unknown controller fields +80 / +88 / +92 / +84.
 
       The port integrates the controller's velocity on a context's skipped first frame (`player::coast`), as the
       game's proxy keeps running while the context skips. Before that the body froze for one frame at every takeoff

@@ -525,7 +525,7 @@ pub fn update_ground(
         let mut r = collision.move_capsule(body.feet, delta, true);
         // PORT: the run stop's root motion (≈0.5 m of slide) does not carry the character off a roof edge; it stops at
         // the last supported position. The game's guard for this is not traced (LIVE: run stop next to an edge).
-        if stopping && collision.ground_height(r.position + Vec3::Y * 0.05, GROUND_PROBE + 0.05 + STEP_HEIGHT).is_none() {
+        if stopping && collision.ground_support(r.position).is_none() {
             r.position = before;
         }
         // event 42 (0xB25230): blocked by an obstacle ≥ 0.5 m high within 45° of the facing → ObstacleCollision
@@ -556,13 +556,15 @@ pub fn update_ground(
         body.velocity = if moved.length() < speed { moved } else { forward * speed };
         body.feet = r.position;
 
-        // ground probe (0xD87720): stay snapped to the floor, otherwise start falling
-        match collision.ground_height(body.feet + Vec3::Y * 0.05, GROUND_PROBE + 0.05 + STEP_HEIGHT) {
-            Some(h) if body.feet.y - h <= STEP_HEIGHT => {
-                body.feet.y = h;
+        // stick to ground (0x57D240): the capsule set on the support up to 0.37 m above / 0.58 m below the feet; a rim
+        // contact steeper than 45° with no floor 0.8 m below does not hold (0xB23CB0) → fall. PORT: the game's
+        // ground-loss poll (0xD87720) asks the probe component Human+252, whose prediction is not decoded.
+        match collision.ground_support(body.feet) {
+            Some(s) => {
+                body.feet.y = s.y;
                 body.grounded = true;
             }
-            _ => {
+            None => {
                 body.grounded = false;
                 let entry = InAirEntry::Fall { from: body.feet, velocity: body.velocity, origin: FallOrigin::Ground, speed_param: g.speed_param };
                 switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));

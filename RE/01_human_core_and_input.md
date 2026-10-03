@@ -374,6 +374,93 @@ So movement is applied as a **velocity** each frame; the proxy resolves collisio
 sliding along contact planes, position is written directly to the entity (no rigid body). Ground
 probing/gravity handling of the modules is outside this function (see other reports).
 
+### 7.1 Parameters, shape, step offset and stick-to-ground (verified 2026-10-03)
+The controller has no subclass: its constraint hooks vt+0xFC / +0x104 are empty (`nullsub`), so it behaves as a plain
+Havok character proxy.
+
+**Defaults** (`CharacterController__ctor` 0x57B4F0; Havok `hkpCharacterProxyCinfo` meaning in brackets):
+
+| Offset | Value | Meaning |
+|---|---|---|
+| +176 / +180 | cos 45° / tan 45° | max slope |
+| +188 / +192 | 1.0 / 0 | dynamic / static friction |
+| +196 / +200 | 1.0 / 1.0 | extra up / down static friction |
+| +204 | 0.05 | keep distance |
+| +208 | 0.1 | keep-contact tolerance |
+| +216 | 10.0 | max character speed for the solver |
+| +224 | 1.0 | penetration recovery speed |
+| +228 | 4 | user planes |
+| +160 | (0, 0, 1) | up |
+| +48 | (0, 0, −9.8) | gravity |
+| +96 | 1.0 | stick-to-ground distance |
+| +100 | 0.51 | step offset |
+| +88 / +92 / +80 | 0.02 / 0.2 / 70 | unknown |
+
+**Contacts → planes** (`CharacterController__ContactToSurfaceConstraint` 0x57A6B0):
+- the plane distance is reduced by the keep distance;
+- a penetrating contact adds a velocity of recovery × depth along its normal;
+- `CharacterController__AddMaxSlopePlane` 0x57A1D0 adds a vertical plane for a walkable-facing contact steeper than
+  the max slope.
+
+So surfaces steeper than 45° act as walls.
+
+**Shape** (`CharacterController__RebuildCapsule` 0x52E9C0):
+- a vertical capsule with radius = +1136 × h (at least keep + 0.001) and height = +1140 × h;
+- h = entity+0x7C (1 for Altaïr);
+- the shape radius is r − keep (the keep distance makes up the rest);
+- when both the stick-to-ground (+127) and step-offset (+128) flags are on, the height is reduced by the step offset.
+
+`HumanGround__OnEnterInit` 0xDA7D20 sets radius 0.4 (`SetShapeRadius` 0x52ED40) and height 1.8
+(`SetShapeHeight` 0x52ED20). It also stores +84 / +88 / +92 = r − 0.4, r − 0.4, r − 0.15 (unknown).
+`HumanInAir__Cleanup` 0xE03DE0 restores the 1.8 m height. Ground Movement sub-states 230 / 233
+(0xD859D0 / 0xD85B30) use 1.0 m, and their exits (0xD85A90 …) restore 1.8 m; their purpose is not traced.
+
+**Ground setup** (`HumanGround__OnActivateSetup` 0xDAE6E0):
+- `SetStickToGround(1)` 0x57AB70, distance 0.58 (`SetStickToGroundDistance` 0x5782C0);
+- `SetStepOffsetEnabled(1)` 0x57ABA0, step offset 0.37 (`SetStepOffset` 0x578290).
+
+`CharacterController__ApplyStepOffset` 0x579500 moves the proxy up by 0.37 × h when both flags turn on, and down when
+they turn off. On the ground the capsule therefore spans feet + 0.37 … feet + 1.8.
+
+**Who turns the flags off:**
+- stick-to-ground off: `Human__SetupJumpToTarget` 0xB20200, `Human__SetupJumpToHandTarget` 0xB21DA0, InAir
+  (0xE01C00), `HumanLedge__EnterCommon` 0xDE26D0, `HumanClimb__EnterCommon` 0xDE97B0, `HumanGround__StartWalling`
+  0xDA2C30, ladder, pole, beam …;
+- step offset off: `HumanGround__ObstacleCollision_Enter` 0xD9CB90.
+
+**Stick to ground** (`CharacterController__StickToGround` 0x57D240, from `CharacterController__PostIntegrate` 0x57D660
+after each integrate):
+1. With +127 set, the shape is cast down by (0.58 + 0.37) × h.
+2. On a hit the proxy rests at the hit plus the keep distance along the up axis, and the step offset is added back.
+   The feet end on the surface.
+3. +384 keeps how far below the feet it was found.
+
+**Fall off support** (`Human__ShouldFallOffSupport` 0xB23CB0):
+- no fall while any world contact has normal.z > 0.7071;
+- with only steeper contacts, a ray of 0.8 m straight down decides: no hit means fall. Character contacts with
+  normal.z > 0.5 also count as support.
+
+The per-frame ground loss (`HumanGround__CheckGroundLoss` 0xD87720) asks the probe component at Human+252 for a 0.5 s
+prediction. That component is not decoded.
+
+**Consequences:**
+- on the ground nothing lower than 0.37 m touches the capsule;
+- the rounded bottom slides up an edge whose contact is within 45° of vertical, up to 0.37 + 0.4 × (1 − cos 45°) ≈ 0.49 m;
+- a drop of up to 0.58 m is followed without falling;
+- past a roof edge the bottom sphere rests on the rim. The feet sink by r − √(r² − d²), and the character falls when
+  the rim contact passes 45° (d ≈ 0.28 m past the edge) unless there is floor within 0.8 m below.
+
+**Port** (`collision.rs`):
+- capsule r 0.4 / h 1.8, lifted 0.37 on the ground;
+- steep contacts push horizontally;
+- `support` / `ground_support` implement the stick-to-ground cast on the rim and the fall-off rule;
+- target jumps move by their path's step through the proxy, as the game's jumps feed it a velocity.
+
+**PORT:**
+- box depenetration in place of Havok's cast and simplex solver;
+- recovery from lag behind a jump's path (6/s; the game has none, LIVE: the root path over a lip);
+- the Human+252 ground-loss prediction.
+
 ## 7b. Jump-target selection (Human core helpers)
 * **Candidate scoring** — `0xE96BF0` (called by the input interpreter 0xEE65A0 and by modules) chooses
   one of the 96-byte guidance jump candidates returned by the IHuman guidance queries
