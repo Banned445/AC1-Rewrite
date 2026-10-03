@@ -454,9 +454,23 @@ not a probe component. The check calls IHuman vt104, `Human__ReportDropAtFeet` 0
 4. **No such edge:** the drop straight under the feet decides, with +52 = 0 and +56 = 1.
 
 The ground is lost when the signed distance is below 0.01 and either +56 is set or dot(normal, horizontal velocity)
-≥ 0. With Human+2801 set, the report cached by vt112 / vt120 is used instead. The fall therefore starts at the edge
-line; the capsule resting on the rim (above) only matters where no 0.5 m drop is reported.
-**Port:** `ground::drop_report` / `ground_loss`. The guard 0xC7F150 is not modelled.
+≥ 0. With Human+2801 set, the report cached by vt112 / vt120 is used instead.
+
+**Correction (verified 2026-10-03, later the same day): ground loss is fight-only.** Its first test is the guard
+`HumanGroundData__IsGrabbedGroundLoss` 0xC7F150 (GroundData+760), and it returns no loss while that flag is clear:
+- the flag is set only by `HumanGround__Fight_EnterGrabbed` 0xD83B80, which plays `xx_h_light_grabed_{front,left,
+  right,back}_footl` (actions `0x3266A57A/7E/80/7C`, HumanGround_Fight), from the Ground fight sub-state's enter
+  0xD8E210;
+- it is cleared by `HumanGround__OnEnterInit` 0xDA7F66 and by the grab exits 0xD83BF0 / 0xD893C0;
+- the same flag turns the ledge stop off (`HumanGround__Guard_LedgeStopFront` 0xDA5DF0) and enables
+  `HumanGround__CheckGrabbedEdgeDrop` 0xDA3F40.
+
+So the edge-line fall (and the HumanGround_Hurt drop entries of RE/04 §4.1.9) happens only while an enemy grabs and
+shoves the character. **In Movement the only fall is the fall-off rule above:** `HumanGround__State1_Update` 0xDB46B0 →
+`Human__ShouldFallOffSupport` → `HumanGround__TransitionToInAirOffSupport` 0xD8ADB0, i.e. once the capsule has rolled
+off the rim (consequences below).
+**Port:** `ground_loss` is kept for the fight (not ported) and is no longer called; Movement falls on
+`collision.ground_support` = None.
 
 **Consequences:**
 - on the ground nothing lower than 0.37 m touches the capsule;

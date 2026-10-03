@@ -510,8 +510,8 @@ fn choose_clip(
                             FallOrigin::HangFree => "hangfree_to_fall",
                             FallOrigin::HangWall | FallOrigin::Climb => "hangwall_to_fall",
                             FallOrigin::Ground if p.clip.as_deref() == Some("jump") => "jump_to_fall",
-                            // fast fall types (odd / 6) at a horizontal speed ≥ 2.5 m/s (0xD8C380); the type → clip
-                            // mapping (probe vt112) is not traced, so the clip is still chosen by name
+                            // PORT: an off-support fall (0xD8ADB0) enters InAir sub-state 3, which keeps the ground clip
+                            // for its remaining length (0xE00EF0); the port plays these named entries instead
                             FallOrigin::Ground if speed >= 2.5 => "run_to_fall",
                             FallOrigin::Ground => "walk_to_fall",
                         };

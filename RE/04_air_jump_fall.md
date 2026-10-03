@@ -341,6 +341,18 @@ Choice:
 **r = HumanInAir+0x16C:** the ctor sets 0 (0xE100D5 → 0xE10124). Its only other writer is IHumanInAir slot 16 (0xE10350, vft 0x17010A4; the old name `SetFatalFallHeight` is likely wrong). Its caller is not traced. **(hypothesis)** It is the ground speed ratio, because the buckets pick walk, jog or sprint exits. The port passes the speed parameter at takeoff.
 
 ### 4.1.9 Ground loss → fall type (`HumanGround__TransitionToInAirFall` 0xD8C380)
+> **Fight-only (verified 2026-10-03).** This path runs only while GroundData+760 is set by the fight's grabbed
+> reaction (RE/01 §7.1, "Correction"). A normal walk or run off an edge takes `HumanGround__TransitionToInAirOffSupport`
+> 0xD8ADB0 instead: TransitionSetupDataToInAir kind 3, an empty report, +128 = 9, +132 = 3. InAir starts in sub-state 3
+> (`HumanInAir__EnterReceptionState` 0xE00EF0): the playing clip continues (`sub_5045F0(1, 0, 0)`) and the sub-state
+> timer is its remaining length (`sub_502570`), then the main fall (sub-state 1). There is no drop entry and no drop
+> steer. The port still enters that fall through `walk_to_fall` / `run_to_fall` chosen by name (PORT).
+>
+> Landing test, for reference (`HumanInAir__GetGroundContactType` 0xE038A0): there is no minimum fall height. Contacts
+> are ignored only while the body is ≤ 0.3 m below the start (Data+64) *and* the Data+528 timer runs, and that timer
+> is armed (0.5 s) only by `HumanInAir__AntiStuckNudge` 0xE0B1E0. A ≤ 45° contact on a character
+> (`HumanInAir__IsContactOnCharacter` 0xE143D0) is not ground.
+
 - h = the ground probe's fall height (probe component Human+0xFC, vt112 → +48); v = horizontal speed (vector at +1264).
 - Fall type:
 

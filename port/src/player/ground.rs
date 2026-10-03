@@ -661,11 +661,12 @@ pub fn update_ground(
         body.velocity = if moved.length() < speed { moved } else { forward * speed };
         body.feet = r.position;
 
-        // stick to ground (0x57D240): the capsule set on the support up to 0.37 m above / 0.58 m below the feet; a rim
-        // contact steeper than 45° with no floor 0.8 m below does not hold (0xB23CB0) → fall. PORT: the game's
-        // ground-loss poll (0xD87720) asks the probe component Human+252, whose prediction is not decoded.
-        let lost = ground_loss(body.feet, body.velocity, &guidance, &collision);
-        match collision.ground_support(body.feet).filter(|_| !lost) {
+        // stick to ground (0x57D240): the capsule set on the support up to 0.37 m above / 0.58 m below the feet. In
+        // Movement the only way off the ground is the fall-off rule (`HumanGround__State1_Update` 0xDB46B0 →
+        // `Human__ShouldFallOffSupport` 0xB23CB0): no contact flatter than 45° and no floor 0.8 m below, i.e. the
+        // capsule's rounded bottom has rolled off the rim (its centre ≈ r·sin 45° = 0.28 m past the edge). The edge-line
+        // ground loss (`ground_loss`, 0xD87720) is gated by GroundData+760, which only the fight's grabbed reaction sets.
+        match collision.ground_support(body.feet) {
             Some(s) => {
                 g.snap_residual = body.feet.y - s.y;
                 body.feet.y = s.y;
@@ -673,14 +674,11 @@ pub fn update_ground(
             }
             None => {
                 body.grounded = false;
+                // `HumanGround__TransitionToInAirOffSupport` 0xD8ADB0: InAir kind 3 (sub-state 3 keeps the current clip
+                // for its remaining length, 0xE00EF0, then the fall), no drop report, so no drop sub-state or drop steer.
+                // PORT: the animator still enters the fall through `walk_to_fall` / `run_to_fall` chosen by name.
                 let entry = InAirEntry::Fall { from: body.feet, velocity: body.velocity, origin: FallOrigin::Ground, speed_param: g.speed_param };
-                // the drop sub-state's type and side (0xD8C380 → 0xE064C0): side from the edge normal against the facing
-                let report = drop_report(body.feet, 0.5, &guidance, &collision);
-                let h = report.map_or(7.0, |r| r.2);
-                let ty = super::air::fall_type(h, Vec2::new(body.velocity.x, body.velocity.z).length());
-                let side = report.and_then(|r| r.1).map_or(0, |n| (n.dot(body.forward()) <= 0.0) as usize);
                 switch_context(&mut loco, &mut data, TransitionSetup::ToInAir(entry));
-                data.air.drop = Some((ty, side, report.and_then(|r| r.1)));
             }
         }
     }
@@ -728,8 +726,10 @@ pub fn drop_report(feet: Vec3, min_drop: f32, guidance: &GuidanceWorld, collisio
 /// `HumanGround__CheckGroundLoss` 0xD87720: with the drop report (vt104, minimum 0.5 m), the ground is lost once the
 /// feet are on or past the edge (signed distance < 0.01) and either there was no edge (a drop right under the feet) or
 /// the horizontal velocity does not point back from the edge (dot(normal, v) ≥ 0). So the fall starts at the edge
-/// line, not when the capsule's rounded bottom slides off the rim. (The guard 0xC7F150 and the cached report of
-/// Human+2801 are not modelled.)
+/// line, not when the capsule's rounded bottom slides off the rim. Its guard (`HumanGroundData__IsGrabbedGroundLoss`
+/// 0xC7F150, GroundData+760) is only set while grabbed in a fight (`HumanGround__Fight_EnterGrabbed` 0xD83B80), so
+/// normal movement never uses it; the fight is not ported. (The cached report of Human+2801 is not modelled.)
+#[allow(dead_code)]
 pub fn ground_loss(feet: Vec3, velocity: Vec3, guidance: &GuidanceWorld, collision: &CollisionWorld) -> bool {
     let Some((dist, n, _)) = drop_report(feet, 0.5, guidance, collision) else { return false };
     if dist >= 0.01 {

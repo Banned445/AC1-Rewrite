@@ -87,7 +87,9 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [x] **Vault / pass-over** (RE/04 §4.1.13): type 2 jumps, reception, HandPassOver vault, Ground / InAir. Open: pass-over pull-down, kind 4 chained jumps, roll ending, vt1592/1596.
 - [ ] **High obstacle** request (vt744/748, minimum height 5.0).
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).
-- [ ] **Ground loss → InAir:** fall-type table, plus `Human__ShouldFallOffSupport` 0xB23CB0 (no floor within 0.8 m).
+- [~] **Ground loss → InAir:** **→ Movement falls only by `Human__ShouldFallOffSupport` 0xB23CB0 (ported); the
+      edge-line ground loss and its fall-type drop are fight-only (grabbed, RE/01 §7.1). Open: InAir sub-state 3
+      keeping the ground clip (0xE00EF0) instead of the named `*_to_fall` clips; the fight grab itself**
 - [ ] **Step off edges:** `xx_fall_step_off_{front,back,left,right}_max`, and walk/run low-fall clips.
 - [~] **Ledge stop / look-down:** **→ decoded (RE/03 §7.8a); front ledge stop + EdgeStop pull-down ported. Open: side ledge stop
       (0xD8E5B0), look-down port (event 119 sender / guard), event 69 sender**

@@ -1203,6 +1203,20 @@ fn trace_run_off_a_drop() {
 
 #[test]
 #[ignore]
+fn trace_drop_grab() {
+    // the dropgrab scene: walk off the 6 m block's +X edge at 65 deg, hold grab and the stick to -Z once in the air
+    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 2.0), -std::f32::consts::FRAC_PI_2);
+    let off = Vec3::new(0.4226, 0.0, 0.9063);
+    s.pad(off, 0.5, true, false);
+    trace_frames(&mut s, "walk off the 6 m block, grab in the air", 2.5, |s, _| {
+        if s.loco().current == ActorContextId::InAir {
+            s.pad(Vec3::NEG_Z, 0.5, true, true);
+        }
+    });
+}
+
+#[test]
+#[ignore]
 fn trace_roof_gap_jump() {
     let mut s = Sim::new(Vec3::new(6.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, true);
@@ -1395,14 +1409,15 @@ fn reversing_the_stick_turns_one_way() {
 }
 
 #[test]
-fn running_off_a_roof_falls_at_the_edge_line() {
-    // 3.5 m block x -14.5..-9.5: the ground-loss report (0xD87720 / 0xB248B0) fires once the feet cross the edge
+fn running_off_a_roof_falls_once_off_the_rim() {
+    // 3.5 m block x -14.5..-9.5: Movement only falls by the fall-off rule (0xDB46B0 → 0xB23CB0), once the capsule
+    // (r 0.4) has no contact flatter than 45°, i.e. its centre ≈ 0.28 m past the edge. The edge-line ground loss
+    // (0xD87720) is for the fight's grabbed reaction only.
     let mut s = Sim::new(Vec3::new(-11.5, 3.5, 24.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never fell");
     let x = s.data().air.start.x;
-    assert!((-9.5..-9.5 + 0.15).contains(&x), "fell at x {x} (edge at -9.5)");
-    assert!((s.data().air.start_y - 3.5).abs() < 1e-3, "no sinking on the rim before the fall");
+    assert!((-9.5 + 0.2..-9.5 + 0.45).contains(&x), "fell at x {x} (edge at -9.5)");
 }
 
 #[test]
@@ -1470,20 +1485,21 @@ fn starting_from_standing_plays_the_start_item() {
 }
 
 #[test]
-fn running_off_a_roof_enters_the_drop_with_the_fall_type() {
-    // 3.5 m block: running (>= 2.5 m/s) off a drop >= 1 m -> type 6 (dive), facing the drop -> side 0 (front)
+fn running_off_a_roof_is_not_the_fight_drop() {
+    // the off-support fall (0xD8ADB0) is InAir kind 3 with no drop report: no HumanGround_Hurt drop entry
     let mut s = Sim::new(Vec3::new(-11.5, 3.5, 24.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
-    assert_eq!(s.data().air.drop.map(|d| (d.0, d.1)), Some((6, 0)));
+    assert_eq!(s.data().air.drop, None);
+    // the fight drop's fall types (0xD8C380), kept for the grabbed reaction
     assert_eq!(air::fall_type(0.7, 1.0), 0);
     assert_eq!(air::fall_type(0.7, 3.0), 1);
     assert_eq!(air::fall_type(3.0, 1.0), 4);
 }
 
 #[test]
-fn a_drop_turns_the_facing_toward_the_edge_normal() {
-    // run off the 3.5 m block's +X edge at 60 deg: the drop steer (0xE04B60) turns the facing to within 30 deg of +X
+fn running_off_at_an_angle_keeps_the_facing() {
+    // the drop steer (0xE04B60) belongs to the drop sub-state only; an off-support fall keeps its facing
     let mut s = Sim::new(Vec3::new(-11.0, 3.5, 22.5), -std::f32::consts::FRAC_PI_2);
     let d = Vec3::new(0.5, 0.0, 0.866);
     s.pad(d, 1.0, true, false);
@@ -1491,7 +1507,18 @@ fn a_drop_turns_the_facing_toward_the_edge_normal() {
     let a0 = s.body().forward().dot(Vec3::X).acos().to_degrees();
     s.run(0.35);
     let a1 = s.body().forward().dot(Vec3::X).acos().to_degrees();
-    assert!(a0 > 40.0 && a1 <= 30.5, "facing vs the edge normal: {a0:.1} -> {a1:.1} deg");
+    assert!((a0 - a1).abs() < 1.0, "facing vs the edge normal: {a0:.1} -> {a1:.1} deg");
+}
+
+#[test]
+fn grabbing_while_walking_off_does_not_stick_to_the_rim() {
+    // walk off the 6 m block at 65 deg to the edge, then hold grab with the stick along the edge: the fall used to
+    // start at the edge line with the capsule still on the rim, land on it after 2 cm and loop Ground <-> InAir
+    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 2.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::new(0.4226, 0.0, 0.9063), 0.5, true, false);
+    assert!(s.run_until(4.0, |s| s.loco().current == ActorContextId::InAir), "never fell");
+    s.pad(Vec3::NEG_Z, 0.5, true, true);
+    assert!(s.run_until(3.0, |s| s.body().feet.y < 1.0 || s.loco().current == ActorContextId::Ledge), "stuck at {:?}", s.body().feet);
 }
 
 #[test]

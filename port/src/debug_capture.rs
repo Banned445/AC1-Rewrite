@@ -51,7 +51,7 @@ enum Scenario {
     LookDown,
     /// Stand, then push the stick straight behind: the pivot (Movement state 25).
     Pivot,
-    /// Run (high profile, no Legs) off the 6 m block: ground loss into the drop sub-state.
+    /// Run (high profile, no Legs) off the 6 m block at an angle: ground loss into the drop sub-state.
     RunOff,
     /// Run, then pull the stick back: the run stop (skid), then the pivot.
     Skid,
@@ -61,7 +61,7 @@ enum Scenario {
     Swing,
     /// Walk to the ladder and climb it onto the wall top.
     Ladder,
-    /// Walk off the 6 m block and fall.
+    /// Walk (high profile, slow stick) off the 6 m block at an angle and fall.
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
     DropGrab,
@@ -187,8 +187,11 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 rig.yaw = -1.2;
                 rig.distance = 6.0;
             }
-            Scenario::RunOff => {
-                b.feet = Vec3::new(-12.5, 6.0, 4.0);
+            Scenario::RunOff | Scenario::Drop | Scenario::DropGrab => {
+                // the 6 m block (x -14.5..-9.5, z 1.5..6.5): leave its +X edge at 65 deg to the normal (`OFF_EDGE`).
+                // Straight at it, a drop of more than 5 m is a front edge and gets the ledge stop (0xEE8899), and in
+                // low profile any drop over 2 m halts the walk (0xEE7C1A), so the falls go out at an angle in high profile.
+                b.feet = Vec3::new(-11.0, 6.0, 2.0);
                 b.heading = -std::f32::consts::FRAC_PI_2;
                 rig.yaw = 0.0;
                 rig.distance = 7.0;
@@ -252,10 +255,6 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.feet = Vec3::new(12.0, 0.0, 40.6);
                 b.heading = std::f32::consts::PI; // facing +Z, into the wall
             }
-            Scenario::Drop | Scenario::DropGrab => {
-                b.feet = Vec3::new(-11.5, 6.0, 4.0);
-                b.heading = -std::f32::consts::FRAC_PI_2; // facing +X, off the edge
-            }
             Scenario::Walk | Scenario::Run | Scenario::Sprint => {
                 b.feet = Vec3::new(-60.0, 0.0, -40.0);
                 b.heading = -std::f32::consts::FRAC_PI_2; // facing +X
@@ -273,6 +272,9 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
         }
     }
 }
+
+/// The fall scenes' stick: 65 deg off the 6 m block's +X edge normal (not a front edge, `FRONT_COS` 60 deg).
+const OFF_EDGE: Vec3 = Vec3::new(0.422_618_3, 0.0, 0.906_307_8);
 
 fn autopilot(
     time: Res<Time>,
@@ -379,7 +381,7 @@ fn autopilot(
         Scenario::RunOff => {
             pad.high_profile = true;
             pad.legs_held = false;
-            pad.dir = Vec3::X;
+            pad.dir = OFF_EDGE;
             pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
             pad.speed01 = pad.magnitude;
         }
@@ -473,16 +475,16 @@ fn autopilot(
                 pad.speed01 = 0.0;
             }
         }
-        Scenario::Drop => {
-            pad.dir = Vec3::X;
-            pad.high_profile = false;
-            pad.legs_held = false;
-        }
-        Scenario::DropGrab => {
-            // walk off, then hold grab and push the stick to the left (-Z is left of +X facing)
-            pad.dir = if t < 1.2 { Vec3::X } else { Vec3::NEG_Z };
-            pad.high_profile = false;
-            pad.legs_held = t >= 1.2;
+        Scenario::Drop | Scenario::DropGrab => {
+            // walk off (high profile, slow stick: low profile would halt at the edge); DropGrab then holds grab and
+            // pushes the stick to the left once falling (the drop steer has turned the facing to +X, so -Z is left)
+            let falling = q.single().ok().is_some_and(|(l, _, _)| l.current == crate::player::ActorContextId::InAir);
+            let grab = *sc == Scenario::DropGrab && falling;
+            pad.dir = if grab { Vec3::NEG_Z } else { OFF_EDGE };
+            pad.high_profile = true;
+            pad.legs_held = grab;
+            pad.magnitude = if t > 1.0 { 0.5 } else { 0.0 };
+            pad.speed01 = ((pad.magnitude - 0.35) / 0.65).max(0.0);
         }
         Scenario::Ledge => {
             // run at the balcony, jump (Legs press at 0.3 s), let go of the stick, then shimmy right (-X)
