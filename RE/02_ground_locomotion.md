@@ -255,6 +255,55 @@ The root is interpolated over 0.15 s to contact + 0.4·h·normal, facing −norm
 - Any stick ends it.
 - `AC_AUTOPILOT=lookdown`.
 
+### 4.3 Turning, the pivot and root yaw (verified 2026-10-03)
+**Turning** (`HumanGround__UpdateHeading` 0xD95290 → `HumanGround__RotateTowards` 0xD94F30):
+- **Rate:** CurHeading turns toward DestHeading at a rate ramped from the min to the max rate (HG+0x6D8 / +0x6DC) over
+  the angle band +0x6E0 … +0x6E4.
+- **Direction:** the side argument HG+0x6F0 is written only by the ctor (0), so the turn always takes the shorter way.
+  An exact half turn uses the up axis.
+- **Skipped** while the playing item has flag 0x10; then the clip's root rotation turns the body.
+
+**Pivot** (Movement state 25, `HumanGround__Pivot_Enter` 0xDA6150):
+- **Entry:** reached when |signed angle CurHeading → DestHeading| (HG+1532) exceeds π/2 (HG+0x720):
+  - from Idle (guard 0xD84B10, with the anim gate);
+  - from Move, but only while the current profile HG+1500 is low (guard 0xD84F10).
+
+  At a run nothing intercepts: the 360°/s turn carries the character round. The `runturn180` actions are not
+  referenced by the exe.
+- **Turn action:** from the table at 0x1A2C120 (filled by 0xDB6E50), indexed by side, [from, to] profile (HG+1500 /
+  +1504) and leading foot (0xD86760). Each entry is `*_wait_hipm_foot?_to_?_waitturn_{left,right}_{090,180}_foot?`,
+  weighted [1 − w, w] with w = (|a| − 90°) / 90°.
+
+| | low → low | low → high | high → low | high → high |
+|---|---|---|---|---|
+| left [foot l, r] | `0x082FBC7C` / `87` | `0x1ABA2384` / `85` | `0x1ABA2388` / `89` | `0x09A09DF1` / `0x09A0A217` |
+| right | `0x082FBC88` / `89` | `0x1ABA2386` / `87` | `0x1ABA238A` / `8B` | `0x09A09DF2` / `0x09A0A218` |
+
+- **Second table:** 0x1A2C1E8 (`0xA6BAD0DC/DE/DF/E0`) replaces it when IHumanGround vt1196 holds (not traced).
+- **Exits:** the action's transitions lead to the wait or into locomotion.
+
+**Root yaw.** The animation's DISPLACEMENT track also has a rotation. In the pivot clips it turns the root by the full
+90° / 180° within the first half of the 0.2 s clip, while the skeleton counter-rotates, so the visible turn is
+smooth. FROMANIM items therefore turn the character by their root yaw.
+- **Clips that carry one:**
+  - the pivots;
+  - the lean and collide exits (side 90°, back 180°);
+  - the side and back free-step takeoffs;
+  - the hang corners;
+  - the ladder turn.
+- **Sign:** a half turn keyed as two rotations 180° apart has no sign of its own; the port takes it from the clip
+  name.
+- **Port:**
+  - `jump_clips.rs` now carries `yaw` per clip (`ActionBlend::yaw`);
+  - ground one-shots set heading = start heading + yaw, with their displacement in the start frame;
+  - the pivot is ported (`ground::PIVOT`). `AC_AUTOPILOT=pivot`.
+
+**PORT / not ported:**
+- the anim gate of the guards;
+- the second pivot table;
+- the pivot exits' own transition items;
+- root yaw in InAir takeoffs (side free-step jumps) and in ledge corners (which still interpolate the facing).
+
 ### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
 MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
 - If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.

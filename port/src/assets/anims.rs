@@ -149,6 +149,7 @@ pub fn load_locomotion(game_dir: &Path) -> Result<(Vec<RawClip>, ActionGraph, Ha
                 || crate::player::swing::DUMPED_ACTIONS.contains(&a.id)
                 || crate::player::ladder::DUMPED_ACTIONS.contains(&a.id)
                 || crate::player::ground::LOOK_DOWN.contains(&a.id)
+                || crate::player::ground::PIVOT_ACTIONS.contains(&a.id)
         })
         .flat_map(|a| a.items.iter().flat_map(|it| it.animations.iter()))
         .filter_map(|id| anim_names.get(id).cloned())

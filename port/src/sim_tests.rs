@@ -1397,3 +1397,43 @@ fn running_off_a_roof_falls_at_the_edge_line() {
     assert!((-9.5..-9.5 + 0.15).contains(&x), "fell at x {x} (edge at -9.5)");
     assert!((s.data().air.start_y - 6.0).abs() < 1e-3, "no sinking on the rim before the fall");
 }
+
+#[test]
+fn reversing_from_standing_pivots_with_the_turn_clip() {
+    use crate::player::ground::PIVOT;
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0); // facing -Z
+    s.run(0.2);
+    s.pad(Vec3::Z, 1.0, true, false); // straight behind
+    s.run(1.0 / 60.0 + 1e-4);
+    let os = s.ground().oneshot.expect("no pivot");
+    assert!(PIVOT.iter().flatten().flatten().flatten().any(|&id| id == os.blend.id), "not a pivot action: {:#x}", os.blend.id);
+    assert!((os.blend.weights()[1] - 1.0).abs() < 0.05, "180 deg -> the 180 clip: {:?}", os.blend.weights());
+    assert!(s.run_until(1.0, |s| s.ground().oneshot.is_none()), "pivot never ended");
+    let f = s.body().forward();
+    assert!(f.dot(Vec3::Z) > 0.99, "turned by the clip's root yaw: {f:?}");
+    let p = s.body().feet;
+    s.run(1.0);
+    assert!(s.body().feet.z > p.z + 1.0, "walks off the other way");
+}
+
+#[test]
+fn reversing_at_a_run_turns_without_a_pivot() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, true, false);
+    s.run(1.5);
+    s.pad(Vec3::Z, 1.0, true, false);
+    for _ in 0..40 {
+        s.run(1.0 / 60.0 + 1e-4);
+        assert!(s.ground().oneshot.is_none_or(|o| !crate::player::ground::PIVOT_ACTIONS.contains(&o.blend.id)), "pivoted at a run");
+    }
+}
+
+#[test]
+fn reversing_a_low_profile_walk_pivots() {
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    s.run(1.0);
+    s.pad(Vec3::new(0.3, 0.0, 1.0), 1.0, false, false);
+    s.run(1.0 / 60.0 + 1e-4);
+    assert!(s.ground().oneshot.is_some_and(|o| crate::player::ground::PIVOT_ACTIONS.contains(&o.blend.id)), "no walk pivot");
+}

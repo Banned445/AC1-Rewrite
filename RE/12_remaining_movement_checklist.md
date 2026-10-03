@@ -68,7 +68,7 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [ ] Full 87-state tree (`HumanGround__InitStateTree` 0xD90D00), including the event table 0xDB1470 (guards and actions).
 - [ ] **Start-move clips:** chosen by leading foot from bone positions (0xD98990); walk start 161516230/161522726, run start 161524269/70.
 - [x] **Stops:** walk stop (11 → 4, 0xD8B220) and **run stop** (state 18, 0xD7EC90 conditions). **→ RE/02 §4.0, ported**
-- [ ] **U-turn / pivot** above 90° (state 25, 0xD84B10).
+- [x] **U-turn / pivot** above 90° (state 25, 0xD84B10). **→ done (RE/02 §4.3): pivot table 0x1A2C120, root yaw of FROMANIM clips; a run has no pivot**
 - [ ] **Turn in place** at 1° or more (0xD84B80).
 - [ ] Clip **exit-flag gating** (0xD80010 bits 0x40/0x80/0x100/0x200/0x400/0x800, 0x20 = locked).
 - [ ] "Anim drives rotation" flag (0x10) overriding code heading.

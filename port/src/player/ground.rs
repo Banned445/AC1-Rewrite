@@ -104,6 +104,17 @@ pub struct HumanGroundData {
 /// right k], k = min(|a|, 90°) / 90°.
 pub const LOOK_DOWN: [u32; 2] = [0x2669_E0F7, 0x2669_E0F8];
 
+/// Pivot actions (table 0x1A2C120, filled by 0xDB6E50): [left, right] x [from low, high] x [to low, high] x [foot l, r],
+/// each `*_wait_hipm_foot?_to_?_waitturn_{left,right}_{090,180}_foot?` (2 clips).
+pub const PIVOT: [[[[u32; 2]; 2]; 2]; 2] = [
+    [[[0x082F_BC7C, 0x082F_BC87], [0x1ABA_2384, 0x1ABA_2385]], [[0x1ABA_2388, 0x1ABA_2389], [0x09A0_9DF1, 0x09A0_A217]]],
+    [[[0x082F_BC88, 0x082F_BC89], [0x1ABA_2386, 0x1ABA_2387]], [[0x1ABA_238A, 0x1ABA_238B], [0x09A0_9DF2, 0x09A0_A218]]],
+];
+pub const PIVOT_ACTIONS: [u32; 16] = [
+    0x082F_BC7C, 0x082F_BC87, 0x1ABA_2384, 0x1ABA_2385, 0x1ABA_2388, 0x1ABA_2389, 0x09A0_9DF1, 0x09A0_A217,
+    0x082F_BC88, 0x082F_BC89, 0x1ABA_2386, 0x1ABA_2387, 0x1ABA_238A, 0x1ABA_238B, 0x09A0_9DF2, 0x09A0_A218,
+];
+
 #[derive(Clone, Copy, Debug)]
 pub struct LookDown {
     pub action: ActionBlend,
@@ -138,13 +149,15 @@ pub struct GroundOneShot {
     pub duration: f32,
     /// Displacement already applied (animation space).
     pub applied: [f32; 3],
+    /// Heading when the action started: its displacement and root yaw are in this frame (set on the first update).
+    pub h0: Option<f32>,
 }
 
 impl HumanGroundData {
     /// Play a ground one-shot action with its root motion (landings, receptions, ledge stop).
     pub fn play_oneshot(&mut self, b: ActionBlend) {
         self.landing_seq = self.landing_seq.wrapping_add(1);
-        self.oneshot = Some(GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
+        self.oneshot = Some(GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3], h0: None });
     }
 
     /// `TransitionSetupDataToMovement::Apply` (0xC80310), simplified.
@@ -165,7 +178,7 @@ impl HumanGroundData {
         }
         if let Some(l) = landing {
             self.landing_seq = self.landing_seq.wrapping_add(1);
-            self.oneshot = l.action.map(|b| GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3] });
+            self.oneshot = l.action.map(|b| GroundOneShot { blend: b, t: 0.0, duration: b.duration(), applied: [0.0; 3], h0: None });
             // The speed parameter HG+0x5E8 is not reset by OnEnterInit 0xDA7D20, so the landing's exit
             // into locomotion continues at the take-off speed. (hypothesis) heavy-damage landings stop.
             if l.kind == LandingType::HeavyDamage {
@@ -230,6 +243,7 @@ pub fn update_ground(
         // ---------------------------------------------------------------- input → wanted motion
         let busy = g.oneshot.is_some();
         let moving = pad.speed01 > 0.0 && !busy;
+        let prev_high = g.high_profile;
         g.high_profile = pad.high_profile;
         g.sprint = pad.high_profile && pad.legs_held; // sprint = high profile + legs (RE/01 §6.2)
         g.sub_state = if g.sprint { HumanGroundSubState::FreeRun } else { HumanGroundSubState::Movement };
@@ -287,6 +301,23 @@ pub fn update_ground(
             g.oneshot = None;
             g.oneshot_next = None;
         }
+        // pivot (Movement state 25, `HumanGround__Pivot_Enter` 0xDA6150): the wanted heading more than 90 deg (HG+0x720)
+        // from the current one, from standing (guard 0xD84B10) or from a low-profile walk (Move guard 0xD84F10: the
+        // current profile HG+1500 low). The turn action from the table at 0x1A2C120 by side, [from, to] profile and
+        // leading foot, blending its 90 / 180 deg clips by (|a| - 90 deg) / 90 deg; the clip's root yaw turns the body.
+        if moving && !busy && g.collide.is_none() && g.ledge_stop.is_none() && off > std::f32::consts::FRAC_PI_2 && (g.speed_param <= 0.0 || (!prev_high && g.speed_param <= BAND_WALK)) {
+            let left = pad.dir.dot(super::right_of(body.forward())) < 0.0;
+            let id = PIVOT[(!left) as usize][prev_high as usize][g.high_profile as usize][(g.blend.foot != 0) as usize];
+            let w = ((off - std::f32::consts::FRAC_PI_2) / std::f32::consts::FRAC_PI_2).clamp(0.0, 1.0);
+            if jump_blend::action_items(id).is_some() {
+                g.play_oneshot(ActionBlend::new(id, 0, &[1.0 - w, w]));
+                g.speed_param = 0.0;
+                g.blend.speed_param = 0.0;
+                body.velocity = Vec3::ZERO;
+                continue;
+            }
+        }
+
         // speed parameter, lean/bank and blend weights (MoveBlend 0xDA0810). The heading snapshot is the
         // heading before this frame's turn (HG+0x600, Movement_PreUpdate 0xD97E30).
         g.blend.speed_param = g.speed_param;
@@ -324,7 +355,9 @@ pub fn update_ground(
                 super::collide::CollideOut::Stay => g.collide = Some(c),
                 super::collide::CollideOut::Leave { first, then, speed, face } => {
                     g.collide = None;
-                    g.face_next = face.map(heading_of);
+                    // the exit clips turn the body by their root yaw (back 180 deg, side 90 deg); the stick-based facing
+                    // is only a fallback for an exit without one
+                    g.face_next = if first.is_some_and(|b| b.yaw(1.0).abs() > 0.05) { None } else { face.map(heading_of) };
                     g.speed_param = speed;
                     g.blend.speed_param = speed;
                     if let Some(b) = first {
@@ -482,6 +515,12 @@ pub fn update_ground(
         let (delta, speed) = if let Some(mut os) = g.oneshot {
             // landing / reception action: its blended root motion (FROMANIM)
             os.t += dt;
+            // the action's displacement and root yaw are in the heading it started with (FROMANIM)
+            let h0 = *os.h0.get_or_insert(body.heading);
+            let yaw = os.blend.yaw(os.t / os.duration.max(1e-4));
+            if yaw.abs() > 1e-4 {
+                body.heading = wrap_angle(h0 + yaw);
+            }
             let d = os.blend.disp(os.t / os.duration.max(1e-4));
             let step = [d[0] - os.applied[0], d[1] - os.applied[1]];
             os.applied = d;
@@ -502,8 +541,9 @@ pub fn update_ground(
                     }
                 }
             }
-            let right = super::right_of(forward);
-            let delta = right * step[0] + forward * step[1];
+            let f0 = Vec3::new(-h0.sin(), 0.0, -h0.cos());
+            let right = super::right_of(f0);
+            let delta = right * step[0] + f0 * step[1];
             (delta, delta.length() / dt.max(1e-4))
         } else {
             let speed = if g.speed_param > 0.0 { g.blend.advance(dt) } else { 0.0 };

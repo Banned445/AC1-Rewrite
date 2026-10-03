@@ -49,6 +49,8 @@ enum Scenario {
     Lean,
     /// Stand at roof A's +X edge facing along it: the look-down to the side.
     LookDown,
+    /// Stand, then push the stick straight behind: the pivot (Movement state 25).
+    Pivot,
     /// Run at the 1 m railing and jump: pass-over vault.
     PassOver,
     /// Jump at the first swing bar and swing from bar to bar onto the far platform.
@@ -86,6 +88,7 @@ impl Plugin for DebugCapturePlugin {
                 "swing" => Scenario::Swing,
                 "ladder" => Scenario::Ladder,
                 "lookdown" => Scenario::LookDown,
+                "pivot" => Scenario::Pivot,
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
@@ -171,6 +174,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.heading = 0.0;
                 rig.yaw = 0.0;
                 rig.distance = 6.0;
+            }
+            Scenario::Pivot => {
+                b.feet = Vec3::new(-30.0, 0.0, -30.0);
+                b.heading = 0.0;
+                rig.yaw = -1.2;
+                rig.distance = 5.0;
             }
             Scenario::LookDown => {
                 b.feet = Vec3::new(2.7, 3.0, 12.0);
@@ -341,6 +350,12 @@ fn autopilot(
         Scenario::LookDown => {
             pad.magnitude = 0.0;
             pad.speed01 = 0.0;
+        }
+        Scenario::Pivot => {
+            pad.high_profile = true;
+            pad.dir = Vec3::Z;
+            pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
         }
         Scenario::Pilotis => {
             use crate::player::narrow::BeamState;
