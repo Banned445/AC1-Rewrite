@@ -110,7 +110,18 @@ pub const PIVOT: [[[[u32; 2]; 2]; 2]; 2] = [
     [[[0x082F_BC7C, 0x082F_BC87], [0x1ABA_2384, 0x1ABA_2385]], [[0x1ABA_2388, 0x1ABA_2389], [0x09A0_9DF1, 0x09A0_A217]]],
     [[[0x082F_BC88, 0x082F_BC89], [0x1ABA_2386, 0x1ABA_2387]], [[0x1ABA_238A, 0x1ABA_238B], [0x09A0_9DF2, 0x09A0_A218]]],
 ];
-pub const PIVOT_ACTIONS: [u32; 16] = [
+/// Start from standing (`HumanGround__PlayStartMove` 0xD98990): the locomotion action entered through these items,
+/// [low, high profile] x [foot l, r] (by `Human__GetLeadingFoot` 0xB18850). Clips [wait_tr_walk_slow, wait_tr_walk,
+/// wait_tr_jog, impulsion_to_sprint]; the exe weights walk (low) or jog (high) and sets the speed parameter HG+0x5E8 to
+/// 0.25 / 0.5 at once.
+pub const START_MOVE: [[u32; 2]; 2] = [[0x09A0_8AC6, 0x09A0_A426], [0x09A0_AA2D, 0x09A0_AA2E]];
+
+pub fn is_start(id: u32) -> bool {
+    START_MOVE.iter().flatten().any(|&s| s == id)
+}
+
+pub const PIVOT_ACTIONS: [u32; 20] = [
+    0x09A0_8AC6, 0x09A0_A426, 0x09A0_AA2D, 0x09A0_AA2E,
     0x082F_BC7C, 0x082F_BC87, 0x1ABA_2384, 0x1ABA_2385, 0x1ABA_2388, 0x1ABA_2389, 0x09A0_9DF1, 0x09A0_A217,
     0x082F_BC88, 0x082F_BC89, 0x1ABA_2386, 0x1ABA_2387, 0x1ABA_238A, 0x1ABA_238B, 0x09A0_9DF2, 0x09A0_A218,
 ];
@@ -241,7 +252,14 @@ pub fn update_ground(
         }
 
         // ---------------------------------------------------------------- input → wanted motion
-        let busy = g.oneshot.is_some();
+        // the start item is the locomotion action itself (entered through a transition): steering and the other
+        // requests stay live while it plays; a released stick ends it
+        let starting = g.oneshot.is_some_and(|o| is_start(o.blend.id));
+        if starting && pad.speed01 <= 0.0 {
+            g.oneshot = None;
+        }
+        let starting = starting && pad.speed01 > 0.0;
+        let busy = g.oneshot.is_some() && !starting;
         let moving = pad.speed01 > 0.0 && !busy;
         let prev_high = g.high_profile;
         g.high_profile = pad.high_profile;
@@ -315,6 +333,16 @@ pub fn update_ground(
                 g.blend.speed_param = 0.0;
                 body.velocity = Vec3::ZERO;
                 continue;
+            }
+        }
+
+        // start from standing (Idle → Move, 0xD84AC0 → `HumanGround__PlayStartMove` 0xD98990)
+        if moving && !busy && !starting && g.speed_param <= 0.0 && g.collide.is_none() && g.ledge_stop.is_none() && g.ledge_stop_lock.is_none() {
+            let id = START_MOVE[g.high_profile as usize][(g.blend.foot != 0) as usize];
+            if jump_blend::action_items(id).is_some() {
+                g.play_oneshot(ActionBlend::new(id, 0, if g.high_profile { &[0.0, 0.0, 1.0, 0.0] } else { &[0.0, 1.0, 0.0, 0.0] }));
+                g.speed_param = if g.high_profile { 0.5 } else { 0.25 };
+                g.blend.speed_param = g.speed_param;
             }
         }
 
@@ -465,7 +493,7 @@ pub fn update_ground(
         // Movement event 69 (0xDB1470): guard 0xDA5DE0 = front edge (ClassifyEdgeSide 0xD9D7F0 → 1), drop > 2 m,
         // body space → ToLedgeStop 0xDA99F0. Side edges (3/4, guard 0xDA5D90) go to another state (not ported).
         // PORT trigger: walking (low profile) into such an edge.
-        let busy = g.oneshot.is_some();
+        let busy = g.oneshot.is_some_and(|o| !is_start(o.blend.id));
         if !g.high_profile && moving && !busy && g.ledge_stop_lock.is_none() {
             if let Some((p, n)) = edge_report(body.feet, body.forward(), LEDGE_STOP_REACH, FRONT_COS, &guidance, &collision) {
                 if let Some(b) = super::ledge_moves::single_item(super::ledge_moves::LEDGE_STOP_START, 0) {
@@ -516,7 +544,8 @@ pub fn update_ground(
             // landing / reception action: its blended root motion (FROMANIM)
             os.t += dt;
             // the action's displacement and root yaw are in the heading it started with (FROMANIM)
-            let h0 = *os.h0.get_or_insert(body.heading);
+            // (the start item follows the steering: its frame is the current heading)
+            let h0 = if is_start(os.blend.id) { body.heading } else { *os.h0.get_or_insert(body.heading) };
             let yaw = os.blend.yaw(os.t / os.duration.max(1e-4));
             if yaw.abs() > 1e-4 {
                 body.heading = wrap_angle(h0 + yaw);

@@ -115,9 +115,13 @@ fn high_profile_runs_and_legs_sprints() {
 fn speed_param_rises_at_one_per_second() {
     let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
     s.pad(Vec3::NEG_Z, 1.0, true, true);
-    s.run(0.5);
+    // the start from standing sets it to 0.5 in high profile (0xD98990), then it rises at 1.0/s toward 1.0
+    s.run(1.0 / 60.0 + 1e-4);
+    let p0 = s.ground().speed_param;
+    assert!((p0 - 0.5).abs() < 0.03, "start sets 0.5: {p0}");
+    s.run(0.25);
     let p = s.ground().speed_param;
-    assert!((p - 0.5).abs() < 0.05, "after 0.5 s param = {p}");
+    assert!((p - 0.75).abs() < 0.05, "after 0.25 s more param = {p}");
 }
 
 #[test]
@@ -1436,4 +1440,25 @@ fn reversing_a_low_profile_walk_pivots() {
     s.pad(Vec3::new(0.3, 0.0, 1.0), 1.0, false, false);
     s.run(1.0 / 60.0 + 1e-4);
     assert!(s.ground().oneshot.is_some_and(|o| crate::player::ground::PIVOT_ACTIONS.contains(&o.blend.id)), "no walk pivot");
+}
+
+#[test]
+fn starting_from_standing_plays_the_start_item() {
+    use crate::player::ground::START_MOVE;
+    let mut s = Sim::new(Vec3::new(-30.0, 0.0, -30.0), 0.0);
+    s.run(0.2);
+    s.pad(Vec3::NEG_Z, 1.0, false, false);
+    s.run(1.0 / 60.0 + 1e-4);
+    let os = s.ground().oneshot.expect("no start item");
+    assert!(START_MOVE[0].contains(&os.blend.id), "low-profile start: {:#x}", os.blend.id);
+    assert!((s.ground().speed_param - 0.25).abs() < 0.02, "walk band at once: {}", s.ground().speed_param);
+    // steering stays live during it
+    s.pad(Vec3::new(-0.5, 0.0, -1.0), 1.0, false, false);
+    let h = s.body().heading;
+    s.run(0.1);
+    assert!((s.body().heading - h).abs() > 0.1, "turned while starting");
+    // releasing the stick ends it
+    s.pad(Vec3::ZERO, 0.0, false, false);
+    s.run(1.0 / 60.0 + 1e-4);
+    assert!(s.ground().oneshot.is_none_or(|o| !START_MOVE.iter().flatten().any(|&i| i == o.blend.id)));
 }

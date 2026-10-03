@@ -304,6 +304,25 @@ smooth. FROMANIM items therefore turn the character by their root yaw.
 - the pivot exits' own transition items;
 - root yaw in InAir takeoffs (side free-step jumps) and in ledge corners (which still interpolate the facing).
 
+### 4.4 Start from standing (verified 2026-10-03)
+`HumanGround__PlayStartMove` 0xD98990 (Idle → Move, guard 0xD84AC0) plays the locomotion action `0x05923BDB`, entered
+through a start transition item with a 0.2 s blend. The item is chosen by profile and `Human__GetLeadingFoot` 0xB18850:
+
+| | foot l | foot r |
+|---|---|---|
+| low | `0x09A08AC6` | `0x09A0A426` |
+| high | `0x09A0AA2D` | `0x09A0AA2E` |
+
+- **Clips:** each has [`wait_tr_walk_slow`, `wait_tr_walk`, `wait_tr_jog`, `impultionstraight_to_sprint_impultion`].
+- **Weights:** the exe sets [0, 1, 0, 0] in low profile and [0, 0, 1, 0] in high profile.
+- **Speed parameter:** it sets HG+0x5E8 (`this+378`) to 0.25 / 0.5 at once, then MoveBlend ramps it from there. The
+  jog start covers 1.87 m in 0.67 s.
+
+**Port:** `ground::START_MOVE`. Because the start is the locomotion action itself:
+- steering and the jump / climb requests stay live while it plays;
+- a released stick ends it;
+- it is not played while the ledge-stop lock holds the character at an edge (PORT).
+
 ### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
 MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
 - If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.
