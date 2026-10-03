@@ -141,8 +141,8 @@ requested mode/profile is set (0xD80010: flag bit 0x40/0x80 idle low/high, 0x100
 |---|---|---|
 | 4 Idle → 11 Move | desired mode ∈{1,2} and anim gate; on enter plays start clip (0xD98990) | 0xD84AC0 |
 | 4 Idle → 25 Pivot | anim gate and |angle(CurHeading,DestHeading)| > HG+0x720 (π/2) and not blocked | 0xD84B10 |
-| 4 Idle → turn in place | HG+0x290==1, no move input, |angle| ≥ 1° (0.017453292) | 0xD84B80 → 0xDA7610 |
-| 4 Idle → (crouch-walk) | Data+0x11C && !HG+0x5E0… | 0xD84C10 → 0xDA7640 |
+| 4 Idle → turn in place | HG+0x290==1, no move input, |angle| ≥ 1° (0.017453292). **Never true in v1.02:** +0x290 is only written by the ctor (0) | 0xD84B80 → 0xDA7610 |
+| 4 Idle → (crouch-walk) | Data+0x11C && !HG+0x5E0… (Data+0x11C comes from SocialStealthHelper bit 5 via the interpreter, RE/12 §2) | 0xD84C10 → 0xDA7640 |
 | 11 Move → 18 RunStop | in run band (+0x5DC), foot phase set, clip not locked, Data+0x11F, and (clip is locomotion node 93469659 or anim id 96/97 or clip time > 0.33) | 0xD7EC90 |
 | 11 Move → 4 Idle | mode==0 and (walk band or clip ≠ locomotion node); plays stop (0xD8B220) | 0xD7ED30 |
 | 11 → others | 0xD84F10 → 0xDA76C0; 0xD7ED80 → 0xDA76E0 | |

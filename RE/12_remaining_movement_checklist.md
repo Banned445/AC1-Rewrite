@@ -70,13 +70,20 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
 - [x] **Stops:** walk stop (11 → 4, 0xD8B220) and **run stop** (state 18, 0xD7EC90 conditions). **→ RE/02 §4.0, ported**
 - [x] **U-turn / pivot** above 90° (state 25, 0xD84B10). **→ done (RE/02 §4.3): pivot table 0x1A2C120, root yaw of FROMANIM clips; a run has no pivot**
 - [x] **Start from standing** (0xD98990). **→ done (RE/02 §4.4): start items by profile and foot, speed parameter set to 0.25 / 0.5**
-- [ ] **Turn in place** at 1° or more (0xD84B80).
+- [x] **Turn in place** at 1° or more (0xD84B80). **→ never enabled in v1.02 (2026-10-03): its guard needs HG+0x290 == 1,
+      and the only writer is `HumanGround__ctor` (0 at 0xDB2A96); HumanGround is not reflected, so data cannot set it
+      either. Nothing to port.**
 - [ ] Clip **exit-flag gating** (0xD80010 bits 0x40/0x80/0x100/0x200/0x400/0x800, 0x20 = locked).
 - [ ] "Anim drives rotation" flag (0x10) overriding code heading.
 - [ ] Turn attenuation above 45° (verify against the interpreter, 0xEE65A0).
 - [ ] **Crowd-avoid vector** (Data+0x60, `UpdateCrowdAvoidVector` 0xD9E5A0): drives the walk-band hip lean (RE/02 §4.1.3).
 - [ ] **Start/transition blend layouts 1–7** (HG+0x724): MoveBlend's other path while a start or transition action plays (0xDA08C0).
-- [ ] **Crouch / crouch-walk** (`MvtDivision_Crouch`, 0xD84C10) and **WalkVerySlow**.
+- [ ] **Crouch / crouch-walk** (`MvtDivision_Crouch`, 0xD84C10) and **WalkVerySlow**. **→ sender found (2026-10-03):
+      not a button. `ProcessGroundMovement` 0xEE7048–0xEE7099 reads the player's `SocialStealthHelper` status (via the
+      manager `dword_1A28290`, set at +0x28: `sub_B7D7C0(5)` = bit 5). With bit 5 set and the weapon interface's vt16
+      false it calls IHumanGround vt64(1) (`sub_DB31D0`, GroundData+0x11C = crouch) and vt72(1); otherwise vt64(0).
+      The helper's bits are set through its vtable slot 2 (`sub_B01730` → `sub_B7D820`); who sets bit 5 is not traced.
+      Crouch broadcasts ActorStateID 29 (Blending is 52, a different state).**
 - [ ] **Sub-states:**
   - FreeRun (2);
   - OrientedMove (3, state 42);
