@@ -199,9 +199,10 @@ fn chained_free_run_crosses_several_roofs() {
 
 #[test]
 fn eight_metre_drop_is_fatal_and_respawns() {
-    // tower at (-12, 14), 5x5, h 8: run off its +X edge
-    let mut s = Sim::new(Vec3::new(-11.0, 8.0, 14.0), -std::f32::consts::FRAC_PI_2);
-    s.pad(Vec3::X, 1.0, true, false); // high profile: walking stops at the edge (ledge stop)
+    // tower at (-12, 14), 5x5, h 8: run off its +X edge at 65 deg (a drop > 5 m straight ahead would ledge-stop,
+    // 0xEE8899; at 65 deg it is not a front edge)
+    let mut s = Sim::new(Vec3::new(-11.0, 8.0, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::new(0.4226, 0.0, 0.9063), 1.0, true, false);
     let landed = s.run_until(4.0, |s| s.saw_air && s.ground().last_landing.is_some());
     assert!(landed && s.saw_air);
     s.pad(Vec3::X, 0.0, false, false);
@@ -214,8 +215,8 @@ fn eight_metre_drop_is_fatal_and_respawns() {
 #[test]
 fn six_metre_drop_rolls_without_heavy_damage() {
     // 6 m is below the 6.3 m heavy threshold but above the 3 m roll threshold
-    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
-    s.pad(Vec3::X, 1.0, true, false); // high profile: walking stops at the edge (ledge stop)
+    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 2.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::new(0.4226, 0.0, 0.9063), 1.0, true, false); // at 65 deg: no ledge stop
     s.run(4.0);
     let l = s.ground().last_landing.expect("landed");
     assert_eq!(l.kind, LandingType::Safe, "{l:?}");
@@ -577,15 +578,16 @@ fn pull_down_from_a_roof_edge_into_a_wall_hang() {
 #[test]
 fn walking_into_a_roof_edge_stops_then_steps_back() {
     use crate::player::ledge_moves::{LEDGE_STOP_END, LEDGE_STOP_START};
-    // roof A: x 5..11, h 3.5; walk (low profile) toward its +X edge
-    let mut s = Sim::new(Vec3::new(9.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    // the 6 m block (x -14.5..-9.5): a drop of more than 5 m (0xEE88A9); walk toward its +X edge
+    let edge = -9.5f32;
+    let mut s = Sim::new(Vec3::new(-12.0, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, false, false);
     assert!(s.run_until(3.0, |s| s.ground().ledge_stop.is_some()), "never stopped: {:?}", s.body().feet);
     assert_eq!(s.ground().oneshot.map(|o| o.blend.id), Some(LEDGE_STOP_START));
     assert!(s.run_until(1.0, |s| s.ground().ledge_stop.is_some_and(|l| l.ending)));
     assert_eq!(s.ground().oneshot.map(|o| o.blend.id), Some(LEDGE_STOP_END));
     let at_end = s.body().feet;
-    assert!(at_end.x < 11.0 - 0.15, "feet stayed behind the edge: {at_end:?}");
+    assert!(at_end.x < edge - 0.03, "feet stayed behind the edge: {at_end:?}");
     assert!(s.run_until(1.5, |s| s.ground().ledge_stop.is_none()));
     // the end action steps back (~0.5 m), still on the roof, no fall
     assert!(s.body().feet.x < at_end.x - 0.3, "stepped back: {:?}", s.body().feet);
@@ -594,7 +596,7 @@ fn walking_into_a_roof_edge_stops_then_steps_back() {
     s.run(1.0);
     assert!(s.ground().ledge_stop.is_none());
     assert_eq!(s.loco().current, ActorContextId::Ground, "held at the edge, no fall");
-    assert!(s.body().feet.x < 11.0 - 0.15, "held behind the edge: {:?}", s.body().feet);
+    assert!(s.body().feet.x < edge - 0.03, "held behind the edge: {:?}", s.body().feet);
     s.pad(Vec3::X, 0.0, false, false);
     s.run(0.1);
     s.pad(Vec3::X, 1.0, false, false);
@@ -604,7 +606,7 @@ fn walking_into_a_roof_edge_stops_then_steps_back() {
 #[test]
 fn pull_down_from_the_ledge_stop_uses_the_edge_stop_orientation() {
     use crate::player::ledge_moves::{MoveKind, PULLDOWN_ORIENT};
-    let mut s = Sim::new(Vec3::new(9.5, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, false, false);
     assert!(s.run_until(3.0, |s| s.ground().ledge_stop.is_some()));
     s.press_legs();
@@ -1394,13 +1396,13 @@ fn reversing_the_stick_turns_one_way() {
 
 #[test]
 fn running_off_a_roof_falls_at_the_edge_line() {
-    // 6 m block x -14.5..-9.5: the ground-loss report (0xD87720 / 0xB248B0) fires once the feet cross the edge
-    let mut s = Sim::new(Vec3::new(-11.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    // 3.5 m block x -14.5..-9.5: the ground-loss report (0xD87720 / 0xB248B0) fires once the feet cross the edge
+    let mut s = Sim::new(Vec3::new(-11.5, 3.5, 24.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir), "never fell");
     let x = s.data().air.start.x;
     assert!((-9.5..-9.5 + 0.15).contains(&x), "fell at x {x} (edge at -9.5)");
-    assert!((s.data().air.start_y - 6.0).abs() < 1e-3, "no sinking on the rim before the fall");
+    assert!((s.data().air.start_y - 3.5).abs() < 1e-3, "no sinking on the rim before the fall");
 }
 
 #[test]
@@ -1469,8 +1471,8 @@ fn starting_from_standing_plays_the_start_item() {
 
 #[test]
 fn running_off_a_roof_enters_the_drop_with_the_fall_type() {
-    // 6 m block: running (>= 2.5 m/s) off a drop >= 1 m -> type 6 (dive), facing the drop -> side 0 (front)
-    let mut s = Sim::new(Vec3::new(-11.5, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    // 3.5 m block: running (>= 2.5 m/s) off a drop >= 1 m -> type 6 (dive), facing the drop -> side 0 (front)
+    let mut s = Sim::new(Vec3::new(-11.5, 3.5, 24.0), -std::f32::consts::FRAC_PI_2);
     s.pad(Vec3::X, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
     assert_eq!(s.data().air.drop.map(|d| (d.0, d.1)), Some((6, 0)));
@@ -1481,8 +1483,8 @@ fn running_off_a_roof_enters_the_drop_with_the_fall_type() {
 
 #[test]
 fn a_drop_turns_the_facing_toward_the_edge_normal() {
-    // run off the 6 m block's +X edge at 60 deg: the drop steer (0xE04B60) turns the facing to within 30 deg of +X
-    let mut s = Sim::new(Vec3::new(-11.0, 6.0, 4.0), -std::f32::consts::FRAC_PI_2);
+    // run off the 3.5 m block's +X edge at 60 deg: the drop steer (0xE04B60) turns the facing to within 30 deg of +X
+    let mut s = Sim::new(Vec3::new(-11.0, 3.5, 22.5), -std::f32::consts::FRAC_PI_2);
     let d = Vec3::new(0.5, 0.0, 0.866);
     s.pad(d, 1.0, true, false);
     assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::InAir));
@@ -1490,4 +1492,25 @@ fn a_drop_turns_the_facing_toward_the_edge_normal() {
     s.run(0.35);
     let a1 = s.body().forward().dot(Vec3::X).acos().to_degrees();
     assert!(a0 > 40.0 && a1 <= 30.5, "facing vs the edge normal: {a0:.1} -> {a1:.1} deg");
+}
+
+#[test]
+#[ignore]
+fn trace_low_profile_edge_halt() {
+    let mut s = Sim::new(Vec3::new(9.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, false, false);
+    trace_frames(&mut s, "low profile into roof A's edge", 1.6, |_, _| {});
+}
+
+#[test]
+fn walking_into_a_lower_edge_halts_without_the_ledge_stop() {
+    // roof A (3.5 m, drop 2-5 m) in low profile: the interpreter's edge halt (0xEE7BDA) stops the walk 0.16 m from the
+    // edge, no ledge-stop clip, no fall, and no restart while the stick still pushes into it
+    let mut s = Sim::new(Vec3::new(9.0, 3.5, 12.0), -std::f32::consts::FRAC_PI_2);
+    s.pad(Vec3::X, 1.0, false, false);
+    s.run(3.0);
+    assert_eq!(s.loco().current, ActorContextId::Ground, "fell: {:?}", s.body().feet);
+    assert!(s.ground().ledge_stop.is_none(), "no ledge stop below 5 m");
+    let x = s.body().feet.x;
+    assert!((11.0 - x - 0.16).abs() < 0.05, "halted 0.16 m from the edge: {x}");
 }

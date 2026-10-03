@@ -230,7 +230,8 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 rig.distance = 7.0;
             }
             Scenario::LedgeStop => {
-                b.feet = Vec3::new(8.5, 3.5, 12.0);
+                // the 6 m block: a drop of more than 5 m gets the ledge stop (0xEE8899); roof A (3.5 m) only halts
+                b.feet = Vec3::new(-12.0, 6.0, 4.0);
                 b.heading = -std::f32::consts::FRAC_PI_2;
                 rig.yaw = 0.0;
                 rig.distance = 6.0;

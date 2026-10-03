@@ -353,8 +353,16 @@ pub fn update_ground(
             }
         }
 
+        // The interpreter's own edge stop (0xEE7BDA–0xEE7CB4), low profile: the stick-direction edge report within
+        // 0.16 m with a drop of more than 2 m and its normal within 70 deg of the facing (and of the stick) zeroes the
+        // wanted speed: the walk halts at the edge without a clip (drops of 2–5 m; deeper ones get the ledge stop),
+        // and with no move request Idle does not start again.
+        let edge_halt = !g.high_profile
+            && moving
+            && edge_report_drop(body.feet, body.forward(), EDGE_HALT_REACH, EDGE_HALT_COS, 2.0, &guidance, &collision)
+                .is_some_and(|(_, n, d)| (d <= LEDGE_STOP_DROP || g.ledge_stop_lock.is_some()) && pad.dir.dot(Vec3::new(n.x, 0.0, n.z).normalize_or_zero()) > EDGE_HALT_COS);
         // start from standing (Idle → Move, 0xD84AC0 → `HumanGround__PlayStartMove` 0xD98990)
-        if moving && !busy && !starting && g.oneshot.is_none() && g.speed_param <= 0.0 && g.collide.is_none() && g.ledge_stop.is_none() && g.ledge_stop_lock.is_none() {
+        if moving && !busy && !starting && !edge_halt && g.oneshot.is_none() && g.speed_param <= 0.0 && g.collide.is_none() && g.ledge_stop.is_none() && g.ledge_stop_lock.is_none() {
             let id = START_MOVE[g.high_profile as usize][(g.blend.foot != 0) as usize];
             if jump_blend::action_items(id).is_some() {
                 g.play_oneshot(ActionBlend::new(id, 0, if g.high_profile { &[0.0, 0.0, 1.0, 0.0] } else { &[0.0, 1.0, 0.0, 0.0] }));
@@ -514,10 +522,12 @@ pub fn update_ground(
         }
         // Movement event 69 (0xDB1470): guard 0xDA5DE0 = front edge (ClassifyEdgeSide 0xD9D7F0 → 1), drop > 2 m,
         // body space → ToLedgeStop 0xDA99F0. Side edges (3/4, guard 0xDA5D90) go to another state (not ported).
-        // PORT trigger: walking (low profile) into such an edge.
+        // Sender: the input interpreter (0xEE8899 → IHumanGround vt748 `HumanGround__DoLedgeStop` 0xDBCAD0): a front
+        // edge (vt744) within 0.15 m (0.0225 = 0.15²) with a drop of more than 5 m, in either profile. Free running
+        // (high profile + Legs) jumps first (the interpreter's jump branch returns before it).
         let busy = g.oneshot.is_some_and(|o| !is_start(o.blend.id));
-        if !g.high_profile && moving && !busy && g.ledge_stop_lock.is_none() {
-            if let Some((p, n)) = edge_report(body.feet, body.forward(), LEDGE_STOP_REACH, FRONT_COS, &guidance, &collision) {
+        if moving && !busy && g.ledge_stop_lock.is_none() && !(g.high_profile && pad.legs_held) {
+            if let Some((p, n)) = edge_report_drop(body.feet, body.forward(), LEDGE_STOP_REACH, FRONT_COS, LEDGE_STOP_DROP, &guidance, &collision).map(|r| (r.0, r.1)) {
                 if let Some(b) = super::ledge_moves::single_item(super::ledge_moves::LEDGE_STOP_START, 0) {
                     g.ledge_stop = Some(LedgeStop { point: p, normal: n, ending: false });
                     g.ledge_stop_lock = Some(n);
@@ -602,9 +612,12 @@ pub fn update_ground(
         };
         // PORT: after a ledge stop, still pushing into the same edge holds the character at it (the game re-sends
         // event 69 from its untraced sender; the port does not loop stop / step back)
+        // The interpreter's own edge stop (0xEE7BDA–0xEE7CB4), low profile: the stick-direction edge report within
+        // 0.16 m with a drop of more than 2 m and its normal within 70 deg of the facing (and of the stick) zeroes the
+        // wanted speed: the walk halts at the edge without a clip (drops of 2–5 m; deeper ones get the ledge stop).
         let held = g.oneshot.is_none()
-            && g.ledge_stop_lock.is_some()
-            && edge_report(body.feet, forward, LEDGE_STOP_REACH, FRONT_COS, &guidance, &collision).is_some();
+            && (edge_halt
+                || (g.ledge_stop_lock.is_some() && edge_report_drop(body.feet, forward, LEDGE_STOP_REACH, FRONT_COS, LEDGE_STOP_DROP, &guidance, &collision).is_some()));
         let (delta, speed) = if held {
             g.speed_param = 0.0;
             g.blend.speed_param = 0.0;
@@ -799,11 +812,15 @@ const GRAB_PROBE_RADIUS: f32 = 0.75;
 /// Event 68 guard 0xD84190: the edge must be at least 0.53 m above the feet.
 const GRAB_MIN_HEIGHT: f32 = 0.53;
 
-/// How far ahead of the feet an edge stops a walk (PORT: the edge report's distance limit +64 is set by the
-/// untraced sender; `ClassifyEdgeSide` compares it with the squared horizontal distance).
-const LEDGE_STOP_REACH: f32 = 0.45;
+/// The ledge stop's edge distance: the interpreter passes 0.0225 (= 0.15²) to `ClassifyEdgeSide` (vt744, 0xEE8899).
+const LEDGE_STOP_REACH: f32 = 0.15;
+/// Event 69 is only sent for a drop of more than 5 m (0xEE88A9).
+const LEDGE_STOP_DROP: f32 = 5.0;
+/// The interpreter's low-profile edge halt: within 0.16 m, normal within 70 deg (0xEE7C1A / 0xEE7C5C).
+const EDGE_HALT_REACH: f32 = 0.16;
+const EDGE_HALT_COS: f32 = 0.342_020_1;
 /// PORT: the feet stay this far behind the edge during the ledge stop.
-const LEDGE_STOP_MARGIN: f32 = 0.2;
+const LEDGE_STOP_MARGIN: f32 = 0.05;
 /// ClassifyEdgeSide 0xD9D7F0: front = within 60° (120° with the report flag +68).
 const FRONT_COS: f32 = 0.5;
 
@@ -811,17 +828,24 @@ const FRONT_COS: f32 = 0.5;
 /// `reach` ahead whose outward normal is within 60° of the facing, with more than 2.0 m of drop
 /// (guards 0xDA5DE0 / 0xD9D6C0; the classifier itself needs > 1.3 m). Returns (point, outward normal).
 fn edge_report(feet: Vec3, forward: Vec3, reach: f32, min_cos: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(Vec3, Vec3)> {
+    edge_report_drop(feet, forward, reach, min_cos, 2.0, guidance, collision).map(|r| (r.0, r.1))
+}
+
+/// `edge_report` with the drop limit and the drop: a front LedgeGrab edge whose closest point is within `reach` of the
+/// feet horizontally. Returns (point, outward normal, drop).
+fn edge_report_drop(feet: Vec3, forward: Vec3, reach: f32, min_cos: f32, min_drop: f32, guidance: &GuidanceWorld, collision: &CollisionWorld) -> Option<(Vec3, Vec3, f32)> {
     let hit = guidance.probe(feet + forward * reach, reach, 0.2, None, std::f32::consts::PI)?;
+    if Vec2::new(hit.point.x - feet.x, hit.point.z - feet.z).length() > reach + 1e-3 {
+        return None;
+    }
     let n = hit.wall_normal;
     let nf = Vec3::new(n.x, 0.0, n.z).normalize_or_zero();
     if nf.dot(forward) <= min_cos {
         return None;
     }
     let below = collision.ground_height(hit.point + n * 0.6 - Vec3::Y * 0.05, 50.0).unwrap_or(hit.point.y - 100.0);
-    if hit.point.y - below <= 2.0 {
-        return None;
-    }
-    Some((hit.point, n))
+    let drop = hit.point.y - below;
+    (drop > min_drop).then_some((hit.point, n, drop))
 }
 
 /// An edge to look down at while standing: a LedgeGrab edge within 0.6 m of the feet, not behind the character

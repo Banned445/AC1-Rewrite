@@ -343,6 +343,51 @@ through a start transition item with a 0.2 s blend. The item is chosen by profil
 - a released stick ends it;
 - it is not played while the ledge-stop lock holds the character at an edge (PORT).
 
+### 4.5 Who sends the Ground events (partly traced, 2026-10-03)
+**How events are sent:** `IHumanGround` (HumanGround's sub-object at +20, vtable 0x16FFEFC) has one "Do" method per
+event. Each builds the payload and calls `HumanGround__PostEvent` 0xDB4A40, which goes through 0xDB4420 to the current
+state's handler (Movement: `HumanGround__Movement_HandleEvent` 0xDB1470).
+
+**Callers:** the player's are in the input interpreter `GoAssassinActionInterpreter__ProcessGroundMovement` 0xEE65A0,
+where a2 = IHuman and a3 = IHumanGround. Slots found:
+
+| Slot (byte offset) | Method | Event / effect |
+|---|---|---|
+| 4 | `HumanGround__SetDestSpeedRatio` 0xD7C930 | wanted speed |
+| 24 | 0xDBCDE0 | jump to a guidance candidate (0xE96BF0) |
+| 108 | `HumanGround__DoObstacleCollision` 0xDBB7E0 | **event 42** (contact point, normal, flag) |
+| 116 | `HumanGround__IHumanGround_StartWalling` 0xDBBD40 | wall run |
+| 136 | `HumanGround__SetRunStopAllowed` 0xDB31B0 | Data+0x11F (§4.0) |
+| 748 | `HumanGround__DoLedgeStop` 0xDBCAD0 | **event 69** (an edge report, +a3, +a4) |
+
+**Event 42** (0xEE83B5). It is sent only from the jump branch:
+- **When the branch runs:** high-profile Legs pressed within 0.3 s (+4390), or `v142`. `v142` is an edge report (IHuman
+  vt136, 0.75 m, cone π) with drop > 0.5, distance < 0.25, its normal within 80° of the stick, and vt700 or
+  `sub_6D0F50`.
+- **What sends it:** no jump target (vt56 → 0xE96BF0), then an obstacle query IHuman vt152 (≤ 2.0 m) that finds
+  something; the event is then sent with that contact.
+
+So the game's lean is not "running into a wall" alone (the port's PORT trigger): it happens when a jump is asked for
+and the obstacle ahead is not a target.
+
+**Ledge stop, low profile** (0xEE7BDA–0xEE7C85):
+- **Report:** the stick-direction edge report (vt136, 0.75 m, 100° cone).
+- **Condition:** distance (+52) < 0.16, drop (+48) > 2.0, normal within 70° of the facing.
+- **Effect:** the interpreter sets the run-stop flag (vt136 = 1) and, with the normal within 70° of the stick, flag
+  +4176. That zeroes the wanted speed (vt4(0), 0xEE7CB4), so the walk stops 0.16 m from the edge.
+
+**Event 69** (0xEE8899–0xEE88B1): the report (IHuman vt136, 0.75 m, cone π) is passed to IHumanGround vt744
+(`ClassifyEdgeSide`) with a squared distance limit of 0.0225 (0.15 m). A front edge (1) with a drop of more than
+**5 m** sends `DoLedgeStop` (vt748) in either profile. The jump branch above returns first when free running.
+- **So in AC1:** walking or running at a drop of more than 5 m stops at the edge (the ledge stop); in low profile,
+  drops of 2–5 m just halt 0.16 m short; a high-profile run off a lower roof falls.
+- **Port:**
+  - `LEDGE_STOP_REACH` 0.15, `LEDGE_STOP_DROP` 5 (either profile, not while free running);
+  - the halt `EDGE_HALT_*` 0.16 m / 70° (low profile, drops 2–5 m; blocks the restart);
+  - the ledge stop wins for deeper drops (PORT: in the game the walk's momentum carries it from 0.16 to 0.15 m).
+
+  `AC_AUTOPILOT=ledgestop` uses the 6 m block.
+
 ### 4.1 MoveBlend in full (`HumanGround__UpdateMoveBlend` 0xDA0810, verified)
 MoveBlend has two paths. Which one runs depends on the action that is playing (0xDA08C0):
 - If the action is **not** `0x05923BDB` (93469659), the start/transition layouts 1–7 (HG+0x724) are used. They are not covered here.
