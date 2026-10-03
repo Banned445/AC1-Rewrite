@@ -66,6 +66,8 @@ enum Scenario {
     Drop,
     /// As Drop, holding grab (Legs) and the stick to the left while falling (the game's fall-grasp blend).
     DropGrab,
+    /// Run at the 0.6 m box with high profile + Legs: the < 0.7 m straight-jump band steps onto it (0xB21DA0).
+    StepUp,
 }
 
 impl Plugin for DebugCapturePlugin {
@@ -99,6 +101,7 @@ impl Plugin for DebugCapturePlugin {
                 "beamjump" => Scenario::BeamJump,
                 "drop" => Scenario::Drop,
                 "dropgrab" => Scenario::DropGrab,
+                "stepup" => Scenario::StepUp,
                 _ => Scenario::Roofs,
             };
             app.insert_resource(sc)
@@ -196,6 +199,12 @@ fn place(sc: Res<Scenario>, mut q: Query<&mut Body, With<Player>>, mut rig: ResM
                 b.heading = -std::f32::consts::FRAC_PI_2;
                 rig.yaw = 0.0;
                 rig.distance = 7.0;
+            }
+            Scenario::StepUp => {
+                b.feet = Vec3::new(9.0, 0.0, -3.0);
+                b.heading = std::f32::consts::PI; // facing +Z, toward the box
+                rig.yaw = std::f32::consts::FRAC_PI_2;
+                rig.distance = 5.0;
             }
             Scenario::Pivot => {
                 b.feet = Vec3::new(-30.0, 0.0, -30.0);
@@ -384,6 +393,15 @@ fn autopilot(
             pad.legs_held = false;
             pad.dir = OFF_EDGE;
             pad.magnitude = if t > 1.0 { 1.0 } else { 0.0 };
+            pad.speed01 = pad.magnitude;
+        }
+        Scenario::StepUp => {
+            // 1 s still, then run at the box with high profile + Legs until on top
+            let on_top = q.single().ok().is_some_and(|(_, _, b)| b.feet.y > 0.5);
+            pad.dir = Vec3::Z;
+            pad.high_profile = true;
+            pad.legs_held = t > 1.0 && !on_top;
+            pad.magnitude = if t > 1.0 && !on_top { 1.0 } else { 0.0 };
             pad.speed01 = pad.magnitude;
         }
         Scenario::Pivot => {

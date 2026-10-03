@@ -89,8 +89,13 @@ code and enums (RE/01–07, RE/11) or its data (clips, guidance, collision in th
   - OrientedMove (3, state 42);
   - Hurt (4);
   - ObstacleCollision (5) with **ObstacleLeanType** Hands/Feet.
-- [ ] **Free-run steps:** `xx_h_freestep_*` (up / down / front / left / right at 50 / 300 / 550 cm) and
-      `freerunfront_entry_*` low-fall entries.
+- [~] **Free-run steps:** `xx_h_freestep_*` (up / down / front / left / right at 50 / 300 / 550 cm) and
+      `freerunfront_entry_*` low-fall entries. **→ (2026-10-03) the 50 / 300 / 550 cm clips are the free-step flight's own
+      blend slots (`air_*_to_freestep`, ported with the jumps). Newly ported: the straight jump's < 0.7 m band
+      (0xB21FCD: `collide_full_*_to_freestep_{050,070}cm` 0x012B291B, b = (dz − 0.5)/0.2, root +0.5 n, flags 1) and its
+      reception 0x012B33F1 (0xE09752), a step-up onto knee-high obstacles (`AC_AUTOPILOT=stepup`). The free-step
+      entry exits (0x0D9971F9…FC, 0x69C24BB2/3) and `freerunfront_entry_030cm` 0x0EED6F55 have no code references:
+      they are reached only through action transitions in the graph (§8 item exits).**
 - [x] **Vault / pass-over** (RE/04 §4.1.13): type 2 jumps, reception, HandPassOver vault, Ground / InAir. Open: pass-over pull-down, kind 4 chained jumps, roll ending, vt1592/1596.
 - [ ] **High obstacle** request (vt744/748, minimum height 5.0).
 - [ ] **Static jump on place** (vt36, ActorState 25 JumpingOnPlace).

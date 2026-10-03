@@ -507,6 +507,21 @@ fn knee_height_block_jumps_and_stands_on_top() {
 }
 
 #[test]
+fn a_box_below_seventy_centimetres_is_a_free_step_up() {
+    use crate::player::ledge_moves::{HangEnd, RECEPTION_STEP_UP};
+    // the 0.6 m box at (9, 0), 1.5 m square: the < 0.7 m band of 0xB21DA0 (collide_full_*_to_freestep, flags 1)
+    let mut s = straight_jump_at(Vec3::new(9.0, 0.0, -1.6));
+    let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");
+    assert_eq!((j.flight, j.end, j.flags), (0x012B_291B, HangEnd::FreeStep, 1));
+    assert!((j.b - 0.5).abs() < 0.01, "0.6 m: halfway between the 50 and 70 cm clips: {}", j.b);
+    assert!(s.run_until(2.0, |s| s.loco().current == ActorContextId::Ledge));
+    assert_eq!(s.data().ledge.mv.and_then(|m| m.seq[0]).map(|a| a.id), Some(RECEPTION_STEP_UP));
+    assert!(s.run_until(3.0, |s| s.loco().current == ActorContextId::Ground), "never stood up");
+    let f = s.body().feet;
+    assert!((f.y - 0.6).abs() < 0.05 && f.z > -0.75, "on top of the box: {f:?}");
+}
+
+#[test]
 fn two_metre_wall_jumps_into_a_wall_hang() {
     let mut s = straight_jump_at(Vec3::new(56.0, 0.0, 49.0));
     let j = s.data().air.target.and_then(|t| t.straight).expect("straight jump band");

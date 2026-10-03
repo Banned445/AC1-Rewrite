@@ -126,7 +126,9 @@ pub fn geometry() -> (CollisionWorld, GuidanceWorld) {
         let min = Vec3::new(x - sx * 0.5, 0.0, z - sz * 0.5);
         let max = Vec3::new(x + sx * 0.5, h, z + sz * 0.5);
         collision.boxes.push(Aabb3 { min, max });
-        if h >= 1.0 {
+        // grab edges from 0.5 m up: the 0.6 m box is a free-step step-up (0xB21DA0 < 0.7 m band); the 0.3 m step
+        // is walked onto (step offset 0.37 m)
+        if h >= 0.5 {
             add_roof_edges(&mut guidance, min, max);
         }
     }

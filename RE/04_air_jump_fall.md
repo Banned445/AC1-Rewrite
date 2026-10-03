@@ -409,7 +409,7 @@ The band is chosen by dz = hand height above the feet. "Subtype 8" is JumpTarget
 
 | dz (m) | Flight (2 clips, weights [1−b, b]) | b | Root = hand + out·n − down | Flags | Arrival (0xE07D00) |
 |---|---|---|---|---|---|
-| < 0.7 | `0x012B291B` `collide_full_*_to_freestep_{050,070}cm` | (dz−0.5)/0.2 | +0.5 n | 1 | `0x012B33F1` → NarrowObject |
+| < 0.7 | `0x012B291B` `collide_full_*_to_freestep_{050,070}cm` | (dz−0.5)/0.2 | +0.5 n | 1 | `0x012B33F1` (0xE09752) → NarrowObject SubState 6. **Ported 2026-10-03** (`HangEnd::FreeStep`, ends standing; greybox blocks ≥ 0.5 m now carry grab edges) |
 | 0.7–1.5 | `0x01290ECF` `lean_wait…_to_hangknee_{070,150}cm` | (dz−0.7)/0.8 | +0.5 n | 4 | `0x01290ED0`, Ledge SubState 4 (pull-up), root → edge − 0.1 n |
 | 1.5–2.0 | `0x01272A69` `jumpstraight_to_hangknee_{150,200}cm` | (dz−1.5)·2 | +0.5 n | 4 | `0x01272A6A` (a, b) → `0x0106C58B` hangknee→wait |
 | 2.0–2.5, subtype 8 | `0x01271631` `jumpstraight_to_hangwall_{200,250}cm` | (dz−2)·2 | +0.5 n − 1.1 | 0x40 | `0x01271632` (a, b) → wall idle `0x0106F2E8`; needs foot holds; hang type 0 |

@@ -76,6 +76,8 @@ pub const DUMPED_ACTIONS: &[u32] = &[
     // straight jump to a hand target (0xB21DA0) and its arrivals (0xE07D00)
     0x0129_0ECF, 0x0127_2A69, 0x0127_1631, 0x0127_1639, 0x0121_A598, 0x0121_A8B1,
     0x0129_0ED0, 0x0127_2A6A, 0x0127_163A, 0x0127_1632, 0x0121_B072, 0x0127_23A5,
+    // < 0.7 m band: collide_full → freestep flight and its reception
+    0x012B_291B, RECEPTION_STEP_UP,
     ACT_WAIST_TO_KNEE, ACT_KNEE_TO_WAIT,
     // running jump onto a ledge: wall reception and free-hang swing (0xE07D00 generic branch)
     RECEPTION_SURFACE_WALL, SWING_RECEPTION,
@@ -462,15 +464,21 @@ pub enum HangEnd {
     StandFromKnee,
     /// Waist height: the reception, hangwaist → hangknee, hangknee → wait.
     StandFromWaist,
+    /// Below 0.7 m: a free-step target (flags 1). The reception `collide_full_*_to_freestep_*_tr_freestep_entry`
+    /// steps onto the top (0xE07D00 → NarrowObject SubState 6, the transient free-step stay that returns to Ground).
+    FreeStep,
 }
 
-/// 0xB21DA0 bands (ground variant: the playing action is the straight-jump impulse; the `beam_*` variants and
-/// the ≤ 0.7 m `collide_full_*_to_freestep` step-up → NarrowObject are not used by the port). `wall` = the
-/// target's sub-type is 8 (hypothesis: a wall below the edge, i.e. a wall hang).
+/// The < 0.7 m band's reception (0xE09752: played when the arriving flight is 0x012B291B).
+pub const RECEPTION_STEP_UP: u32 = 0x012B_33F1;
+
+/// 0xB21DA0 bands (ground variant: the playing action is the straight-jump impulse; the `beam_*` variants are
+/// `hang_jump_in_beam`). `wall` = the target's sub-type is 8 (hypothesis: a wall below the edge, i.e. a wall hang).
 pub fn hang_jump_in(dz: f32, wall: bool) -> Option<HangJumpIn> {
     let c = |x: f32| x.clamp(0.0, 1.0);
     Some(if dz < 0.7 {
-        return None;
+        // `collide_full_*_{050,070}cm_to_freestep_*`: b = (dz − 0.5) / 0.2, root +0.5 n, flags 1 (0xB21FCD)
+        HangJumpIn { flight: 0x012B_291B, b: c((dz - 0.5) / 0.2), out: 0.5, down: 0.0, flags: 1, reception: RECEPTION_STEP_UP, end: HangEnd::FreeStep }
     } else if dz < 1.5 {
         HangJumpIn { flight: 0x0129_0ECF, b: c((dz - 0.7) / 0.8), out: 0.5, down: 0.0, flags: 4, reception: 0x0129_0ED0, end: HangEnd::StandFromKnee }
     } else if dz < 2.0 {
@@ -531,6 +539,10 @@ pub fn arrival_move(arr: LedgeArrival, from: Vec3, hand_l: Vec3, hand_r: Vec3, n
                     ([item(j.reception, 0, &w), item(j.reception, 1, &w), None, None], to, h == LedgeHangType::Free, false)
                 }
                 HangEnd::StandFromKnee => ([item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_KNEE_TO_WAIT, 0, &[1.0]), None], top, false, true),
+                // PORT: the reception's root (FROMANIM) is corrected onto the pull-up's stand point; where the game's
+                // free-step stay leaves the root is not traced. Its exit transitions (low / high wait 0x69C24BB2 /
+                // 0x0D9971F9, jog 0x0D9971FB) are chosen by the animation graph; the port hands back to Ground.
+                HangEnd::FreeStep => ([item(j.reception, 0, &w), None, None, None], top, false, true),
                 HangEnd::StandFromWaist => (
                     [item(j.reception, 0, &w), item(j.reception, 1, &w), item(ACT_WAIST_TO_KNEE, 0, &[1.0]), item(ACT_KNEE_TO_WAIT, 0, &[1.0])],
                     top,
